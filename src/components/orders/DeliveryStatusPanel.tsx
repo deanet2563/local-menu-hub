@@ -26,8 +26,7 @@ type SubOrderDelivery = {
   sub_id: string;
   shop_id: string;
   delivery_status: DeliveryStatus;
-  delivery_zone: string | null;
-  customer_address: string | null;
+  delivery_address: string | null;
   rider_called_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
@@ -73,7 +72,7 @@ export function DeliveryStatusPanel({ subId }: { subId: string }) {
     const { data, error } = await supabase
       .from("sub_orders")
       .select(
-        "sub_id, shop_id, delivery_status, rider_called_at, picked_up_at, delivered_at, delivery_failed_reason, rider_retry_count"
+        "sub_id, shop_id, delivery_status, delivery_address, rider_called_at, picked_up_at, delivered_at, delivery_failed_reason, rider_retry_count"
       )
       .eq("sub_id", subId)
       .single();
@@ -126,7 +125,7 @@ export function DeliveryStatusPanel({ subId }: { subId: string }) {
       setError("กรุณาเลือกเบอร์วินก่อนกด");
       return;
     }
-    await copyAddressAndCallRider(order?.customer_address ?? null, contact.phone);
+    await copyAddressAndCallRider(order?.delivery_address ?? null, contact.phone);
     await updateStatus("rider_called", { rider_contact_id: contact.id });
   }
 
@@ -144,11 +143,8 @@ export function DeliveryStatusPanel({ subId }: { subId: string }) {
         <StatusBadge status={order.delivery_status} />
       </div>
 
-      {order.delivery_zone && (
-        <p className="text-sm text-gray-500">โซน: {order.delivery_zone}</p>
-      )}
-      {order.customer_address && (
-        <p className="text-sm text-gray-500">ที่อยู่: {order.customer_address}</p>
+      {order.delivery_address && (
+        <p className="text-sm text-gray-500">ที่อยู่: {order.delivery_address}</p>
       )}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
