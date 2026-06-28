@@ -10,7 +10,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import type { PaymentMethodEnum } from "@/types/database";
+import type { PaymentMethodEnum, FulfillmentTypeEnum } from "@/types/database";
+import { DeliveryStatusPanel } from "@/components/orders/DeliveryStatusPanel";
 
 // ----------------------------------------------------------------
 // Types
@@ -43,6 +44,8 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodEnum>("cash");
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentTypeEnum>("pickup");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [showAdhocForm, setShowAdhocForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +145,10 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
       setError("ยังไม่มีรายการในตะกร้า");
       return;
     }
+    if (fulfillmentType === "delivery" && !deliveryAddress.trim()) {
+      setError("เลือกส่ง — ต้องกรอกที่อยู่ลูกค้าก่อน");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -156,7 +163,8 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
       p_shop_id: shopId,
       p_items: items,
       p_payment_method: paymentMethod,
-      p_fulfillment_type: "pickup", // POS = ลูกค้าหน้าร้าน ไม่มี delivery
+      p_fulfillment_type: fulfillmentType,
+      p_delivery_address: fulfillmentType === "delivery" ? deliveryAddress.trim() : null,
       p_source: "pos",
     });
 
@@ -170,6 +178,7 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
     const result = Array.isArray(data) ? data[0] : data;
     setLastOrderId(result?.out_sub_id ?? null);
     setCart([]);
+    setDeliveryAddress("");
   }
 
   // ----------------------------------------------------------------
@@ -278,6 +287,29 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
           <span>฿{total}</span>
         </div>
 
+        {/* รับที่ร้าน / ส่ง */}
+        <div className="flex gap-2">
+          <PaymentMethodButton
+            label="🏠 รับที่ร้าน"
+            active={fulfillmentType === "pickup"}
+            onClick={() => setFulfillmentType("pickup")}
+          />
+          <PaymentMethodButton
+            label="🚚 ส่ง"
+            active={fulfillmentType === "delivery"}
+            onClick={() => setFulfillmentType("delivery")}
+          />
+        </div>
+        {fulfillmentType === "delivery" && (
+          <textarea
+            className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+            placeholder="ที่อยู่ลูกค้า (จำเป็น)"
+            value={deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+            rows={2}
+          />
+        )}
+
         {/* วิธีจ่าย */}
         <div className="flex gap-2">
           <PaymentMethodButton
@@ -293,22 +325,53 @@ export function POSOrderScreen({ shopId }: { shopId: string }) {
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
-        {lastOrderId && (
-          <p className="text-sm text-green-600">
-            ✅ สร้างออเดอร์แล้ว ({lastOrderId.slice(0, 6)})
-          </p>
+
+        {lastOrderId ? (
+          <div className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3">
+            <p className="text-sm text-green-700">
+              ✅ สร้างออเดอร์แล้ว (#{lastOrderId.slice(0, 6)})
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.open(`/sweet/print/${lastOrderId}`, "_blank")}
+                className="flex-1 rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-700"
+              >
+                🖨️ พิมพ์ใบสั่ง
+              </button>
+              <button
+                onClick={() => setLastOrderId(null)}
+                className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white"
+              >
+                + ออเดอร์ใหม่
+              </button>
+            </div>
+
+            {/* ออเดอร์ delivery → เปิด panel เรียกวินทันที ไม่ต้องไปหน้า Order Detail แยก */}
+            {fulfillmentType === "delivery" && (
+              <div className="pt-2">
+                <DeliveryStatusPanel subId={lastOrderId} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || cart.length === 0}
+            className="w-full rounded-lg bg-orange-500 py-3 font-medium text-white disabled:opacity-50"
+          >
+            {submitting ? "กำลังบันทึก..." : "✅ ยืนยันออเดอร์"}
+          </button>
         )}
 
-        <button
-          onClick={handleSubmit}
-          disabled={submitting || cart.length === 0}
-          className="w-full rounded-lg bg-orange-500 py-3 font-medium text-white disabled:opacity-50"
-        >
-          {submitting ? "กำลังบันทึก..." : "✅ ยืนยันออเดอร์"}
-        </button>
-        {paymentMethod === "cash" && (
+        {!lastOrderId && paymentMethod === "cash" && fulfillmentType === "pickup" && (
           <p className="text-xs text-gray-400">
-            เลือกเงินสด → ระบบจะบันทึกว่า "จ่ายแล้ว" ทันที (เก็บเงินจริงหน้าร้าน)
+            เลือกเงินสด + รับที่ร้าน → ระบบจะบันทึกว่า "จ่ายแล้ว" ทันที
+          </p>
+        )}
+        {!lastOrderId && paymentMethod === "cash" && fulfillmentType === "delivery" && (
+          <p className="text-xs text-gray-400">
+            เลือกเงินสด + ส่ง → ระบบจะรอจนกว่าวินส่งสำเร็จ แล้วค่อย mark "จ่ายแล้ว"
+            อัตโนมัติ (COD ผ่านวิน เงินยังไม่เข้าร้านตอนนี้)
           </p>
         )}
       </div>
