@@ -31,6 +31,8 @@ export type DeliveryStatusEnum =
 
 export type FulfillmentTypeEnum = "pickup" | "delivery";
 
+export type PaymentMethodEnum = "cash" | "qr_transfer";
+
 export type HubOrderStatusEnum =
   | "pending"
   | "partially_confirmed"

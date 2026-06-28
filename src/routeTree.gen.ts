@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SweetIndexRouteImport } from './routes/sweet/index'
 import { Route as ShopIndexRouteImport } from './routes/shop/index'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
+import { Route as SweetPosRouteImport } from './routes/sweet/pos'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
 
@@ -36,6 +37,11 @@ const HubIndexRoute = HubIndexRouteImport.update({
   path: '/hub/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SweetPosRoute = SweetPosRouteImport.update({
+  id: '/sweet/pos',
+  path: '/sweet/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
   id: '/shop/orders/',
   path: '/shop/orders/',
@@ -49,6 +55,7 @@ const ShopOrdersSubIdRoute = ShopOrdersSubIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sweet/pos': typeof SweetPosRoute
   '/hub/': typeof HubIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sweet/pos': typeof SweetPosRoute
   '/hub': typeof HubIndexRoute
   '/shop': typeof ShopIndexRoute
   '/sweet': typeof SweetIndexRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sweet/pos': typeof SweetPosRoute
   '/hub/': typeof HubIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
@@ -76,16 +85,25 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/sweet/pos'
     | '/hub/'
     | '/shop/'
     | '/sweet/'
     | '/shop/orders/$subId'
     | '/shop/orders/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/hub' | '/shop' | '/sweet' | '/shop/orders/$subId' | '/shop/orders'
+  to:
+    | '/'
+    | '/sweet/pos'
+    | '/hub'
+    | '/shop'
+    | '/sweet'
+    | '/shop/orders/$subId'
+    | '/shop/orders'
   id:
     | '__root__'
     | '/'
+    | '/sweet/pos'
     | '/hub/'
     | '/shop/'
     | '/sweet/'
@@ -95,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SweetPosRoute: typeof SweetPosRoute
   HubIndexRoute: typeof HubIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
   SweetIndexRoute: typeof SweetIndexRoute
@@ -132,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sweet/pos': {
+      id: '/sweet/pos'
+      path: '/sweet/pos'
+      fullPath: '/sweet/pos'
+      preLoaderRoute: typeof SweetPosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop/orders/': {
       id: '/shop/orders/'
       path: '/shop/orders'
@@ -151,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SweetPosRoute: SweetPosRoute,
   HubIndexRoute: HubIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
   SweetIndexRoute: SweetIndexRoute,
