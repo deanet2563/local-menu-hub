@@ -15,6 +15,7 @@ import { Route as ShopIndexRouteImport } from './routes/shop/index'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as SweetPosRouteImport } from './routes/sweet/pos'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
+import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
   path: '/shop/orders/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SweetPrintSubIdRoute = SweetPrintSubIdRouteImport.update({
+  id: '/sweet/print/$subId',
+  path: '/sweet/print/$subId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopOrdersSubIdRoute = ShopOrdersSubIdRouteImport.update({
   id: '/shop/orders/$subId',
   path: '/shop/orders/$subId',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
+  '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders/': typeof ShopOrdersIndexRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/shop': typeof ShopIndexRoute
   '/sweet': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
+  '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders': typeof ShopOrdersIndexRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
+  '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders/': typeof ShopOrdersIndexRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/shop/'
     | '/sweet/'
     | '/shop/orders/$subId'
+    | '/sweet/print/$subId'
     | '/shop/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/shop'
     | '/sweet'
     | '/shop/orders/$subId'
+    | '/sweet/print/$subId'
     | '/shop/orders'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/shop/'
     | '/sweet/'
     | '/shop/orders/$subId'
+    | '/sweet/print/$subId'
     | '/shop/orders/'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   ShopIndexRoute: typeof ShopIndexRoute
   SweetIndexRoute: typeof SweetIndexRoute
   ShopOrdersSubIdRoute: typeof ShopOrdersSubIdRoute
+  SweetPrintSubIdRoute: typeof SweetPrintSubIdRoute
   ShopOrdersIndexRoute: typeof ShopOrdersIndexRoute
 }
 
@@ -165,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopOrdersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sweet/print/$subId': {
+      id: '/sweet/print/$subId'
+      path: '/sweet/print/$subId'
+      fullPath: '/sweet/print/$subId'
+      preLoaderRoute: typeof SweetPrintSubIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop/orders/$subId': {
       id: '/shop/orders/$subId'
       path: '/shop/orders/$subId'
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShopIndexRoute: ShopIndexRoute,
   SweetIndexRoute: SweetIndexRoute,
   ShopOrdersSubIdRoute: ShopOrdersSubIdRoute,
+  SweetPrintSubIdRoute: SweetPrintSubIdRoute,
   ShopOrdersIndexRoute: ShopOrdersIndexRoute,
 }
 export const routeTree = rootRouteImport
