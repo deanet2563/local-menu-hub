@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SweetIndexRouteImport } from './routes/sweet/index'
 import { Route as ShopIndexRouteImport } from './routes/shop/index'
+import { Route as RiderIndexRouteImport } from './routes/rider/index'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
+import { Route as SweetRidersRouteImport } from './routes/sweet/riders'
 import { Route as SweetPosRouteImport } from './routes/sweet/pos'
+import { Route as RiderSignupRouteImport } from './routes/rider/signup'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
 import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
@@ -33,14 +36,29 @@ const ShopIndexRoute = ShopIndexRouteImport.update({
   path: '/shop/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RiderIndexRoute = RiderIndexRouteImport.update({
+  id: '/rider/',
+  path: '/rider/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HubIndexRoute = HubIndexRouteImport.update({
   id: '/hub/',
   path: '/hub/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SweetRidersRoute = SweetRidersRouteImport.update({
+  id: '/sweet/riders',
+  path: '/sweet/riders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SweetPosRoute = SweetPosRouteImport.update({
   id: '/sweet/pos',
   path: '/sweet/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RiderSignupRoute = RiderSignupRouteImport.update({
+  id: '/rider/signup',
+  path: '/rider/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
@@ -61,8 +79,11 @@ const ShopOrdersSubIdRoute = ShopOrdersSubIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/rider/signup': typeof RiderSignupRoute
   '/sweet/pos': typeof SweetPosRoute
+  '/sweet/riders': typeof SweetRidersRoute
   '/hub/': typeof HubIndexRoute
+  '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
@@ -71,8 +92,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/rider/signup': typeof RiderSignupRoute
   '/sweet/pos': typeof SweetPosRoute
+  '/sweet/riders': typeof SweetRidersRoute
   '/hub': typeof HubIndexRoute
+  '/rider': typeof RiderIndexRoute
   '/shop': typeof ShopIndexRoute
   '/sweet': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
@@ -82,8 +106,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/rider/signup': typeof RiderSignupRoute
   '/sweet/pos': typeof SweetPosRoute
+  '/sweet/riders': typeof SweetRidersRoute
   '/hub/': typeof HubIndexRoute
+  '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
@@ -94,8 +121,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/rider/signup'
     | '/sweet/pos'
+    | '/sweet/riders'
     | '/hub/'
+    | '/rider/'
     | '/shop/'
     | '/sweet/'
     | '/shop/orders/$subId'
@@ -104,8 +134,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/rider/signup'
     | '/sweet/pos'
+    | '/sweet/riders'
     | '/hub'
+    | '/rider'
     | '/shop'
     | '/sweet'
     | '/shop/orders/$subId'
@@ -114,8 +147,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/rider/signup'
     | '/sweet/pos'
+    | '/sweet/riders'
     | '/hub/'
+    | '/rider/'
     | '/shop/'
     | '/sweet/'
     | '/shop/orders/$subId'
@@ -125,8 +161,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  RiderSignupRoute: typeof RiderSignupRoute
   SweetPosRoute: typeof SweetPosRoute
+  SweetRidersRoute: typeof SweetRidersRoute
   HubIndexRoute: typeof HubIndexRoute
+  RiderIndexRoute: typeof RiderIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
   SweetIndexRoute: typeof SweetIndexRoute
   ShopOrdersSubIdRoute: typeof ShopOrdersSubIdRoute
@@ -157,6 +196,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rider/': {
+      id: '/rider/'
+      path: '/rider'
+      fullPath: '/rider/'
+      preLoaderRoute: typeof RiderIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hub/': {
       id: '/hub/'
       path: '/hub'
@@ -164,11 +210,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sweet/riders': {
+      id: '/sweet/riders'
+      path: '/sweet/riders'
+      fullPath: '/sweet/riders'
+      preLoaderRoute: typeof SweetRidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sweet/pos': {
       id: '/sweet/pos'
       path: '/sweet/pos'
       fullPath: '/sweet/pos'
       preLoaderRoute: typeof SweetPosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rider/signup': {
+      id: '/rider/signup'
+      path: '/rider/signup'
+      fullPath: '/rider/signup'
+      preLoaderRoute: typeof RiderSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shop/orders/': {
@@ -197,8 +257,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  RiderSignupRoute: RiderSignupRoute,
   SweetPosRoute: SweetPosRoute,
+  SweetRidersRoute: SweetRidersRoute,
   HubIndexRoute: HubIndexRoute,
+  RiderIndexRoute: RiderIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
   SweetIndexRoute: SweetIndexRoute,
   ShopOrdersSubIdRoute: ShopOrdersSubIdRoute,
