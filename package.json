@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@line/liff": "^2.29.2",
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-router": "^1.120.12",
     "react": "^19.1.0",
