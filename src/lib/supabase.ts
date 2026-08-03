@@ -56,7 +56,9 @@ export async function getCurrentCustomerId(): Promise<string | null> {
   const token = await getAccessToken();
   if (!token) return null;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const payload = JSON.parse(atob(part));
     return payload.customer_id ?? null;
   } catch {
     return null;
