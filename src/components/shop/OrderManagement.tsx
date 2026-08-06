@@ -14,6 +14,7 @@ type Item = { item_name_snapshot: string; qty: number; line_total: number };
 type Order = {
   sub_id: string; order_id: string; fulfillment_type: "pickup" | "delivery";
   order_status: string; payment_status: string; print_status: string; delivery_status: string;
+  delivery_photo_url: string | null;
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
   order_items: Item[];
 };
@@ -73,7 +74,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total)")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total)")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as Order[]) ?? [];
@@ -220,6 +221,12 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             </div>
             {o.fulfillment_type === "delivery" && o.delivery_address && (
               <p className="text-xs text-gray-500">📍 {o.delivery_address}</p>
+            )}
+            {o.delivery_photo_url && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">📷 รูปยืนยันส่งของ</p>
+                <img src={o.delivery_photo_url} alt="delivery proof" className="w-full rounded-lg object-cover" />
+              </div>
             )}
 
             {/* actions */}

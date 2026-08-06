@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
+import { MyDeliveries } from "@/components/rider/MyDeliveries";
 
 type RiderRow = {
   id: string;
@@ -188,6 +189,8 @@ export function RiderDashboard({ riderId }: { riderId: string }) {
           </button>
         </div>
       </div>
+
+      {rider.is_approved && !rider.deletion_requested_at && <MyDeliveries />}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
