@@ -10,6 +10,7 @@ import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 type Shop = {
   shop_id: string; name: string; category: string | null; logo_url: string | null;
   is_open: boolean | null; delivery_note: string | null;
+  is_approved: boolean; is_banned: boolean;
 };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
 
@@ -22,7 +23,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
   useEffect(() => {
     (async () => {
       const [{ data: s }, { data: m }] = await Promise.all([
-        supabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note").eq("shop_id", shopId).maybeSingle(),
+        supabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note,is_approved,is_banned").eq("shop_id", shopId).maybeSingle(),
         supabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("shop_id", shopId).eq("is_available", true),
       ]);
       setShop(s as Shop);
@@ -33,6 +34,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
   if (!shop) return <p className="p-4 text-sm text-gray-400">ไม่พบร้าน</p>;
+  if (!shop.is_approved || shop.is_banned) return <p className="p-4 text-sm text-gray-400">ร้านนี้ยังไม่พร้อมให้บริการ</p>;
 
   const cats = Array.from(new Set(items.map((i) => i.category || "อื่นๆ")));
   const qtyOf = (id: string) => c.items.find((i) => i.itemId === id)?.qty ?? 0;

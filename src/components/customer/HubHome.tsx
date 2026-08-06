@@ -24,8 +24,14 @@ export function HubHome() {
   useEffect(() => {
     (async () => {
       const [{ data: s }, { data: m }] = await Promise.all([
-        supabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true),
-        supabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("is_available", true),
+        supabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
+        supabase
+          .from("menu_items")
+          .select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)")
+          .eq("is_available", true)
+          .eq("shops.is_open", true)
+          .eq("shops.is_approved", true)
+          .eq("shops.is_banned", false),
       ]);
       setShops((s as Shop[]) ?? []);
       setItems((m as Item[]) ?? []);
