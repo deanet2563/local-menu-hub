@@ -245,16 +245,19 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               {o.fulfillment_type === "delivery" && o.delivery_status === "needs_rider" && o.order_status !== "pending" && (
                 <button onClick={() => openPicker(o.sub_id)} className="rounded-lg bg-blue-500 text-white text-xs px-3 py-1.5">🛵 เลือกวิน</button>
               )}
-              {o.fulfillment_type === "delivery" && o.delivery_status === "rider_called" && (
-                <>
-                  {o.assigned_rider_id && riderInfo[o.assigned_rider_id] && (
-                    <a href={`tel:${riderInfo[o.assigned_rider_id].phone}`} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
-                      📞 {riderInfo[o.assigned_rider_id].name}
-                    </a>
-                  )}
-                  <button onClick={() => upd(o.sub_id, { delivery_status: "picked_up" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">วินรับของแล้ว</button>
-                </>
-              )}
+              {o.fulfillment_type === "delivery" && o.delivery_status === "rider_called" && (() => {
+                const riderContact = o.assigned_rider_id ? riderInfo[o.assigned_rider_id] : undefined;
+                return (
+                  <>
+                    {riderContact && (
+                      <a href={`tel:${riderContact.phone}`} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
+                        📞 {riderContact.name}
+                      </a>
+                    )}
+                    <button onClick={() => upd(o.sub_id, { delivery_status: "picked_up" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">วินรับของแล้ว</button>
+                  </>
+                );
+              })()}
               {o.fulfillment_type === "delivery" && o.delivery_status === "picked_up" && (
                 <button onClick={() => upd(o.sub_id, { delivery_status: "delivered", order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">ส่งถึงแล้ว ✓</button>
               )}
