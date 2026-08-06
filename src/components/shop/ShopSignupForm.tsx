@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
+import { linkRichMenu } from "@/lib/richmenu";
 
 // ============================================================
 // MyTree — Shop onboarding (5 fields, per original spec):
@@ -78,6 +79,7 @@ export function ShopSignupForm() {
       if (rpcErr) throw rpcErr;
 
       const shopId = Array.isArray(data) ? data[0]?.shop_id : (data as any)?.shop_id;
+      void linkRichMenu("shop"); // best-effort, don't block navigation on it
       navigate({ to: "/sweet/menu", search: { welcome: 1 } as any });
       void shopId;
     } catch (e: any) {

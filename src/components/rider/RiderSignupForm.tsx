@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
+import { linkRichMenu } from "@/lib/richmenu";
 
 type RiderClass = "public_win" | "general";
 
@@ -116,6 +117,7 @@ export function RiderSignupForm() {
       );
       return;
     }
+    void linkRichMenu("rider"); // best-effort, doesn't block success screen
     setDone(true);
   }
 
