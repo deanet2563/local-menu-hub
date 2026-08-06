@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { RiderDashboard } from "@/components/rider/RiderDashboard";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
+import { linkRichMenu } from "@/lib/richmenu";
 
 export const Route = createFileRoute("/rider/")({
   component: RiderHome,
@@ -33,6 +34,7 @@ function RiderHome() {
         }
         setRiderId(data.id);
         setState("ready");
+        void linkRichMenu("rider"); // keep menu synced no matter which menu they arrived from
       } catch {
         setState("no-auth");
       }

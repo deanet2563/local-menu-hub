@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { MenuManager } from "@/components/shop/MenuManager";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
+import { linkRichMenu } from "@/lib/richmenu";
 
 type Search = { welcome?: number };
 
@@ -32,6 +33,7 @@ function ShopMenu() {
         if (!data) { setState("no-shop"); return; }
         setShopId((data as { shop_id: string }).shop_id);
         setState("ok");
+        void linkRichMenu("shop"); // keep menu synced no matter which menu they arrived from
       } catch {
         setState("no-auth");
       }
