@@ -25,14 +25,22 @@ function set(next: CartState) {
 }
 
 export const cart = {
-  add(item: Omit<CartItem, "qty">) {
-    let items = state.items;
-    if (state.shopId && state.shopId !== item.shopId) items = []; // switch shop -> reset
+  /** Returns "ok" on success, or "different_shop" if this would silently wipe
+   * items from another shop — caller should confirm with the user, then
+   * retry with { force: true }. Fixes a bug where adding a dish from a
+   * different shop (easy to do from the multi-shop food-first grid) silently
+   * cleared the cart with no warning. */
+  add(item: Omit<CartItem, "qty">, opts?: { force?: boolean }): "ok" | "different_shop" {
+    const switchingShop = !!state.shopId && state.shopId !== item.shopId;
+    if (switchingShop && !opts?.force) return "different_shop";
+
+    let items = switchingShop ? [] : state.items;
     const existing = items.find((i) => i.itemId === item.itemId);
     items = existing
       ? items.map((i) => (i.itemId === item.itemId ? { ...i, qty: i.qty + 1 } : i))
       : [...items, { ...item, qty: 1 }];
     set({ shopId: item.shopId, items });
+    return "ok";
   },
   setQty(itemId: string, qty: number) {
     const items = state.items

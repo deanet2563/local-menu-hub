@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { cart, useCart, cartTotal } from "@/lib/cart";
-import { supabase } from "@/lib/supabase";
+import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
 import { submitOrder } from "@/lib/order";
 
 export const Route = createFileRoute("/cart")({
@@ -14,6 +14,8 @@ function CartCheckout() {
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -27,14 +29,43 @@ function CartCheckout() {
     })();
   }, [c.shopId]);
 
+  // Prefill name/phone from the customer's saved profile, if they've ordered before.
+  useEffect(() => {
+    (async () => {
+      try {
+        await initLiff();
+        const cid = await getCurrentCustomerId();
+        if (!cid) return;
+        const { data } = await supabase.from("customers").select("name,phone").eq("id", cid).maybeSingle();
+        const row = data as { name: string | null; phone: string | null } | null;
+        if (row?.name) setCustomerName(row.name);
+        if (row?.phone) setCustomerPhone(row.phone);
+      } catch {
+        /* not logged in yet — fields stay blank, still required at submit */
+      }
+    })();
+  }, []);
+
   async function confirm() {
     if (!c.shopId) return;
+    if (!customerName.trim() || !customerPhone.trim()) {
+      setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
+      return;
+    }
     if (fulfillment === "delivery" && !address.trim()) {
       setError("กรอกที่อยู่จัดส่ง");
       return;
     }
     setSubmitting(true);
     setError(null);
+
+    // Save/refresh the customer profile — this is how MyTree starts building
+    // real customer history (name + phone), not just an anonymous LINE id.
+    const cid = await getCurrentCustomerId();
+    if (cid) {
+      await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
+    }
+
     const res = await submitOrder({
       shopId: c.shopId,
       items: c.items.map((i) => ({ itemId: i.itemId, qty: i.qty })),
@@ -57,8 +88,9 @@ function CartCheckout() {
       <div className="p-6 text-center space-y-2 max-w-md mx-auto">
         <p className="text-2xl">✅</p>
         <p className="text-lg font-semibold">สั่งเรียบร้อย</p>
-        <p className="text-sm text-gray-500">ร้านได้รับออเดอร์แล้ว จะแจ้งสถานะทาง LINE</p>
-        <Link to="/" className="text-orange-500 underline block mt-2">กลับหน้าแรก</Link>
+        <p className="text-sm text-gray-500">ร้านได้รับออเดอร์แล้ว ติดตามสถานะได้ที่หน้าประวัติออเดอร์</p>
+        <Link to="/orders" className="text-orange-500 underline block mt-2">ดูสถานะออเดอร์</Link>
+        <Link to="/" className="text-gray-400 underline block text-sm">กลับหน้าแรก</Link>
       </div>
     );
 
@@ -82,6 +114,25 @@ function CartCheckout() {
             <span className="text-gray-600">฿{i.price * i.qty}</span>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+        <p className="text-sm font-medium text-gray-700">ข้อมูลติดต่อ</p>
+        <input
+          className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+          placeholder="ชื่อผู้สั่ง"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+        />
+        <input
+          className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+          placeholder="เบอร์โทร"
+          value={customerPhone}
+          onChange={(e) => setCustomerPhone(e.target.value.replace(/[^0-9]/g, ""))}
+          inputMode="numeric"
+          type="tel"
+          maxLength={10}
+        />
       </div>
 
       <div className="rounded-lg border border-gray-200 p-3 space-y-2">

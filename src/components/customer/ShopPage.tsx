@@ -38,8 +38,14 @@ export function ShopPage({ shopId }: { shopId: string }) {
 
   const cats = Array.from(new Set(items.map((i) => i.category || "อื่นๆ")));
   const qtyOf = (id: string) => c.items.find((i) => i.itemId === id)?.qty ?? 0;
-  const addItem = (i: Item) =>
-    cart.add({ itemId: i.item_id, shopId: i.shop_id, name: i.name, price: i.price, imageUrl: i.image_url });
+  const addItem = (i: Item) => {
+    const cartItem = { itemId: i.item_id, shopId: i.shop_id, name: i.name, price: i.price, imageUrl: i.image_url };
+    const result = cart.add(cartItem);
+    if (result === "different_shop") {
+      const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
+      if (ok) cart.add(cartItem, { force: true });
+    }
+  };
 
   return (
     <div className="pb-24">
