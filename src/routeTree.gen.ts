@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as CartRouteImport } from './routes/cart'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SweetIndexRouteImport } from './routes/sweet/index'
 import { Route as ShopIndexRouteImport } from './routes/shop/index'
@@ -24,6 +25,7 @@ import { Route as SweetMenuRouteImport } from './routes/sweet/menu'
 import { Route as SweetAdminRouteImport } from './routes/sweet/admin'
 import { Route as ShopShopIdRouteImport } from './routes/shop/$shopId'
 import { Route as RiderSignupRouteImport } from './routes/rider/signup'
+import { Route as RiderProfileRouteImport } from './routes/rider/profile'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
 import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
@@ -36,6 +38,11 @@ const OrdersRoute = OrdersRouteImport.update({
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -103,6 +110,11 @@ const RiderSignupRoute = RiderSignupRouteImport.update({
   path: '/rider/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RiderProfileRoute = RiderProfileRouteImport.update({
+  id: '/rider/profile',
+  path: '/rider/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
   id: '/shop/orders/',
   path: '/shop/orders/',
@@ -121,8 +133,10 @@ const ShopOrdersSubIdRoute = ShopOrdersSubIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
@@ -141,8 +155,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
@@ -162,8 +178,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
@@ -184,8 +202,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/cart'
     | '/orders'
+    | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
@@ -204,8 +224,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/cart'
     | '/orders'
+    | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
@@ -224,8 +246,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/cart'
     | '/orders'
+    | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
@@ -245,8 +269,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   CartRoute: typeof CartRoute
   OrdersRoute: typeof OrdersRoute
+  RiderProfileRoute: typeof RiderProfileRoute
   RiderSignupRoute: typeof RiderSignupRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
   SweetAdminRoute: typeof SweetAdminRoute
@@ -278,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/cart'
       fullPath: '/cart'
       preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -371,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RiderSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rider/profile': {
+      id: '/rider/profile'
+      path: '/rider/profile'
+      fullPath: '/rider/profile'
+      preLoaderRoute: typeof RiderProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop/orders/': {
       id: '/shop/orders/'
       path: '/shop/orders'
@@ -397,8 +437,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   CartRoute: CartRoute,
   OrdersRoute: OrdersRoute,
+  RiderProfileRoute: RiderProfileRoute,
   RiderSignupRoute: RiderSignupRoute,
   ShopShopIdRoute: ShopShopIdRoute,
   SweetAdminRoute: SweetAdminRoute,
