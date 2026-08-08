@@ -15,6 +15,8 @@ type Order = {
   sub_id: string; order_id: string; fulfillment_type: "pickup" | "delivery";
   order_status: string; payment_status: string; print_status: string; delivery_status: string;
   delivery_photo_url: string | null;
+  customer_note: string | null;
+  payment_method: "cash" | "qr_transfer"; payment_slip_url: string | null;
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
   order_items: Item[];
 };
@@ -74,7 +76,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total)")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total)")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as Order[]) ?? [];
@@ -204,7 +206,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                 {o.fulfillment_type === "delivery" ? "🛵 ส่งถึงบ้าน" : "🏪 รับเอง"}
               </span>
               <span className={`text-xs rounded-full px-2 py-0.5 ${paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                {paid ? "จ่ายแล้ว" : "เก็บปลายทาง"}
+                {paid ? "จ่ายแล้ว" : o.payment_method === "qr_transfer" ? "รอยืนยันโอน" : "เก็บปลายทาง"}
               </span>
             </div>
 
@@ -219,6 +221,9 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             <div className="flex justify-between text-sm border-t border-gray-100 pt-1">
               <span className="font-medium">รวม</span><span className="font-medium">฿{o.amount}</span>
             </div>
+            {o.customer_note && (
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5">📝 {o.customer_note}</p>
+            )}
             {o.fulfillment_type === "delivery" && o.delivery_address && (
               <p className="text-xs text-gray-500">📍 {o.delivery_address}</p>
             )}
@@ -226,6 +231,21 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               <div>
                 <p className="text-xs text-gray-500 mb-1">📷 รูปยืนยันส่งของ</p>
                 <img src={o.delivery_photo_url} alt="delivery proof" className="w-full rounded-lg object-cover" />
+              </div>
+            )}
+            {o.payment_method === "qr_transfer" && !paid && (
+              <div className="rounded-lg bg-purple-50 p-2 space-y-1">
+                {o.payment_slip_url ? (
+                  <>
+                    <p className="text-xs text-purple-700">💳 ลูกค้าแนบสลิปแล้ว — ตรวจสอบก่อนกดยืนยัน</p>
+                    <img src={o.payment_slip_url} alt="payment slip" className="w-32 rounded-lg object-cover" />
+                    <button onClick={() => upd(o.sub_id, { payment_status: "paid" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">
+                      ✅ ยืนยันได้รับเงินแล้ว
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-purple-500">รอลูกค้าแนบสลิปโอนเงิน</p>
+                )}
               </div>
             )}
 
