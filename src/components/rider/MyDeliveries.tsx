@@ -17,6 +17,7 @@ type Job = {
   amount: number;
   shops: { name: string } | null;
   order_items: { item_name_snapshot: string; qty: number }[];
+  hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
 };
 
 export function MyDeliveries() {
@@ -30,7 +31,7 @@ export function MyDeliveries() {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,shop_id,delivery_status,delivery_address,amount,shops(name),order_items(item_name_snapshot,qty)")
+      .select("sub_id,shop_id,delivery_status,delivery_address,amount,shops(name),order_items(item_name_snapshot,qty),hub_orders(customers(name,phone))")
       .in("delivery_status", ["rider_called", "picked_up"])
       .order("created_at", { ascending: true });
     setJobs((data as unknown as Job[]) ?? []);
@@ -96,6 +97,14 @@ export function MyDeliveries() {
       {jobs.map((j) => (
         <div key={j.sub_id} className="rounded-lg border border-gray-200 p-3 space-y-1">
           <p className="text-sm font-medium">{j.shops?.name ?? j.shop_id}</p>
+          {j.hub_orders?.customers && (
+            <p className="text-xs text-gray-600">
+              👤 {j.hub_orders.customers.name || "(ไม่มีชื่อ)"}
+              {j.hub_orders.customers.phone && (
+                <> · <a href={`tel:${j.hub_orders.customers.phone}`} className="underline">📞 {j.hub_orders.customers.phone}</a></>
+              )}
+            </p>
+          )}
           <p className="text-xs text-gray-500">
             {j.order_items.map((i) => `${i.item_name_snapshot}×${i.qty}`).join(", ")} — ฿{j.amount}
           </p>

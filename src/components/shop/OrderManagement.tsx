@@ -16,6 +16,7 @@ type Order = {
   order_status: string; payment_status: string; print_status: string; delivery_status: string;
   delivery_photo_url: string | null;
   customer_note: string | null;
+  hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
   payment_method: "cash" | "qr_transfer"; payment_slip_url: string | null;
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
   order_items: Item[];
@@ -76,7 +77,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total)")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as Order[]) ?? [];
@@ -209,6 +210,15 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                 {paid ? "จ่ายแล้ว" : o.payment_method === "qr_transfer" ? "รอยืนยันโอน" : "เก็บปลายทาง"}
               </span>
             </div>
+
+            {o.hub_orders?.customers && (
+              <p className="text-sm text-gray-600">
+                👤 {o.hub_orders.customers.name || "(ไม่มีชื่อ)"}
+                {o.hub_orders.customers.phone && (
+                  <> · <a href={`tel:${o.hub_orders.customers.phone}`} className="underline">📞 {o.hub_orders.customers.phone}</a></>
+                )}
+              </p>
+            )}
 
             <div className="text-sm text-gray-700">
               {o.order_items.map((i, idx) => (
