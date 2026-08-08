@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+﻿import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 // ============================================================
-// MyTree — Shop order management (directory model: shop picks rider)
-// Flow: รับออเดอร์ -> พิมพ์ครัว -> ทำอาหาร -> (delivery) เลือกวิน -> ส่ง
+// MyTree â€” Shop order management (directory model: shop picks rider)
+// Flow: à¸£à¸±à¸šà¸­à¸­à¹€à¸”à¸­à¸£à¹Œ -> à¸žà¸´à¸¡à¸žà¹Œà¸„à¸£à¸±à¸§ -> à¸—à¸³à¸­à¸²à¸«à¸²à¸£ -> (delivery) à¹€à¸¥à¸·à¸­à¸à¸§à¸´à¸™ -> à¸ªà¹ˆà¸‡
 //
 // No push notification from the server (removed to control LINE messaging
-// cost — see worker /order handler). Instead: auto-poll + an in-page sound
+// cost â€” see worker /order handler). Instead: auto-poll + an in-page sound
 // chime when a new order appears, so the shop must keep this page open.
 // ============================================================
 
@@ -26,7 +26,7 @@ type Rider = { rider_id: string; name: string; phone: string; distance_km: numbe
 const POLL_MS = 15_000; // auto-refresh interval while the tab is visible
 const SOUND_PREF_KEY = "mytree_shop_sound_enabled";
 
-/** Two-tone ascending chime via Web Audio — no external asset needed. */
+/** Two-tone ascending chime via Web Audio â€” no external asset needed. */
 function playChime(ctx: AudioContext) {
   const now = ctx.currentTime;
   [880, 1108.73].forEach((freq, i) => {
@@ -80,7 +80,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
       .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
-    const list = (data as Order[]) ?? [];
+    const list = (data as unknown as Order[]) ?? [];
     setOrders(list);
 
     // detect newly-arrived pending orders since the last poll
@@ -93,8 +93,8 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           playChime(audioCtxRef.current);
         }
         if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
-          new Notification("🧾 ออเดอร์ใหม่เข้า MyTree", {
-            body: newOnes.length === 1 ? "มีออเดอร์ใหม่ 1 รายการ" : `มีออเดอร์ใหม่ ${newOnes.length} รายการ`,
+          new Notification("ðŸ§¾ à¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹ƒà¸«à¸¡à¹ˆà¹€à¸‚à¹‰à¸² MyTree", {
+            body: newOnes.length === 1 ? "à¸¡à¸µà¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹ƒà¸«à¸¡à¹ˆ 1 à¸£à¸²à¸¢à¸à¸²à¸£" : `à¸¡à¸µà¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹ƒà¸«à¸¡à¹ˆ ${newOnes.length} à¸£à¸²à¸¢à¸à¸²à¸£`,
           });
         }
       }
@@ -160,7 +160,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     load();
   };
 
-  if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
+  if (loading) return <p className="p-4 text-sm text-gray-400">à¸à¸³à¸¥à¸±à¸‡à¹‚à¸«à¸¥à¸”...</p>;
 
   const active = orders.filter((o) => o.order_status !== "completed" && o.order_status !== "cancelled");
   const done = orders.filter((o) => o.order_status === "completed" || o.order_status === "cancelled");
@@ -168,13 +168,13 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   return (
     <div className="p-4 pb-8 space-y-3 max-w-md mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">🧾 ออเดอร์เข้า</h1>
+        <h1 className="text-lg font-bold">ðŸ§¾ à¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹€à¸‚à¹‰à¸²</h1>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-gray-400">
-            {live ? "🟢 อัปเดตอัตโนมัติ" : "⏸ หยุดชั่วคราว"}
-            {lastSynced && ` · ${lastSynced.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+            {live ? "ðŸŸ¢ à¸­à¸±à¸›à¹€à¸”à¸•à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´" : "â¸ à¸«à¸¢à¸¸à¸”à¸Šà¸±à¹ˆà¸§à¸„à¸£à¸²à¸§"}
+            {lastSynced && ` Â· ${lastSynced.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
           </span>
-          <button onClick={load} className="text-xs text-orange-500">↻</button>
+          <button onClick={load} className="text-xs text-orange-500">â†»</button>
         </div>
       </div>
 
@@ -183,20 +183,20 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           onClick={enableSound}
           className="w-full rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-sm px-3 py-2.5 text-left"
         >
-          🔔 <span className="font-medium">กดเปิดเสียงแจ้งเตือนออเดอร์</span>
+          ðŸ”” <span className="font-medium">à¸à¸”à¹€à¸›à¸´à¸”à¹€à¸ªà¸µà¸¢à¸‡à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¸­à¸­à¹€à¸”à¸­à¸£à¹Œ</span>
           <br />
           <span className="text-xs text-orange-600">
-            ระบบไม่ส่งแจ้งเตือนผ่าน LINE แล้ว — ต้องเปิดเสียงตรงนี้ + เปิดหน้านี้ทิ้งไว้ตลอดเวลาขายของ
-            เพื่อไม่พลาดออเดอร์ใหม่
+            à¸£à¸°à¸šà¸šà¹„à¸¡à¹ˆà¸ªà¹ˆà¸‡à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¸œà¹ˆà¸²à¸™ LINE à¹à¸¥à¹‰à¸§ â€” à¸•à¹‰à¸­à¸‡à¹€à¸›à¸´à¸”à¹€à¸ªà¸µà¸¢à¸‡à¸•à¸£à¸‡à¸™à¸µà¹‰ + à¹€à¸›à¸´à¸”à¸«à¸™à¹‰à¸²à¸™à¸µà¹‰à¸—à¸´à¹‰à¸‡à¹„à¸§à¹‰à¸•à¸¥à¸­à¸”à¹€à¸§à¸¥à¸²à¸‚à¸²à¸¢à¸‚à¸­à¸‡
+            à¹€à¸žà¸·à¹ˆà¸­à¹„à¸¡à¹ˆà¸žà¸¥à¸²à¸”à¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹ƒà¸«à¸¡à¹ˆ
           </span>
         </button>
       ) : (
         <p className="text-xs text-gray-400">
-          🔊 เสียงแจ้งเตือนเปิดอยู่ — เปิดหน้านี้ทิ้งไว้ที่ร้านตลอดเวลาขาย ระบบจะเช็คออเดอร์ใหม่ให้ทุก 15 วินาที
+          ðŸ”Š à¹€à¸ªà¸µà¸¢à¸‡à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¹€à¸›à¸´à¸”à¸­à¸¢à¸¹à¹ˆ â€” à¹€à¸›à¸´à¸”à¸«à¸™à¹‰à¸²à¸™à¸µà¹‰à¸—à¸´à¹‰à¸‡à¹„à¸§à¹‰à¸—à¸µà¹ˆà¸£à¹‰à¸²à¸™à¸•à¸¥à¸­à¸”à¹€à¸§à¸¥à¸²à¸‚à¸²à¸¢ à¸£à¸°à¸šà¸šà¸ˆà¸°à¹€à¸Šà¹‡à¸„à¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¹ƒà¸«à¸¡à¹ˆà¹ƒà¸«à¹‰à¸—à¸¸à¸ 15 à¸§à¸´à¸™à¸²à¸—à¸µ
         </p>
       )}
 
-      {active.length === 0 && <p className="text-sm text-gray-400">ไม่มีออเดอร์ที่ต้องจัดการ</p>}
+      {active.length === 0 && <p className="text-sm text-gray-400">à¹„à¸¡à¹ˆà¸¡à¸µà¸­à¸­à¹€à¸”à¸­à¸£à¹Œà¸—à¸µà¹ˆà¸•à¹‰à¸­à¸‡à¸ˆà¸±à¸”à¸à¸²à¸£</p>}
 
       {active.map((o) => {
         const paid = o.payment_status === "paid";
@@ -204,18 +204,18 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           <div key={o.sub_id} className="rounded-xl border border-gray-200 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {o.fulfillment_type === "delivery" ? "🛵 ส่งถึงบ้าน" : "🏪 รับเอง"}
+                {o.fulfillment_type === "delivery" ? "ðŸ›µ à¸ªà¹ˆà¸‡à¸–à¸¶à¸‡à¸šà¹‰à¸²à¸™" : "ðŸª à¸£à¸±à¸šà¹€à¸­à¸‡"}
               </span>
               <span className={`text-xs rounded-full px-2 py-0.5 ${paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                {paid ? "จ่ายแล้ว" : o.payment_method === "qr_transfer" ? "รอยืนยันโอน" : "เก็บปลายทาง"}
+                {paid ? "à¸ˆà¹ˆà¸²à¸¢à¹à¸¥à¹‰à¸§" : o.payment_method === "qr_transfer" ? "à¸£à¸­à¸¢à¸·à¸™à¸¢à¸±à¸™à¹‚à¸­à¸™" : "à¹€à¸à¹‡à¸šà¸›à¸¥à¸²à¸¢à¸—à¸²à¸‡"}
               </span>
             </div>
 
             {o.hub_orders?.customers && (
               <p className="text-sm text-gray-600">
-                👤 {o.hub_orders.customers.name || "(ไม่มีชื่อ)"}
+                ðŸ‘¤ {o.hub_orders.customers.name || "(à¹„à¸¡à¹ˆà¸¡à¸µà¸Šà¸·à¹ˆà¸­)"}
                 {o.hub_orders.customers.phone && (
-                  <> · <a href={`tel:${o.hub_orders.customers.phone}`} className="underline">📞 {o.hub_orders.customers.phone}</a></>
+                  <> Â· <a href={`tel:${o.hub_orders.customers.phone}`} className="underline">ðŸ“ž {o.hub_orders.customers.phone}</a></>
                 )}
               </p>
             )}
@@ -223,23 +223,23 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             <div className="text-sm text-gray-700">
               {o.order_items.map((i, idx) => (
                 <div key={idx} className="flex justify-between">
-                  <span>{i.item_name_snapshot} × {i.qty}</span>
-                  <span className="text-gray-500">฿{i.line_total}</span>
+                  <span>{i.item_name_snapshot} Ã— {i.qty}</span>
+                  <span className="text-gray-500">à¸¿{i.line_total}</span>
                 </div>
               ))}
             </div>
             <div className="flex justify-between text-sm border-t border-gray-100 pt-1">
-              <span className="font-medium">รวม</span><span className="font-medium">฿{o.amount}</span>
+              <span className="font-medium">à¸£à¸§à¸¡</span><span className="font-medium">à¸¿{o.amount}</span>
             </div>
             {o.customer_note && (
-              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5">📝 {o.customer_note}</p>
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5">ðŸ“ {o.customer_note}</p>
             )}
             {o.fulfillment_type === "delivery" && o.delivery_address && (
-              <p className="text-xs text-gray-500">📍 {o.delivery_address}</p>
+              <p className="text-xs text-gray-500">ðŸ“ {o.delivery_address}</p>
             )}
             {o.delivery_photo_url && (
               <div>
-                <p className="text-xs text-gray-500 mb-1">📷 รูปยืนยันส่งของ</p>
+                <p className="text-xs text-gray-500 mb-1">ðŸ“· à¸£à¸¹à¸›à¸¢à¸·à¸™à¸¢à¸±à¸™à¸ªà¹ˆà¸‡à¸‚à¸­à¸‡</p>
                 <img src={o.delivery_photo_url} alt="delivery proof" className="w-full rounded-lg object-cover" />
               </div>
             )}
@@ -247,14 +247,14 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               <div className="rounded-lg bg-purple-50 p-2 space-y-1">
                 {o.payment_slip_url ? (
                   <>
-                    <p className="text-xs text-purple-700">💳 ลูกค้าแนบสลิปแล้ว — ตรวจสอบก่อนกดยืนยัน</p>
+                    <p className="text-xs text-purple-700">ðŸ’³ à¸¥à¸¹à¸à¸„à¹‰à¸²à¹à¸™à¸šà¸ªà¸¥à¸´à¸›à¹à¸¥à¹‰à¸§ â€” à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸à¹ˆà¸­à¸™à¸à¸”à¸¢à¸·à¸™à¸¢à¸±à¸™</p>
                     <img src={o.payment_slip_url} alt="payment slip" className="w-32 rounded-lg object-cover" />
                     <button onClick={() => upd(o.sub_id, { payment_status: "paid" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">
-                      ✅ ยืนยันได้รับเงินแล้ว
+                      âœ… à¸¢à¸·à¸™à¸¢à¸±à¸™à¹„à¸”à¹‰à¸£à¸±à¸šà¹€à¸‡à¸´à¸™à¹à¸¥à¹‰à¸§
                     </button>
                   </>
                 ) : (
-                  <p className="text-xs text-purple-500">รอลูกค้าแนบสลิปโอนเงิน</p>
+                  <p className="text-xs text-purple-500">à¸£à¸­à¸¥à¸¹à¸à¸„à¹‰à¸²à¹à¸™à¸šà¸ªà¸¥à¸´à¸›à¹‚à¸­à¸™à¹€à¸‡à¸´à¸™</p>
                 )}
               </div>
             )}
@@ -262,25 +262,25 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             {/* actions */}
             <div className="flex flex-wrap gap-2 pt-1">
               {o.order_status === "pending" && (
-                <button onClick={() => upd(o.sub_id, { order_status: "confirmed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">รับออเดอร์</button>
+                <button onClick={() => upd(o.sub_id, { order_status: "confirmed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">à¸£à¸±à¸šà¸­à¸­à¹€à¸”à¸­à¸£à¹Œ</button>
               )}
               {o.order_status !== "pending" && (
                 <button onClick={() => upd(o.sub_id, { print_status: o.print_status === "not_printed" ? "printed" : "reprinted" })} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
-                  {o.print_status === "not_printed" ? "🖨 พิมพ์ครัว" : "🖨 พิมพ์ซ้ำ"}
+                  {o.print_status === "not_printed" ? "ðŸ–¨ à¸žà¸´à¸¡à¸žà¹Œà¸„à¸£à¸±à¸§" : "ðŸ–¨ à¸žà¸´à¸¡à¸žà¹Œà¸‹à¹‰à¸³"}
                 </button>
               )}
               {o.order_status === "confirmed" && (
-                <button onClick={() => upd(o.sub_id, { order_status: "preparing" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">เริ่มทำอาหาร</button>
+                <button onClick={() => upd(o.sub_id, { order_status: "preparing" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">à¹€à¸£à¸´à¹ˆà¸¡à¸—à¸³à¸­à¸²à¸«à¸²à¸£</button>
               )}
 
               {/* pickup completion */}
               {o.fulfillment_type === "pickup" && (o.order_status === "confirmed" || o.order_status === "preparing") && (
-                <button onClick={() => upd(o.sub_id, { order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">ลูกค้ารับแล้ว ✓</button>
+                <button onClick={() => upd(o.sub_id, { order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">à¸¥à¸¹à¸à¸„à¹‰à¸²à¸£à¸±à¸šà¹à¸¥à¹‰à¸§ âœ“</button>
               )}
 
               {/* delivery flow */}
               {o.fulfillment_type === "delivery" && o.delivery_status === "needs_rider" && o.order_status !== "pending" && (
-                <button onClick={() => openPicker(o.sub_id)} className="rounded-lg bg-blue-500 text-white text-xs px-3 py-1.5">🛵 เลือกวิน</button>
+                <button onClick={() => openPicker(o.sub_id)} className="rounded-lg bg-blue-500 text-white text-xs px-3 py-1.5">ðŸ›µ à¹€à¸¥à¸·à¸­à¸à¸§à¸´à¸™</button>
               )}
               {o.fulfillment_type === "delivery" && o.delivery_status === "rider_called" && (() => {
                 const riderContact = o.assigned_rider_id ? riderInfo[o.assigned_rider_id] : undefined;
@@ -288,32 +288,32 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                   <>
                     {riderContact && (
                       <a href={`tel:${riderContact.phone}`} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
-                        📞 {riderContact.name}
+                        ðŸ“ž {riderContact.name}
                       </a>
                     )}
-                    <button onClick={() => upd(o.sub_id, { delivery_status: "picked_up" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">วินรับของแล้ว</button>
+                    <button onClick={() => upd(o.sub_id, { delivery_status: "picked_up" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">à¸§à¸´à¸™à¸£à¸±à¸šà¸‚à¸­à¸‡à¹à¸¥à¹‰à¸§</button>
                   </>
                 );
               })()}
               {o.fulfillment_type === "delivery" && o.delivery_status === "picked_up" && (
-                <button onClick={() => upd(o.sub_id, { delivery_status: "delivered", order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">ส่งถึงแล้ว ✓</button>
+                <button onClick={() => upd(o.sub_id, { delivery_status: "delivered", order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">à¸ªà¹ˆà¸‡à¸–à¸¶à¸‡à¹à¸¥à¹‰à¸§ âœ“</button>
               )}
             </div>
 
             {/* rider picker (directory) */}
             {pickerFor === o.sub_id && (
               <div className="rounded-lg bg-gray-50 p-2 space-y-1 mt-1">
-                <p className="text-xs text-gray-500 mb-1">เลือกวิน (เรียงใกล้+ว่างก่อน)</p>
-                {riders.length === 0 && <p className="text-xs text-gray-400">ไม่มีวินออนไลน์ตอนนี้</p>}
+                <p className="text-xs text-gray-500 mb-1">à¹€à¸¥à¸·à¸­à¸à¸§à¸´à¸™ (à¹€à¸£à¸µà¸¢à¸‡à¹ƒà¸à¸¥à¹‰+à¸§à¹ˆà¸²à¸‡à¸à¹ˆà¸­à¸™)</p>
+                {riders.length === 0 && <p className="text-xs text-gray-400">à¹„à¸¡à¹ˆà¸¡à¸µà¸§à¸´à¸™à¸­à¸­à¸™à¹„à¸¥à¸™à¹Œà¸•à¸­à¸™à¸™à¸µà¹‰</p>}
                 {riders.map((r) => (
                   <button key={r.rider_id} onClick={() => assign(o.sub_id, r)} className="w-full flex items-center justify-between rounded-lg bg-white border border-gray-100 px-3 py-2 text-sm">
                     <span>{r.name}</span>
                     <span className="text-xs text-gray-500">
-                      {r.distance_km != null ? `${(r.distance_km * 1000).toFixed(0)} ม.` : ""} · {r.is_busy ? "🟠 กำลังส่ง" : "🟢 ว่าง"}
+                      {r.distance_km != null ? `${(r.distance_km * 1000).toFixed(0)} à¸¡.` : ""} Â· {r.is_busy ? "ðŸŸ  à¸à¸³à¸¥à¸±à¸‡à¸ªà¹ˆà¸‡" : "ðŸŸ¢ à¸§à¹ˆà¸²à¸‡"}
                     </span>
                   </button>
                 ))}
-                <button onClick={() => setPickerFor(null)} className="w-full text-xs text-gray-400 pt-1">ยกเลิก</button>
+                <button onClick={() => setPickerFor(null)} className="w-full text-xs text-gray-400 pt-1">à¸¢à¸à¹€à¸¥à¸´à¸</button>
               </div>
             )}
           </div>
@@ -322,11 +322,11 @@ export function OrderManagement({ shopId }: { shopId: string }) {
 
       {done.length > 0 && (
         <details className="pt-2">
-          <summary className="text-sm text-gray-500">เสร็จแล้ว ({done.length})</summary>
+          <summary className="text-sm text-gray-500">à¹€à¸ªà¸£à¹‡à¸ˆà¹à¸¥à¹‰à¸§ ({done.length})</summary>
           <div className="space-y-2 mt-2">
             {done.map((o) => (
               <div key={o.sub_id} className="rounded-lg border border-gray-100 p-3 text-sm text-gray-500">
-                {o.order_items.map((i) => `${i.item_name_snapshot}×${i.qty}`).join(", ")} — ฿{o.amount} {o.order_status === "cancelled" ? "(ยกเลิก)" : "✓"}
+                {o.order_items.map((i) => `${i.item_name_snapshot}Ã—${i.qty}`).join(", ")} â€” à¸¿{o.amount} {o.order_status === "cancelled" ? "(à¸¢à¸à¹€à¸¥à¸´à¸)" : "âœ“"}
               </div>
             ))}
           </div>
@@ -335,3 +335,4 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     </div>
   );
 }
+
