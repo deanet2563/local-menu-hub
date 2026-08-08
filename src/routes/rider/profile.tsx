@@ -1,4 +1,4 @@
-﻿import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
 import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
 
@@ -17,6 +17,7 @@ type Rider = {
   win_zone: string | null;
   is_approved: boolean;
   is_banned: boolean;
+  verified_at: string | null;
 };
 
 function RiderProfilePage() {
@@ -40,7 +41,7 @@ function RiderProfilePage() {
 
         const { data, error } = await supabase
           .from("riders")
-          .select("id,name,phone,vehicle_type,rider_class,plate_number,win_registration_no,win_zone,is_approved,is_banned")
+          .select("id,name,phone,vehicle_type,rider_class,plate_number,win_registration_no,win_zone,is_approved,is_banned,verified_at")
           .eq("customer_id", cid)
           .maybeSingle();
 
@@ -70,16 +71,23 @@ function RiderProfilePage() {
     setSaving(true);
     setMessage("");
 
+    const patch: Record<string, string | null> = {
+      name: name.trim(),
+      phone: phone.trim(),
+      vehicle_type: vehicle.trim() || null,
+    };
+
+    // Verified public-win identity fields are locked.
+    // Changing them must go through admin re-verification.
+    if (rider.rider_class === "public_win" && !rider.verified_at) {
+      patch.plate_number = plate.trim() || null;
+      patch.win_registration_no = registration.trim() || null;
+      patch.win_zone = zone.trim() || null;
+    }
+
     const { error } = await supabase
       .from("riders")
-      .update({
-        name: name.trim(),
-        phone: phone.trim(),
-        vehicle_type: vehicle.trim() || null,
-        plate_number: plate.trim() || null,
-        win_registration_no: registration.trim() || null,
-        win_zone: zone.trim() || null,
-      })
+      .update(patch)
       .eq("id", rider.id);
 
     setSaving(false);
