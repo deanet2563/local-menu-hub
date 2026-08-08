@@ -262,7 +262,6 @@ export function MenuManager({ shopId, showWelcome }: { shopId: string; showWelco
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])}
               className="w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs"
             />
@@ -307,7 +306,7 @@ export function MenuManager({ shopId, showWelcome }: { shopId: string; showWelco
                 <div key={i.item_id} className="rounded-lg border border-orange-200 bg-orange-50/40 p-2 space-y-2">
                   <div className="flex items-center gap-2">
                     <img src={i.image_url ?? ""} alt={i.name} className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0" />
-                    <input type="file" accept="image/*" capture="environment" onChange={(e) => setEditPhoto(e.target.files?.[0] ?? null)} className="flex-1 text-xs" />
+                    <input type="file" accept="image/*" onChange={(e) => setEditPhoto(e.target.files?.[0] ?? null)} className="flex-1 text-xs" />
                   </div>
                   <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ชื่อเมนู" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
                   <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ราคา" inputMode="numeric" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} />
@@ -342,7 +341,7 @@ export function MenuManager({ shopId, showWelcome }: { shopId: string; showWelco
 
       {adding ? (
         <div className="rounded-lg border border-gray-200 p-3 space-y-2">
-          <input type="file" accept="image/*" capture="environment" onChange={(e) => setAddPhoto(e.target.files?.[0] ?? null)} className="w-full text-xs" />
+          <input type="file" accept="image/*" onChange={(e) => setAddPhoto(e.target.files?.[0] ?? null)} className="w-full text-xs" />
           <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ชื่อเมนู" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} />
           <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ราคา" inputMode="numeric" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: e.target.value })} />
           <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="หมวด เช่น จานเดียว" value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} />
