@@ -80,7 +80,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
       .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
-    const list = (data as Order[]) ?? [];
+    const list = (data as unknown as Order[]) ?? [];
     setOrders(list);
 
     // detect newly-arrived pending orders since the last poll
