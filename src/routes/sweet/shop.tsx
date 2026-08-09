@@ -1,17 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { MenuCatalogManager } from "@/components/shop/MenuCatalogManager";
+import { ShopProfileManager } from "@/components/shop/ShopProfileManager";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
 import { linkRichMenu } from "@/lib/richmenu";
 
-type Search = { welcome?: number };
-export const Route = createFileRoute("/sweet/menu")({
-  validateSearch: (s: Record<string, unknown>): Search => ({ welcome: s.welcome ? Number(s.welcome) : undefined }),
-  component: ShopMenu,
-});
+export const Route = createFileRoute("/sweet/shop")({ component: ShopProfile });
 
-function ShopMenu() {
-  const { welcome } = Route.useSearch();
+function ShopProfile() {
   const [shopId, setShopId] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "no-auth" | "no-shop" | "ok">("loading");
 
@@ -33,5 +28,5 @@ function ShopMenu() {
   if (state === "loading") return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
   if (state === "no-auth") return <div className="p-6 text-center">🔒 ต้องเข้าสู่ระบบ LINE ก่อน</div>;
   if (state === "no-shop") return <div className="p-6 text-center"><a className="text-orange-500 underline" href="/sweet/signup">สมัครร้านค้าใหม่</a></div>;
-  return <MenuCatalogManager shopId={shopId!} showWelcome={!!welcome} />;
+  return <ShopProfileManager shopId={shopId!} />;
 }
