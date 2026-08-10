@@ -1,21 +1,34 @@
 import liff from "@line/liff";
 import { initLiff } from "@/lib/supabase";
+import type { CartBundleSelection, CartOptionSelection } from "@/lib/cart";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
-// Sends the LINE idToken + cart; the worker verifies, resolves the
-// customer, prices from DB, creates the order, and notifies the shop.
+// Client sends selections only. Worker remains authoritative for prices,
+// availability, option/bundle validity, fulfillment and final snapshots.
 // ============================================================
 
 const ORDER_URL = "https://mytree-worker.kompakorn-t.workers.dev/order";
 
+export type OrderLinePayload = {
+  lineId: string;
+  kind: "item" | "bundle";
+  itemId: string;
+  qty: number;
+  options: CartOptionSelection[];
+  note: string | null;
+  bundleSelections: CartBundleSelection[];
+};
+
 export type OrderPayload = {
   shopId: string;
-  items: { itemId: string; qty: number }[];
+  items: OrderLinePayload[];
   fulfillment: "delivery" | "pickup";
-  payment: "cash";
+  payment: "cash" | "qr_transfer";
   address: string | null;
   note: string | null;
+  /** Reserved for the existing pre-order flow. Omitted for Order Now. */
+  requestedFor?: string | null;
 };
 
 export async function submitOrder(
