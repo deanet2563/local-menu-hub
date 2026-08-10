@@ -33,9 +33,8 @@ create index if not exists idx_order_line_configurations_shop
 
 alter table public.order_line_configurations enable row level security;
 
--- Shop staff may read snapshots for their own shop. Writes are performed by the
--- Worker service role so we deliberately do not expose client write policies.
+-- fn_staff_shop_ids() returns SETOF text in the live DB.
 create policy "shop staff read order line configurations"
   on public.order_line_configurations
   for select
-  using (shop_id = any(public.fn_staff_shop_ids()));
+  using (shop_id in (select public.fn_staff_shop_ids()));
