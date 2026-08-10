@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
+import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 
 // ============================================================
-// MyTree — Shop page: menu grouped by category + add to cart.
+// MyTree — Shop page: menu grouped by category + configurable add-to-cart.
 // ============================================================
 
 type Shop = {
@@ -18,6 +19,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
   const [shop, setShop] = useState<Shop | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [configuring, setConfiguring] = useState<Item | null>(null);
   const c = useCart();
 
   useEffect(() => {
@@ -37,15 +39,37 @@ export function ShopPage({ shopId }: { shopId: string }) {
   if (!shop.is_approved || shop.is_banned) return <p className="p-4 text-sm text-gray-400">ร้านนี้ยังไม่พร้อมให้บริการ</p>;
 
   const cats = Array.from(new Set(items.map((i) => i.category || "อื่นๆ")));
-  const qtyOf = (id: string) => c.items.find((i) => i.itemId === id)?.qty ?? 0;
-  const addItem = (i: Item) => {
-    const cartItem = { itemId: i.item_id, shopId: i.shop_id, name: i.name, price: i.price, imageUrl: i.image_url };
-    const result = cart.add(cartItem);
+  const qtyOf = (id: string) => c.items.filter((i) => i.itemId === id).reduce((n, i) => n + i.qty, 0);
+
+  function configuredAdd(input: {
+    product: ConfigurableProduct;
+    qty: number;
+    options: Parameters<typeof cart.add>[0]["options"];
+    note: string | null;
+  }) {
+    const payload = {
+      itemId: input.product.itemId,
+      shopId: input.product.shopId,
+      name: input.product.name,
+      price: input.product.price,
+      imageUrl: input.product.imageUrl,
+      options: input.options,
+      note: input.note,
+    };
+
+    let result: ReturnType<typeof cart.add> = "ok";
+    for (let n = 0; n < input.qty; n += 1) {
+      result = cart.add(payload);
+      if (result === "different_shop") break;
+    }
+
     if (result === "different_shop") {
       const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
-      if (ok) cart.add(cartItem, { force: true });
+      if (!ok) return;
+      for (let n = 0; n < input.qty; n += 1) cart.add(payload, { force: n === 0 });
     }
-  };
+    setConfiguring(null);
+  }
 
   return (
     <div className="pb-24">
@@ -73,18 +97,11 @@ export function ShopPage({ shopId }: { shopId: string }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{i.name}</p>
                     <p className="text-sm text-orange-600">฿{i.price}</p>
+                    {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ในตะกร้า {qtyOf(i.item_id)} ชิ้น</p>}
                   </div>
-                  {qtyOf(i.item_id) > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => cart.setQty(i.item_id, qtyOf(i.item_id) - 1)} className="w-7 h-7 rounded-full bg-gray-100">−</button>
-                      <span className="text-sm w-4 text-center">{qtyOf(i.item_id)}</span>
-                      <button onClick={() => addItem(i)} className="w-7 h-7 rounded-full bg-orange-500 text-white">+</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => addItem(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
-                      เพิ่ม
-                    </button>
-                  )}
+                  <button onClick={() => setConfiguring(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
+                    {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
+                  </button>
                 </div>
               ))}
           </div>
@@ -99,6 +116,20 @@ export function ShopPage({ shopId }: { shopId: string }) {
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>
+      )}
+
+      {configuring && (
+        <ProductConfigurator
+          product={{
+            itemId: configuring.item_id,
+            shopId: configuring.shop_id,
+            name: configuring.name,
+            price: configuring.price,
+            imageUrl: configuring.image_url,
+          }}
+          onClose={() => setConfiguring(null)}
+          onConfirm={configuredAdd}
+        />
       )}
     </div>
   );
