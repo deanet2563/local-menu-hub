@@ -3,9 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
+import { BundleConfigurator } from "@/components/customer/BundleConfigurator";
+import { loadShopBundles, type OrderingBundle } from "@/lib/ordering-config";
 
 // ============================================================
-// MyTree — Shop page: menu grouped by category + configurable add-to-cart.
+// MyTree — Shop page: menu + shop-defined configurable sets/bundles.
 // ============================================================
 
 type Shop = {
@@ -18,8 +20,10 @@ type Item = { item_id: string; shop_id: string; name: string; price: number; ima
 export function ShopPage({ shopId }: { shopId: string }) {
   const [shop, setShop] = useState<Shop | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [bundles, setBundles] = useState<OrderingBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuring, setConfiguring] = useState<Item | null>(null);
+  const [configuringBundle, setConfiguringBundle] = useState<OrderingBundle | null>(null);
   const c = useCart();
 
   useEffect(() => {
@@ -30,6 +34,12 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ]);
       setShop(s as Shop);
       setItems((m as Item[]) ?? []);
+      try {
+        setBundles(await loadShopBundles(shopId));
+      } catch {
+        // Migration may not be applied yet. Preserve the existing menu flow.
+        setBundles([]);
+      }
       setLoading(false);
     })();
   }, [shopId]);
@@ -71,6 +81,32 @@ export function ShopPage({ shopId }: { shopId: string }) {
     setConfiguring(null);
   }
 
+  function configuredBundleAdd(input: Parameters<React.ComponentProps<typeof BundleConfigurator>["onConfirm"]>[0]) {
+    const payload = {
+      kind: "bundle" as const,
+      itemId: input.bundle.bundle_id,
+      shopId: input.bundle.shop_id,
+      name: input.bundle.name,
+      price: input.bundle.price,
+      imageUrl: input.bundle.image_url,
+      options: input.options,
+      note: input.note,
+      bundleSelections: input.selections,
+    };
+
+    let result: ReturnType<typeof cart.add> = "ok";
+    for (let n = 0; n < input.qty; n += 1) {
+      result = cart.add(payload);
+      if (result === "different_shop") break;
+    }
+    if (result === "different_shop") {
+      const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
+      if (!ok) return;
+      for (let n = 0; n < input.qty; n += 1) cart.add(payload, { force: n === 0 });
+    }
+    setConfiguringBundle(null);
+  }
+
   return (
     <div className="pb-24">
       <div className="p-4 flex items-center gap-3 border-b border-gray-100">
@@ -84,6 +120,28 @@ export function ShopPage({ shopId }: { shopId: string }) {
           </p>
         </div>
       </div>
+
+      {bundles.length > 0 && (
+        <div className="px-4 pt-4">
+          <div className="flex items-end justify-between mb-2">
+            <p className="text-sm font-semibold text-gray-800">จัดเป็นชุด</p>
+            <p className="text-[11px] text-gray-400">เลือกสินค้าในชุดได้เอง</p>
+          </div>
+          <div className="space-y-3">
+            {bundles.map((bundle) => (
+              <div key={bundle.bundle_id} className="flex gap-3 items-center rounded-xl border border-orange-100 bg-orange-50/40 p-2.5">
+                <img src={bundle.image_url ?? ""} alt={bundle.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{bundle.name}</p>
+                  {bundle.description && <p className="text-xs text-gray-400 line-clamp-2">{bundle.description}</p>}
+                  <p className="text-sm text-orange-600 mt-0.5">฿{bundle.price}</p>
+                </div>
+                <button onClick={() => setConfiguringBundle(bundle)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">จัดชุด</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {cats.map((cc) => (
         <div key={cc} className="px-4 pt-4">
@@ -129,6 +187,14 @@ export function ShopPage({ shopId }: { shopId: string }) {
           }}
           onClose={() => setConfiguring(null)}
           onConfirm={configuredAdd}
+        />
+      )}
+
+      {configuringBundle && (
+        <BundleConfigurator
+          bundle={configuringBundle}
+          onClose={() => setConfiguringBundle(null)}
+          onConfirm={configuredBundleAdd}
         />
       )}
     </div>
