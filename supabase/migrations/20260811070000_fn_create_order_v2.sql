@@ -24,7 +24,6 @@ declare
   v_sub_id uuid;
   v_config jsonb;
 begin
-  -- Reuse the existing, production-proven order lifecycle and status logic.
   select f.out_hub_order_id, f.out_sub_id
     into v_hub_order_id, v_sub_id
   from public.fn_create_order(
@@ -50,19 +49,9 @@ begin
   for v_config in select * from jsonb_array_elements(p_line_configurations)
   loop
     insert into public.order_line_configurations (
-      sub_id,
-      shop_id,
-      line_ref,
-      line_kind,
-      menu_item_id,
-      bundle_id,
-      item_name_snapshot,
-      base_price_snapshot,
-      unit_price_snapshot,
-      qty,
-      options_snapshot,
-      bundle_selections_snapshot,
-      item_note
+      sub_id, shop_id, line_ref, line_kind, menu_item_id, bundle_id,
+      item_name_snapshot, base_price_snapshot, unit_price_snapshot, qty,
+      options_snapshot, bundle_selections_snapshot, item_note
     ) values (
       v_sub_id,
       p_shop_id,
@@ -84,13 +73,19 @@ begin
 end;
 $function$;
 
+-- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. Supabase may
+-- also retain explicit grants for API roles, so revoke each client-facing role
+-- explicitly. Only the Worker service-role may call this security-definer RPC.
 revoke all on function public.fn_create_order_v2(
   text, jsonb, jsonb, uuid, fulfillment_type_enum, payment_method_enum,
   text, uuid, text, text
 ) from public;
 
--- Called by the Cloudflare Worker with the service-role key. Keeping execute
--- away from anon/authenticated prevents clients bypassing Worker validation.
+revoke execute on function public.fn_create_order_v2(
+  text, jsonb, jsonb, uuid, fulfillment_type_enum, payment_method_enum,
+  text, uuid, text, text
+) from anon, authenticated;
+
 grant execute on function public.fn_create_order_v2(
   text, jsonb, jsonb, uuid, fulfillment_type_enum, payment_method_enum,
   text, uuid, text, text
