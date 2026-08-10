@@ -77,15 +77,12 @@ create table if not exists public.menu_bundle_option_groups (
   primary key (bundle_id, option_group_id)
 );
 
--- Historical snapshots: current order_items already allows menu_item_id NULL,
--- so a bundle can be represented without inventing a fake menu item.
 alter table public.order_items
   add column if not exists line_kind text not null default 'item',
   add column if not exists bundle_id uuid references public.menu_bundles(bundle_id) on delete restrict,
   add column if not exists item_note text,
   add column if not exists configuration_snapshot jsonb;
 
--- Keep the allowed line kinds explicit while remaining backwards-compatible.
 do $$
 begin
   if not exists (
@@ -115,8 +112,6 @@ alter table public.menu_bundle_groups enable row level security;
 alter table public.menu_bundle_group_items enable row level security;
 alter table public.menu_bundle_option_groups enable row level security;
 
--- Customer-facing reads. Parent availability/active checks are also enforced by
--- the Worker before order creation; browser data is never authoritative.
 create policy "public read active option groups" on public.menu_option_groups
   for select using (is_active = true);
 create policy "public read active options" on public.menu_options
@@ -132,26 +127,25 @@ create policy "public read bundle items" on public.menu_bundle_group_items
 create policy "public read bundle option links" on public.menu_bundle_option_groups
   for select using (true);
 
--- Shop write policies intentionally use the existing SECURITY DEFINER helper.
--- Do not apply this migration until fn_staff_shop_ids() is confirmed to return
--- the same shop-id type used by shops.shop_id (live schema: text).
+-- fn_staff_shop_ids() returns SETOF text in the live DB. Use it as a set,
+-- not as an array, to avoid ANY(array) type errors.
 create policy "shop staff manage option groups" on public.menu_option_groups
-  for all using (shop_id = any(public.fn_staff_shop_ids()))
-  with check (shop_id = any(public.fn_staff_shop_ids()));
+  for all using (shop_id in (select public.fn_staff_shop_ids()))
+  with check (shop_id in (select public.fn_staff_shop_ids()));
 
 create policy "shop staff manage options" on public.menu_options
   for all using (
     exists (
       select 1 from public.menu_option_groups g
       where g.option_group_id = menu_options.option_group_id
-        and g.shop_id = any(public.fn_staff_shop_ids())
+        and g.shop_id in (select public.fn_staff_shop_ids())
     )
   )
   with check (
     exists (
       select 1 from public.menu_option_groups g
       where g.option_group_id = menu_options.option_group_id
-        and g.shop_id = any(public.fn_staff_shop_ids())
+        and g.shop_id in (select public.fn_staff_shop_ids())
     )
   );
 
@@ -160,34 +154,34 @@ create policy "shop staff manage item option links" on public.menu_item_option_g
     exists (
       select 1 from public.menu_items m
       where m.item_id = menu_item_option_groups.item_id
-        and m.shop_id = any(public.fn_staff_shop_ids())
+        and m.shop_id in (select public.fn_staff_shop_ids())
     )
   )
   with check (
     exists (
       select 1 from public.menu_items m
       where m.item_id = menu_item_option_groups.item_id
-        and m.shop_id = any(public.fn_staff_shop_ids())
+        and m.shop_id in (select public.fn_staff_shop_ids())
     )
   );
 
 create policy "shop staff manage bundles" on public.menu_bundles
-  for all using (shop_id = any(public.fn_staff_shop_ids()))
-  with check (shop_id = any(public.fn_staff_shop_ids()));
+  for all using (shop_id in (select public.fn_staff_shop_ids()))
+  with check (shop_id in (select public.fn_staff_shop_ids()));
 
 create policy "shop staff manage bundle groups" on public.menu_bundle_groups
   for all using (
     exists (
       select 1 from public.menu_bundles b
       where b.bundle_id = menu_bundle_groups.bundle_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   )
   with check (
     exists (
       select 1 from public.menu_bundles b
       where b.bundle_id = menu_bundle_groups.bundle_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   );
 
@@ -198,7 +192,7 @@ create policy "shop staff manage bundle items" on public.menu_bundle_group_items
       from public.menu_bundle_groups bg
       join public.menu_bundles b on b.bundle_id = bg.bundle_id
       where bg.bundle_group_id = menu_bundle_group_items.bundle_group_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   )
   with check (
@@ -207,7 +201,7 @@ create policy "shop staff manage bundle items" on public.menu_bundle_group_items
       from public.menu_bundle_groups bg
       join public.menu_bundles b on b.bundle_id = bg.bundle_id
       where bg.bundle_group_id = menu_bundle_group_items.bundle_group_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   );
 
@@ -216,13 +210,13 @@ create policy "shop staff manage bundle option links" on public.menu_bundle_opti
     exists (
       select 1 from public.menu_bundles b
       where b.bundle_id = menu_bundle_option_groups.bundle_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   )
   with check (
     exists (
       select 1 from public.menu_bundles b
       where b.bundle_id = menu_bundle_option_groups.bundle_id
-        and b.shop_id = any(public.fn_staff_shop_ids())
+        and b.shop_id in (select public.fn_staff_shop_ids())
     )
   );
