@@ -27,30 +27,28 @@ export type OrderPayload = {
   payment: "cash" | "qr_transfer";
   address: string | null;
   note: string | null;
-  /** Reserved for the existing pre-order flow. Omitted for Order Now. */
   requestedFor?: string | null;
 };
 
 export async function submitOrder(
   order: OrderPayload
 ): Promise<{ ok: boolean; order_id?: string; error?: string }> {
-  // The public Cloudflare preview is intentionally not a LIFF endpoint.
-  // Never launch LINE login from here: the callback/session would not belong
-  // to the preview app and the cart/order context would be lost. Preview is
-  // for catalog/cart/checkout UX only; real order submission is tested from
-  // a configured LIFF endpoint.
-  if (isOrderingPreview()) {
-    return {
-      ok: false,
-      error: "โหมดทดสอบหน้าเว็บยังไม่ส่งคำสั่งซื้อจริง กรุณาทดสอบการยืนยันออเดอร์ผ่าน LINE LIFF",
-    };
-  }
-
   await initLiff();
+
   if (!liff.isLoggedIn()) {
+    // The raw Cloudflare preview URL is for UX testing only. Once this same
+    // hostname is opened through its staging LIFF URL, LIFF supplies a logged
+    // in session and real order submission is allowed.
+    if (isOrderingPreview()) {
+      return {
+        ok: false,
+        error: "โหมดทดสอบหน้าเว็บยังไม่ได้เปิดผ่าน LIFF staging จึงยังไม่ส่งคำสั่งซื้อจริง",
+      };
+    }
     liff.login();
     return { ok: false, error: "กำลังเข้าสู่ระบบ LINE..." };
   }
+
   const idToken = liff.getIDToken();
   if (!idToken) return { ok: false, error: "ไม่พบ LINE idToken" };
 
