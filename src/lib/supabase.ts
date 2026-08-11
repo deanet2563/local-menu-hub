@@ -19,6 +19,12 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
 
+/** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
+export function isOrderingPreview(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+}
+
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
 export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -37,12 +43,19 @@ export async function getAccessToken(): Promise<string> {
 
   await initLiff();
   if (!liff.isLoggedIn()) {
+    // Preview browsing intentionally works outside LINE. Never redirect this
+    // hostname to access.line.me; authenticated actions are tested later from
+    // the real LIFF entry point.
+    if (isOrderingPreview()) return "";
     liff.login();
     return "";
   }
 
   const idToken = liff.getIDToken();
-  if (!idToken) throw new Error("no LINE idToken");
+  if (!idToken) {
+    if (isOrderingPreview()) return "";
+    throw new Error("no LINE idToken");
+  }
 
   const res = await fetch(AUTH_BROKER, {
     method: "POST",
