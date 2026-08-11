@@ -3,12 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { publicSupabase } from "@/lib/supabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
-import { BundleConfigurator } from "@/components/customer/BundleConfigurator";
-import { loadShopBundles, type OrderingBundle } from "@/lib/ordering-config";
 
 // ============================================================
-// MyTree — Shop page: menu + shop-defined configurable sets/bundles.
-// Public catalog reads must not trigger LINE login.
+// MyTree — Shop page
+// Customers freely create ชุด 1 / ชุด 2 / ... and add any menu products
+// into each set. A set is only grouping; price is always the sum of products.
 // ============================================================
 
 type Shop = {
@@ -18,13 +17,18 @@ type Shop = {
 };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
 
+function setNumber(setId: string | null | undefined) {
+  const m = /^customer-set-(\d+)$/.exec(setId ?? "");
+  return m ? Number(m[1]) : 0;
+}
+
 export function ShopPage({ shopId }: { shopId: string }) {
   const [shop, setShop] = useState<Shop | null>(null);
   const [items, setItems] = useState<Item[]>([]);
-  const [bundles, setBundles] = useState<OrderingBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuring, setConfiguring] = useState<Item | null>(null);
-  const [configuringBundle, setConfiguringBundle] = useState<OrderingBundle | null>(null);
+  const [activeSetNo, setActiveSetNo] = useState(1);
+  const [setCount, setSetCount] = useState(1);
   const c = useCart();
 
   useEffect(() => {
@@ -35,22 +39,35 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ]);
       setShop(s as Shop);
       setItems((m as Item[]) ?? []);
-      try {
-        setBundles(await loadShopBundles(shopId));
-      } catch (error) {
-        console.warn("Unable to load bundles", error);
-        setBundles([]);
-      }
       setLoading(false);
     })();
   }, [shopId]);
+
+  useEffect(() => {
+    if (c.shopId !== shopId) return;
+    const maxExisting = c.items.reduce((max, item) => Math.max(max, setNumber(item.setId)), 0);
+    if (maxExisting > setCount) setSetCount(maxExisting);
+  }, [c.items, c.shopId, shopId, setCount]);
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
   if (!shop) return <p className="p-4 text-sm text-gray-400">ไม่พบร้าน</p>;
   if (!shop.is_approved || shop.is_banned) return <p className="p-4 text-sm text-gray-400">ร้านนี้ยังไม่พร้อมให้บริการ</p>;
 
   const cats = Array.from(new Set(items.map((i) => i.category || "อื่นๆ")));
-  const qtyOf = (id: string) => c.items.filter((i) => i.itemId === id).reduce((n, i) => n + i.qty, 0);
+  const activeSetId = `customer-set-${activeSetNo}`;
+  const activeSetName = `ชุด ${activeSetNo}`;
+  const qtyOf = (id: string) => c.items
+    .filter((i) => i.itemId === id && i.setId === activeSetId)
+    .reduce((n, i) => n + i.qty, 0);
+  const activeSetCount = c.items
+    .filter((i) => i.setId === activeSetId)
+    .reduce((n, i) => n + i.qty, 0);
+
+  function addSet() {
+    const next = setCount + 1;
+    setSetCount(next);
+    setActiveSetNo(next);
+  }
 
   function configuredAdd(input: {
     product: ConfigurableProduct;
@@ -66,6 +83,8 @@ export function ShopPage({ shopId }: { shopId: string }) {
       imageUrl: input.product.imageUrl,
       options: input.options,
       note: input.note,
+      setId: activeSetId,
+      setName: activeSetName,
     };
 
     let result: ReturnType<typeof cart.add> = "ok";
@@ -73,7 +92,6 @@ export function ShopPage({ shopId }: { shopId: string }) {
       result = cart.add(payload);
       if (result === "different_shop") break;
     }
-
     if (result === "different_shop") {
       const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
       if (!ok) return;
@@ -82,96 +100,68 @@ export function ShopPage({ shopId }: { shopId: string }) {
     setConfiguring(null);
   }
 
-  function configuredBundleAdd(input: Parameters<React.ComponentProps<typeof BundleConfigurator>["onConfirm"]>[0]) {
-    const payload = {
-      kind: "bundle" as const,
-      itemId: input.bundle.bundle_id,
-      shopId: input.bundle.shop_id,
-      name: input.bundle.name,
-      price: input.bundle.price,
-      imageUrl: input.bundle.image_url,
-      options: input.options,
-      note: input.note,
-      bundleSelections: input.selections,
-    };
-
-    let result: ReturnType<typeof cart.add> = "ok";
-    for (let n = 0; n < input.qty; n += 1) {
-      result = cart.add(payload);
-      if (result === "different_shop") break;
-    }
-    if (result === "different_shop") {
-      const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
-      if (!ok) return;
-      for (let n = 0; n < input.qty; n += 1) cart.add(payload, { force: n === 0 });
-    }
-    setConfiguringBundle(null);
-  }
-
   return (
-    <div className="pb-24">
+    <div className="pb-28">
       <div className="p-4 flex items-center gap-3 border-b border-gray-100">
         <Link to="/" className="text-gray-400 text-lg">‹</Link>
         <img src={shop.logo_url ?? ""} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{shop.name}</h1>
           <p className="text-xs text-gray-400 truncate">
-            {shop.category}
-            {shop.delivery_note ? ` · ${shop.delivery_note}` : ""}
+            {shop.category}{shop.delivery_note ? ` · ${shop.delivery_note}` : ""}
           </p>
         </div>
       </div>
 
-      {bundles.length > 0 && (
-        <div className="px-4 pt-4">
-          <div className="flex items-end justify-between mb-2">
-            <p className="text-sm font-semibold text-gray-800">จัดเป็นชุด</p>
-            <p className="text-[11px] text-gray-400">เลือกสินค้าในชุดได้เอง</p>
-          </div>
-          <div className="space-y-3">
-            {bundles.map((bundle) => (
-              <div key={bundle.bundle_id} className="flex gap-3 items-center rounded-xl border border-orange-100 bg-orange-50/40 p-2.5">
-                <img src={bundle.image_url ?? ""} alt={bundle.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{bundle.name}</p>
-                  {bundle.description && <p className="text-xs text-gray-400 line-clamp-2">{bundle.description}</p>}
-                  <p className="text-sm text-orange-600 mt-0.5">฿{bundle.price}</p>
-                </div>
-                <button onClick={() => setConfiguringBundle(bundle)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">จัดชุด</button>
-              </div>
-            ))}
-          </div>
+      <div className="sticky top-0 z-20 bg-white border-b border-orange-100 px-4 py-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-sm text-gray-500 shrink-0">กำลังเลือก</span>
+          {Array.from({ length: setCount }, (_, idx) => idx + 1).map((n) => {
+            const count = c.items.filter((i) => i.setId === `customer-set-${n}`).reduce((sum, i) => sum + i.qty, 0);
+            const active = n === activeSetNo;
+            return (
+              <button
+                type="button"
+                key={n}
+                onClick={() => setActiveSetNo(n)}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium border ${active ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-200"}`}
+              >
+                ชุด {n}{count > 0 ? ` (${count})` : ""}
+              </button>
+            );
+          })}
+          <button type="button" onClick={addSet} className="shrink-0 rounded-full px-4 py-2 text-sm font-medium text-orange-600 border border-dashed border-orange-400 bg-white">
+            ＋ เพิ่มชุด
+          </button>
         </div>
-      )}
+        <p className="mt-1 text-[11px] text-gray-400">
+          {activeSetCount > 0 ? `${activeSetName} มี ${activeSetCount} ชิ้น · เลือกสินค้าเพิ่มได้อิสระ` : `${activeSetName} · เลือกสินค้าอะไรก็ได้จากเมนูด้านล่าง`}
+        </p>
+      </div>
 
       {cats.map((cc) => (
         <div key={cc} className="px-4 pt-4">
           <p className="text-sm font-medium text-gray-700 mb-2">{cc}</p>
           <div className="space-y-3">
-            {items
-              .filter((i) => (i.category || "อื่นๆ") === cc)
-              .map((i) => (
-                <div key={i.item_id} className="flex gap-3 items-center">
-                  <img src={i.image_url ?? ""} alt={i.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{i.name}</p>
-                    <p className="text-sm text-orange-600">฿{i.price}</p>
-                    {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ในตะกร้า {qtyOf(i.item_id)} ชิ้น</p>}
-                  </div>
-                  <button onClick={() => setConfiguring(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
-                    {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
-                  </button>
+            {items.filter((i) => (i.category || "อื่นๆ") === cc).map((i) => (
+              <div key={i.item_id} className="flex gap-3 items-center">
+                <img src={i.image_url ?? ""} alt={i.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{i.name}</p>
+                  <p className="text-sm text-orange-600">฿{i.price}</p>
+                  {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ใน{activeSetName} {qtyOf(i.item_id)} ชิ้น</p>}
                 </div>
-              ))}
+                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
+                  {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       ))}
 
       {cartCount(c) > 0 && (
-        <Link
-          to="/cart"
-          className="fixed left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"
-        >
+        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>
@@ -188,14 +178,6 @@ export function ShopPage({ shopId }: { shopId: string }) {
           }}
           onClose={() => setConfiguring(null)}
           onConfirm={configuredAdd}
-        />
-      )}
-
-      {configuringBundle && (
-        <BundleConfigurator
-          bundle={configuringBundle}
-          onClose={() => setConfiguringBundle(null)}
-          onConfirm={configuredBundleAdd}
         />
       )}
     </div>
