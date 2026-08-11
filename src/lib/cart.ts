@@ -133,7 +133,8 @@ function restore(): CartState {
     const parsed = JSON.parse(raw) as PersistedCart;
     if (parsed.version !== STORAGE_VERSION || !parsed.state || !Array.isArray(parsed.state.items)) return EMPTY;
     const items = parsed.state.items.filter((i) => i && i.shopId && i.itemId && i.qty > 0);
-    const shopId = items.length ? parsed.state.shopId ?? items[0].shopId : null;
+    const firstItem = items[0];
+    const shopId = firstItem ? (parsed.state.shopId ?? firstItem.shopId) : null;
     // Single-shop safety also applies when restoring stale/tampered storage.
     const sameShop = shopId ? items.filter((i) => i.shopId === shopId) : [];
     return { shopId: sameShop.length ? shopId : null, items: sameShop };
