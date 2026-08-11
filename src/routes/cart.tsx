@@ -83,6 +83,7 @@ function CartCheckout() {
         });
       }
       const group = groups[groupIndex];
+      if (!group) continue;
       group.items.push(item);
       group.count += item.qty;
       group.total += cartLineTotal(item);
