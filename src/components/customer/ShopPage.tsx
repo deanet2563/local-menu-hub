@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/supabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 import { BundleConfigurator } from "@/components/customer/BundleConfigurator";
@@ -8,6 +8,7 @@ import { loadShopBundles, type OrderingBundle } from "@/lib/ordering-config";
 
 // ============================================================
 // MyTree — Shop page: menu + shop-defined configurable sets/bundles.
+// Public catalog reads must not trigger LINE login.
 // ============================================================
 
 type Shop = {
@@ -29,15 +30,15 @@ export function ShopPage({ shopId }: { shopId: string }) {
   useEffect(() => {
     (async () => {
       const [{ data: s }, { data: m }] = await Promise.all([
-        supabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note,is_approved,is_banned").eq("shop_id", shopId).maybeSingle(),
-        supabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("shop_id", shopId).eq("is_available", true),
+        publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note,is_approved,is_banned").eq("shop_id", shopId).maybeSingle(),
+        publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("shop_id", shopId).eq("is_available", true),
       ]);
       setShop(s as Shop);
       setItems((m as Item[]) ?? []);
       try {
         setBundles(await loadShopBundles(shopId));
-      } catch {
-        // Migration may not be applied yet. Preserve the existing menu flow.
+      } catch (error) {
+        console.warn("Unable to load bundles", error);
         setBundles([]);
       }
       setLoading(false);
