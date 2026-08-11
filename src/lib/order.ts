@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff } from "@/lib/supabase";
+import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import type { CartBundleSelection, CartOptionSelection } from "@/lib/cart";
 
 // ============================================================
@@ -34,6 +34,18 @@ export type OrderPayload = {
 export async function submitOrder(
   order: OrderPayload
 ): Promise<{ ok: boolean; order_id?: string; error?: string }> {
+  // The public Cloudflare preview is intentionally not a LIFF endpoint.
+  // Never launch LINE login from here: the callback/session would not belong
+  // to the preview app and the cart/order context would be lost. Preview is
+  // for catalog/cart/checkout UX only; real order submission is tested from
+  // a configured LIFF endpoint.
+  if (isOrderingPreview()) {
+    return {
+      ok: false,
+      error: "โหมดทดสอบหน้าเว็บยังไม่ส่งคำสั่งซื้อจริง กรุณาทดสอบการยืนยันออเดอร์ผ่าน LINE LIFF",
+    };
+  }
+
   await initLiff();
   if (!liff.isLoggedIn()) {
     liff.login();
