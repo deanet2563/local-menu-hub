@@ -56,6 +56,44 @@ function CartCheckout() {
     [shop]
   );
 
+  const groupedItems = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      name: string;
+      isSet: boolean;
+      items: typeof c.items;
+      count: number;
+      total: number;
+    }> = [];
+    const index = new Map<string, number>();
+
+    for (const item of c.items) {
+      const key = item.setId ? `set:${item.setId}` : "general";
+      let groupIndex = index.get(key);
+      if (groupIndex === undefined) {
+        groupIndex = groups.length;
+        index.set(key, groupIndex);
+        groups.push({
+          key,
+          name: item.setName || "รายการทั่วไป",
+          isSet: !!item.setId,
+          items: [],
+          count: 0,
+          total: 0,
+        });
+      }
+      const group = groups[groupIndex];
+      group.items.push(item);
+      group.count += item.qty;
+      group.total += cartLineTotal(item);
+    }
+
+    return [
+      ...groups.filter((g) => g.isSet),
+      ...groups.filter((g) => !g.isSet),
+    ];
+  }, [c.items]);
+
   useEffect(() => {
     (async () => {
       if (!c.shopId) return;
@@ -190,50 +228,66 @@ function CartCheckout() {
         </div>
       )}
 
-      <div className="space-y-3 border-b border-gray-100 pb-3">
-        {c.items.map((i) => (
-          <div key={i.lineId} className="rounded-xl border border-gray-100 p-3 text-sm space-y-2">
-            {i.setName && <p className="text-xs font-medium text-orange-600">{i.setName}</p>}
-            <div className="flex justify-between gap-3">
-              <span className="font-medium">{i.name}</span>
-              <span className="text-gray-600 shrink-0">฿{cartLineTotal(i)}</span>
-            </div>
-            {i.options.length > 0 && <p className="text-xs text-gray-500">{i.options.map((o) => `${o.groupName}: ${o.optionName}`).join(" · ")}</p>}
-            {i.bundleSelections.length > 0 && (
-              <div className="text-xs text-gray-500 pl-2 border-l border-gray-200 space-y-0.5">
-                {i.bundleSelections.map((s, idx) => <p key={`${s.groupId}-${s.itemId}-${idx}`}>{s.itemName} × {s.qty}</p>)}
+      <div className="space-y-4 border-b border-gray-100 pb-4">
+        {groupedItems.map((group) => (
+          <section
+            key={group.key}
+            className={`rounded-2xl border p-3 ${group.isSet ? "border-orange-100 bg-orange-50/40" : "border-gray-100 bg-white"}`}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 mb-2">
+              <div>
+                <p className={`font-semibold ${group.isSet ? "text-orange-700" : "text-gray-700"}`}>{group.name}</p>
+                <p className="text-[11px] text-gray-400">{group.count} ชิ้น</p>
               </div>
-            )}
-            {i.note && <p className="text-xs text-gray-400">📝 {i.note}</p>}
-
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => cart.setQty(i.lineId, i.qty - 1)}
-                className="h-9 w-9 rounded-full border border-gray-200 bg-white text-lg text-gray-700"
-                aria-label={`ลดจำนวน ${i.name}`}
-              >
-                −
-              </button>
-              <span className="w-8 text-center font-medium" aria-label={`จำนวน ${i.qty}`}>{i.qty}</span>
-              <button
-                type="button"
-                onClick={() => cart.setQty(i.lineId, i.qty + 1)}
-                className="h-9 w-9 rounded-full bg-orange-500 text-lg text-white"
-                aria-label={`เพิ่มจำนวน ${i.name}`}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => cart.remove(i.lineId)}
-                className="ml-1 h-9 px-3 rounded-lg bg-red-50 text-red-500 text-xs font-medium"
-                aria-label={`ลบ ${i.name} ออกจากตะกร้า`}
-              >
-                ลบ
-              </button>
+              <p className="text-sm font-semibold text-gray-700">฿{group.total}</p>
             </div>
-          </div>
+
+            <div className="divide-y divide-gray-100">
+              {group.items.map((i) => (
+                <div key={i.lineId} className="py-3 first:pt-1 last:pb-1 text-sm space-y-2">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-medium">{i.name}</span>
+                    <span className="text-gray-600 shrink-0">฿{cartLineTotal(i)}</span>
+                  </div>
+                  {i.options.length > 0 && <p className="text-xs text-gray-500">{i.options.map((o) => `${o.groupName}: ${o.optionName}`).join(" · ")}</p>}
+                  {i.bundleSelections.length > 0 && (
+                    <div className="text-xs text-gray-500 pl-2 border-l border-gray-200 space-y-0.5">
+                      {i.bundleSelections.map((s, idx) => <p key={`${s.groupId}-${s.itemId}-${idx}`}>{s.itemName} × {s.qty}</p>)}
+                    </div>
+                  )}
+                  {i.note && <p className="text-xs text-gray-400">📝 {i.note}</p>}
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => cart.setQty(i.lineId, i.qty - 1)}
+                      className="h-9 w-9 rounded-full border border-gray-200 bg-white text-lg text-gray-700"
+                      aria-label={`ลดจำนวน ${i.name}`}
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center font-medium" aria-label={`จำนวน ${i.qty}`}>{i.qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => cart.setQty(i.lineId, i.qty + 1)}
+                      className="h-9 w-9 rounded-full bg-orange-500 text-lg text-white"
+                      aria-label={`เพิ่มจำนวน ${i.name}`}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cart.remove(i.lineId)}
+                      className="ml-1 h-9 px-3 rounded-lg bg-red-50 text-red-500 text-xs font-medium"
+                      aria-label={`ลบ ${i.name} ออกจากตะกร้า`}
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
