@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
 
 // ============================================================
-// MyTree — Food-first hub. Shows food photos across ALL shops before
-// shop selection (core UX principle). Tap a dish -> that shop.
+// MyTree — Food-first hub. Public catalog browsing must not trigger LINE login.
 // ============================================================
 
 type Shop = { shop_id: string; name: string; category: string | null; logo_url: string | null };
@@ -24,8 +23,8 @@ export function HubHome() {
   useEffect(() => {
     (async () => {
       const [{ data: s }, { data: m }] = await Promise.all([
-        supabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
-        supabase
+        publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
+        publicSupabase
           .from("menu_items")
           .select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)")
           .eq("is_available", true)
@@ -54,7 +53,7 @@ export function HubHome() {
   async function useMyLocation() {
     try {
       const loc = await getCurrentLocation();
-      const { data } = await supabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
+      const { data } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
       if (data) setNearOrder((data as { shop_id: string }[]).map((r) => r.shop_id));
     } catch {
       /* ignore */
