@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase, isOrderingPreview } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
 
@@ -19,6 +19,7 @@ export function HubHome() {
   const [cat, setCat] = useState<string | null>(null);
   const [nearOrder, setNearOrder] = useState<string[] | null>(null);
   const c = useCart();
+  const staging = isOrderingPreview();
 
   useEffect(() => {
     (async () => {
@@ -66,6 +67,24 @@ export function HubHome() {
     <div className="pb-24">
       <div className="p-4 space-y-3">
         <h1 className="text-xl font-bold">MyTree 🌳</h1>
+
+        {staging && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+            <div>
+              <p className="text-sm font-semibold text-blue-800">🧪 Staging Tools</p>
+              <p className="text-xs text-blue-600">ใช้สำหรับทดสอบฝั่งร้าน โดยไม่กระทบ Rich Menu production</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Link to="/sweet/menu" className="rounded-xl bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white">
+                จัดการรายการ
+              </Link>
+              <Link to="/sweet/shop" className="rounded-xl bg-white px-3 py-2 text-center text-sm font-medium text-blue-700 border border-blue-200">
+                จัดการร้านค้า
+              </Link>
+            </div>
+          </div>
+        )}
+
         <input
           className="w-full rounded-lg border border-gray-200 p-2 text-sm"
           placeholder="ค้นหาอาหาร หรือร้าน"
