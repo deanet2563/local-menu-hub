@@ -161,7 +161,7 @@ function CartCheckout() {
   );
 
   return (
-    <div className="p-4 pb-28 space-y-4 max-w-md mx-auto">
+    <div className="p-4 pb-40 space-y-4 max-w-md mx-auto">
       <div className="flex items-center gap-3">
         {c.shopId && (
           <Link
@@ -192,9 +192,10 @@ function CartCheckout() {
 
       <div className="space-y-3 border-b border-gray-100 pb-3">
         {c.items.map((i) => (
-          <div key={i.lineId} className="text-sm space-y-1">
+          <div key={i.lineId} className="rounded-xl border border-gray-100 p-3 text-sm space-y-2">
+            {i.setName && <p className="text-xs font-medium text-orange-600">{i.setName}</p>}
             <div className="flex justify-between gap-3">
-              <span className="font-medium">{i.name} × {i.qty}</span>
+              <span className="font-medium">{i.name}</span>
               <span className="text-gray-600 shrink-0">฿{cartLineTotal(i)}</span>
             </div>
             {i.options.length > 0 && <p className="text-xs text-gray-500">{i.options.map((o) => `${o.groupName}: ${o.optionName}`).join(" · ")}</p>}
@@ -204,6 +205,34 @@ function CartCheckout() {
               </div>
             )}
             {i.note && <p className="text-xs text-gray-400">📝 {i.note}</p>}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => cart.setQty(i.lineId, i.qty - 1)}
+                className="h-9 w-9 rounded-full border border-gray-200 bg-white text-lg text-gray-700"
+                aria-label={`ลดจำนวน ${i.name}`}
+              >
+                −
+              </button>
+              <span className="w-8 text-center font-medium" aria-label={`จำนวน ${i.qty}`}>{i.qty}</span>
+              <button
+                type="button"
+                onClick={() => cart.setQty(i.lineId, i.qty + 1)}
+                className="h-9 w-9 rounded-full bg-orange-500 text-lg text-white"
+                aria-label={`เพิ่มจำนวน ${i.name}`}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => cart.remove(i.lineId)}
+                className="ml-1 h-9 px-3 rounded-lg bg-red-50 text-red-500 text-xs font-medium"
+                aria-label={`ลบ ${i.name} ออกจากตะกร้า`}
+              >
+                ลบ
+              </button>
+            </div>
           </div>
         ))}
       </div>
