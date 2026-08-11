@@ -104,7 +104,7 @@ export function MenuCatalogManager({ shopId, showWelcome }: { shopId: string; sh
       <div className="grid grid-cols-2 gap-2"><button disabled={saving} onClick={()=>void submitNew()} className="rounded-xl bg-blue-600 p-3 text-white">บันทึก</button><button onClick={()=>{setAdding(false);setAddPhoto(null)}} className="rounded-xl bg-gray-100 p-3">ยกเลิก</button></div>
     </div>}
 
-    <OptionGroupManager shopId={shopId} items={items.map(({ item_id, name, category }) => ({ item_id, name, category }))} />
+    <OptionGroupManager shopId={shopId} items={items} />
 
     {cats.map(cat => <section key={cat} className="space-y-2"><h2 className="font-semibold">{cat}</h2>{items.filter(i=>(i.category||"อื่นๆ")===cat).map(item => <div key={item.item_id} className="rounded-2xl border p-3">
       {editingId===item.item_id ? <div className="space-y-2"><input value={editForm.name} onChange={(e)=>setEditForm({...editForm,name:e.target.value})} className="w-full rounded-xl border p-3"/><div className="grid grid-cols-2 gap-2"><input type="number" value={editForm.price} onChange={(e)=>setEditForm({...editForm,price:e.target.value})} className="rounded-xl border p-3"/><input value={editForm.category} onChange={(e)=>setEditForm({...editForm,category:e.target.value})} className="rounded-xl border p-3"/></div><input type="file" accept="image/*" onChange={(e)=>setEditPhoto(e.target.files?.[0]??null)} className="w-full text-sm"/><div className="grid grid-cols-2 gap-2"><button onClick={()=>void saveEdit(item.item_id)} className="rounded-xl bg-orange-500 p-2 text-white">บันทึก</button><button onClick={()=>setEditingId(null)} className="rounded-xl bg-gray-100 p-2">ยกเลิก</button></div></div>
