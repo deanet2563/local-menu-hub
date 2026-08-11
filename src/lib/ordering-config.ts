@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/supabase";
 
 export type OrderingOption = {
   option_id: string;
@@ -56,7 +56,7 @@ export type OrderingBundle = {
 };
 
 export async function loadItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
-  const { data: links, error: linkError } = await supabase
+  const { data: links, error: linkError } = await publicSupabase
     .from("menu_item_option_groups")
     .select("option_group_id,sort_order")
     .eq("item_id", itemId)
@@ -67,12 +67,12 @@ export async function loadItemOptionGroups(itemId: string): Promise<OrderingOpti
   if (!ids.length) return [];
 
   const [{ data: groups, error: groupError }, { data: options, error: optionError }] = await Promise.all([
-    supabase
+    publicSupabase
       .from("menu_option_groups")
       .select("option_group_id,shop_id,name,description,min_select,max_select,is_required,is_active,sort_order")
       .in("option_group_id", ids)
       .eq("is_active", true),
-    supabase
+    publicSupabase
       .from("menu_options")
       .select("option_id,option_group_id,name,price_delta,is_default,is_active,sort_order")
       .in("option_group_id", ids)
@@ -90,7 +90,7 @@ export async function loadItemOptionGroups(itemId: string): Promise<OrderingOpti
 }
 
 export async function loadShopBundles(shopId: string): Promise<OrderingBundle[]> {
-  const { data: bundles, error: bundleError } = await supabase
+  const { data: bundles, error: bundleError } = await publicSupabase
     .from("menu_bundles")
     .select("bundle_id,shop_id,name,description,price,image_url,category,is_available,sort_order")
     .eq("shop_id", shopId)
@@ -103,12 +103,12 @@ export async function loadShopBundles(shopId: string): Promise<OrderingBundle[]>
   const bundleIds = bs.map((b) => b.bundle_id);
 
   const [{ data: groups, error: groupError }, { data: optionLinks, error: optionLinkError }] = await Promise.all([
-    supabase
+    publicSupabase
       .from("menu_bundle_groups")
       .select("bundle_group_id,bundle_id,name,min_units,max_units,sort_order")
       .in("bundle_id", bundleIds)
       .order("sort_order"),
-    supabase
+    publicSupabase
       .from("menu_bundle_option_groups")
       .select("bundle_id,option_group_id,sort_order")
       .in("bundle_id", bundleIds)
@@ -123,21 +123,21 @@ export async function loadShopBundles(shopId: string): Promise<OrderingBundle[]>
 
   const [eligibleResult, optionGroupResult, optionResult] = await Promise.all([
     groupIds.length
-      ? supabase
+      ? publicSupabase
           .from("menu_bundle_group_items")
           .select("bundle_group_id,item_id,price_delta,sort_order,menu_items(name,price,image_url,is_available)")
           .in("bundle_group_id", groupIds)
           .order("sort_order")
       : Promise.resolve({ data: [], error: null }),
     optionGroupIds.length
-      ? supabase
+      ? publicSupabase
           .from("menu_option_groups")
           .select("option_group_id,shop_id,name,description,min_select,max_select,is_required,is_active,sort_order")
           .in("option_group_id", optionGroupIds)
           .eq("is_active", true)
       : Promise.resolve({ data: [], error: null }),
     optionGroupIds.length
-      ? supabase
+      ? publicSupabase
           .from("menu_options")
           .select("option_id,option_group_id,name,price_delta,is_default,is_active,sort_order")
           .in("option_group_id", optionGroupIds)
