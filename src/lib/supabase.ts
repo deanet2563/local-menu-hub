@@ -11,7 +11,8 @@ import liff from "@line/liff";
 // Flow: LIFF login -> getIDToken -> POST /auth/line -> Supabase JWT.
 // ============================================================
 
-const LIFF_ID = "2010936243-3kPykppE";
+const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
+export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -30,9 +31,17 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-/** Initialise LIFF exactly once. */
+/** Initialise the environment-selected LIFF app exactly once. */
 export function initLiff(): Promise<void> {
-  if (!liffReady) liffReady = liff.init({ liffId: LIFF_ID });
+  if (!liffReady) {
+    liffReady = liff.init({
+      liffId: LIFF_ID,
+      // Do not auto-login when somebody opens the raw Pages URL in Safari.
+      // When launched through the LIFF URL inside LINE, LIFF handles the
+      // in-client session automatically.
+      withLoginOnExternalBrowser: false,
+    });
+  }
   return liffReady;
 }
 
@@ -43,9 +52,9 @@ export async function getAccessToken(): Promise<string> {
 
   await initLiff();
   if (!liff.isLoggedIn()) {
-    // Preview browsing intentionally works outside LINE. Never redirect this
-    // hostname to access.line.me; authenticated actions are tested later from
-    // the real LIFF entry point.
+    // Raw preview browsing intentionally works outside LINE. Authenticated
+    // actions are allowed only after the same preview is launched through its
+    // configured staging LIFF URL.
     if (isOrderingPreview()) return "";
     liff.login();
     return "";
