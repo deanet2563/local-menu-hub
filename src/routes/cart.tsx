@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cart, useCart, cartLineTotal, cartTotal } from "@/lib/cart";
-import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
+import { publicSupabase, supabase, getCurrentCustomerId } from "@/lib/supabase";
 import { submitOrder } from "@/lib/order";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 
@@ -59,7 +59,7 @@ function CartCheckout() {
   useEffect(() => {
     (async () => {
       if (!c.shopId) return;
-      const { data } = await supabase
+      const { data } = await publicSupabase
         .from("shops")
         .select("name,delivery_enabled,pickup_enabled,payment_cash_enabled,payment_qr_enabled,qr_code_url,accepts_preorders,is_open,business_hours")
         .eq("shop_id", c.shopId)
@@ -84,14 +84,15 @@ function CartCheckout() {
   useEffect(() => {
     (async () => {
       try {
-        await initLiff();
         const cid = await getCurrentCustomerId();
         if (!cid) return;
         const { data } = await supabase.from("customers").select("name,phone").eq("id", cid).maybeSingle();
         const row = data as { name: string | null; phone: string | null } | null;
         if (row?.name) setCustomerName(row.name);
         if (row?.phone) setCustomerPhone(row.phone);
-      } catch { /* editable fields remain */ }
+      } catch {
+        // Preview/external browser: leave editable contact fields blank.
+      }
     })();
   }, []);
 
@@ -161,8 +162,23 @@ function CartCheckout() {
 
   return (
     <div className="p-4 pb-28 space-y-4 max-w-md mx-auto">
-      <h1 className="text-lg font-bold">ตรวจสอบคำสั่งซื้อ</h1>
-      {shop?.name && <p className="text-sm text-gray-500">ร้าน {shop.name}</p>}
+      <div className="flex items-center gap-3">
+        {c.shopId && (
+          <Link
+            to="/shop/$shopId"
+            params={{ shopId: c.shopId }}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700"
+          >
+            <span aria-hidden="true">←</span>
+            <span>กลับไปเพิ่มสินค้า</span>
+          </Link>
+        )}
+      </div>
+
+      <div>
+        <h1 className="text-lg font-bold">ตรวจสอบคำสั่งซื้อ</h1>
+        {shop?.name && <p className="text-sm text-gray-500 mt-1">ร้าน {shop.name}</p>}
+      </div>
 
       {availability?.state === "manual_closed" && (
         <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-sm text-red-600">ร้านปิดรับออเดอร์ชั่วคราว</div>
