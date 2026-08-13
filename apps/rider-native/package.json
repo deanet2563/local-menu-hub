@@ -1,0 +1,23 @@
+{
+  "name": "@mytree/rider-native",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor",
+    "setup:native-deps": "npx expo install expo-router expo-location expo-notifications expo-secure-store expo-image-picker react-native-maps react-native-safe-area-context react-native-screens react-native-gesture-handler expo-linking expo-device expo-constants"
+  },
+  "dependencies": {
+    "expo": "^57.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "typescript": "^5.9.0"
+  }
+}
