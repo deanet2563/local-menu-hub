@@ -27,8 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: apps/rider-native/package-lock.json
 
       - name: Install base dependencies
         run: npm install
