@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { clearRiderSession, isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { riderFeatures } from '@/config/features';
 import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
@@ -34,6 +36,7 @@ function HealthRow({ label, value, state = 'pending' }: HealthRowProps) {
 }
 
 export default function RiderHomeScreen() {
+  const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [updatingOnline, setUpdatingOnline] = useState(false);
   const [pushState, setPushState] = useState<ReadinessState>('pending');
@@ -255,6 +258,32 @@ export default function RiderHomeScreen() {
           </Text>
         </Pressable>
 
+        <View style={styles.workRow}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!accountReady}
+            onPress={() => router.push('/active-delivery')}
+            style={[styles.workButton, !accountReady && styles.buttonDisabled]}
+          >
+            <Text style={styles.workButtonTitle}>งานปัจจุบัน</Text>
+            <Text style={styles.workButtonMeta}>Pickup → Delivery</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!rider?.is_online || !riderFeatures.candidateFlow}
+            onPress={() => router.push('/nearby-jobs')}
+            style={[
+              styles.workButton,
+              (!rider?.is_online || !riderFeatures.candidateFlow) && styles.buttonDisabled,
+            ]}
+          >
+            <Text style={styles.workButtonTitle}>งานใกล้ฉัน</Text>
+            <Text style={styles.workButtonMeta}>
+              {riderFeatures.candidateFlow ? 'Nearby Rider Offer' : 'รอ backend gate'}
+            </Text>
+          </Pressable>
+        </View>
+
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.note}>
@@ -315,6 +344,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   onlineButtonActive: { backgroundColor: '#067647' },
+  workRow: { flexDirection: 'row', gap: 10 },
+  workButton: {
+    flex: 1,
+    minHeight: 72,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+  },
+  workButtonTitle: { fontSize: 15, fontWeight: '800', color: '#1D2939' },
+  workButtonMeta: { marginTop: 4, fontSize: 11, color: '#667085' },
   buttonDisabled: { opacity: 0.45 },
   primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   onlineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
