@@ -5,6 +5,8 @@ const allowedAdvisories = new Set([
   'https://github.com/advisories/GHSA-5p2g-fcmc-qvqq',
 ]);
 
+const blockingSeverities = new Set(['high', 'critical']);
+
 const result = spawnSync('npm', ['audit', '--omit=dev', '--json'], {
   encoding: 'utf8',
   shell: process.platform === 'win32',
@@ -46,15 +48,17 @@ const blocking = [];
 const accepted = [];
 
 for (const [name, vulnerability] of Object.entries(vulnerabilities)) {
-  if (!['high', 'critical'].includes(vulnerability.severity)) continue;
+  if (!blockingSeverities.has(vulnerability.severity)) continue;
 
   const leaves = leafAdvisories(name);
-  if (!leaves.length) {
-    blocking.push({ name, reason: 'high/critical vulnerability has no resolvable advisory leaf' });
+  const blockingLeaves = leaves.filter((leaf) => blockingSeverities.has(leaf.severity));
+
+  if (!blockingLeaves.length) {
+    blocking.push({ name, reason: 'high/critical dependency has no resolvable high/critical advisory leaf' });
     continue;
   }
 
-  const unknownLeaves = leaves.filter((leaf) => !allowedAdvisories.has(leaf.url));
+  const unknownLeaves = blockingLeaves.filter((leaf) => !allowedAdvisories.has(leaf.url));
   if (unknownLeaves.length) {
     blocking.push({
       name,
