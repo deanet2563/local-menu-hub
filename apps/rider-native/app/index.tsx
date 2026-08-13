@@ -1,15 +1,28 @@
+import { useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+
+import { ensureForegroundLocation, type RiderLocation } from '@/services/location';
+import { ensurePushReadiness } from '@/services/notifications';
+
+type ReadinessState = 'pending' | 'checking' | 'ready' | 'blocked';
 
 type HealthRowProps = {
   label: string;
   value: string;
-  ready?: boolean;
+  state?: ReadinessState;
 };
 
-function HealthRow({ label, value, ready = false }: HealthRowProps) {
+function HealthRow({ label, value, state = 'pending' }: HealthRowProps) {
   return (
     <View style={styles.healthRow}>
-      <View style={[styles.dot, ready ? styles.dotReady : styles.dotPending]} />
+      <View
+        style={[
+          styles.dot,
+          state === 'ready' && styles.dotReady,
+          state === 'blocked' && styles.dotBlocked,
+          (state === 'pending' || state === 'checking') && styles.dotPending,
+        ]}
+      />
       <View style={styles.healthText}>
         <Text style={styles.healthLabel}>{label}</Text>
         <Text style={styles.healthValue}>{value}</Text>
@@ -19,6 +32,64 @@ function HealthRow({ label, value, ready = false }: HealthRowProps) {
 }
 
 export default function RiderHomeScreen() {
+  const [checking, setChecking] = useState(false);
+  const [pushState, setPushState] = useState<ReadinessState>('pending');
+  const [pushText, setPushText] = useState('รอตรวจสอบ');
+  const [locationState, setLocationState] = useState<ReadinessState>('pending');
+  const [locationText, setLocationText] = useState('รอตรวจสอบ');
+  const [location, setLocation] = useState<RiderLocation | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function checkReadiness() {
+    if (checking) return;
+
+    setChecking(true);
+    setError(null);
+    setPushState('checking');
+    setLocationState('checking');
+    setPushText('กำลังตรวจสอบ...');
+    setLocationText('กำลังตรวจสอบ...');
+
+    const [pushResult, locationResult] = await Promise.allSettled([
+      ensurePushReadiness(),
+      ensureForegroundLocation(),
+    ]);
+
+    if (pushResult.status === 'fulfilled') {
+      setPushState(pushResult.value.ready ? 'ready' : 'blocked');
+      setPushText(
+        pushResult.value.ready
+          ? 'พร้อมรับ Push Notification'
+          : pushResult.value.reason ?? 'Push ยังไม่พร้อม',
+      );
+    } else {
+      setPushState('blocked');
+      setPushText('ตรวจสอบ Push ไม่สำเร็จ');
+    }
+
+    if (locationResult.status === 'fulfilled') {
+      setLocationState(locationResult.value.ready ? 'ready' : 'blocked');
+      setLocation(locationResult.value.location);
+      setLocationText(
+        locationResult.value.ready
+          ? 'ได้ตำแหน่งปัจจุบันแล้ว'
+          : locationResult.value.reason ?? 'ตำแหน่งยังไม่พร้อม',
+      );
+    } else {
+      setLocationState('blocked');
+      setLocationText('ตรวจสอบตำแหน่งไม่สำเร็จ');
+    }
+
+    const failures = [pushResult, locationResult]
+      .filter((result) => result.status === 'rejected')
+      .map((result) => (result.status === 'rejected' ? String(result.reason) : ''));
+
+    if (failures.length) setError(failures.join('\n'));
+    setChecking(false);
+  }
+
+  const nativeReady = pushState === 'ready' && locationState === 'ready';
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -26,23 +97,49 @@ export default function RiderHomeScreen() {
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
           <Text style={styles.title}>พร้อมรับงาน</Text>
           <Text style={styles.subtitle}>
-            Phase 1 foundation: notification, location, account eligibility, and nearby jobs.
+            ตรวจ Push และตำแหน่งก่อนเชื่อมบัญชี MyTree และเปิดสถานะ Online
           </Text>
         </View>
 
         <View style={styles.card}>
-          <HealthRow label="บัญชีไรเดอร์" value="ยังไม่ได้เชื่อม MyTree session" />
-          <HealthRow label="การแจ้งเตือน" value="รอขอ permission" />
-          <HealthRow label="ตำแหน่ง" value="รอขอ permission" />
-          <HealthRow label="สถานะ" value="Offline" />
+          <HealthRow label="บัญชีไรเดอร์" value="รอเชื่อม MyTree session" />
+          <HealthRow label="การแจ้งเตือน" value={pushText} state={pushState} />
+          <HealthRow label="ตำแหน่ง" value={locationText} state={locationState} />
+          <HealthRow
+            label="สถานะรับงาน"
+            value={nativeReady ? 'Native readiness ผ่าน — รอเชื่อมบัญชี' : 'Offline'}
+            state={nativeReady ? 'ready' : 'pending'}
+          />
         </View>
 
-        <Pressable style={styles.primaryButton} accessibilityRole="button">
-          <Text style={styles.primaryButtonText}>ตั้งค่าความพร้อมรับงาน</Text>
+        {location && (
+          <View style={styles.locationCard}>
+            <Text style={styles.locationLabel}>ตำแหน่งล่าสุดบนอุปกรณ์</Text>
+            <Text style={styles.locationValue}>
+              {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+            </Text>
+            <Text style={styles.locationMeta}>
+              Accuracy {location.accuracy ? `${Math.round(location.accuracy)} m` : 'unknown'}
+            </Text>
+          </View>
+        )}
+
+        <Pressable
+          style={[styles.primaryButton, checking && styles.buttonDisabled]}
+          accessibilityRole="button"
+          disabled={checking}
+          onPress={checkReadiness}
+        >
+          <Text style={styles.primaryButtonText}>
+            {checking ? 'กำลังตรวจสอบ...' : 'ตั้งค่าความพร้อมรับงาน'}
+          </Text>
         </Pressable>
 
+        {error && <Text style={styles.error}>{error}</Text>}
+
         <Text style={styles.note}>
-          งานใหม่จะใช้ native push เป็นหลัก ส่วนข้อมูลขณะเปิดแอปจะ sync กับ MyTree backend/realtime.
+          Native Push ใช้แจ้งงานใหม่และการเปลี่ยน assignment ส่วนตำแหน่งนี้ยังไม่ถูกส่งขึ้น backend
+          จนกว่าจะเชื่อม MyTree rider session อย่างปลอดภัย
         </Text>
       </View>
     </SafeAreaView>
@@ -50,35 +147,12 @@ export default function RiderHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F6F8FB',
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    gap: 20,
-  },
-  header: {
-    gap: 8,
-  },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: '#246B50',
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#112235',
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#5B6877',
-  },
+  safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 20 },
+  header: { gap: 8 },
+  eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: '#246B50' },
+  title: { fontSize: 30, fontWeight: '800', color: '#112235' },
+  subtitle: { fontSize: 15, lineHeight: 22, color: '#5B6877' },
   card: {
     gap: 16,
     padding: 18,
@@ -87,35 +161,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  healthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  healthRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  dotReady: { backgroundColor: '#2F855A' },
+  dotPending: { backgroundColor: '#D69E2E' },
+  dotBlocked: { backgroundColor: '#C53030' },
+  healthText: { flex: 1 },
+  healthLabel: { fontSize: 15, fontWeight: '700', color: '#1F2937' },
+  healthValue: { marginTop: 2, fontSize: 13, color: '#667085' },
+  locationCard: {
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#ABEFC6',
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  dotReady: {
-    backgroundColor: '#2F855A',
-  },
-  dotPending: {
-    backgroundColor: '#D69E2E',
-  },
-  healthText: {
-    flex: 1,
-  },
-  healthLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  healthValue: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#667085',
-  },
+  locationLabel: { fontSize: 12, fontWeight: '700', color: '#067647' },
+  locationValue: { marginTop: 4, fontSize: 16, fontWeight: '700', color: '#074D31' },
+  locationMeta: { marginTop: 2, fontSize: 12, color: '#3F6B57' },
   primaryButton: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -124,14 +187,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#163E72',
     paddingHorizontal: 18,
   },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  note: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#667085',
-  },
+  buttonDisabled: { opacity: 0.55 },
+  primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  error: { fontSize: 13, lineHeight: 19, color: '#B42318' },
+  note: { fontSize: 13, lineHeight: 19, color: '#667085' },
 });
