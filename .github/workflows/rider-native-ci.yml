@@ -39,3 +39,6 @@ jobs:
 
       - name: Expo Doctor
         run: npm run doctor
+
+      - name: Production dependency audit
+        run: npm run audit:prod
