@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { ensureForegroundLocation, type RiderLocation } from '@/services/location';
+import { clearRiderSession, isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
+import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
 
 type ReadinessState = 'pending' | 'checking' | 'ready' | 'blocked';
@@ -33,12 +35,71 @@ function HealthRow({ label, value, state = 'pending' }: HealthRowProps) {
 
 export default function RiderHomeScreen() {
   const [checking, setChecking] = useState(false);
+  const [updatingOnline, setUpdatingOnline] = useState(false);
   const [pushState, setPushState] = useState<ReadinessState>('pending');
   const [pushText, setPushText] = useState('รอตรวจสอบ');
   const [locationState, setLocationState] = useState<ReadinessState>('pending');
   const [locationText, setLocationText] = useState('รอตรวจสอบ');
   const [location, setLocation] = useState<RiderLocation | null>(null);
+  const [session, setSession] = useState<RiderSession | null>(null);
+  const [rider, setRider] = useState<RiderProfile | null>(null);
+  const [accountState, setAccountState] = useState<ReadinessState>('checking');
+  const [accountText, setAccountText] = useState('กำลังตรวจ MyTree session...');
   const [error, setError] = useState<string | null>(null);
+
+  async function restoreAccount() {
+    setAccountState('checking');
+    setAccountText('กำลังตรวจ MyTree session...');
+
+    const saved = await loadRiderSession();
+    if (!saved) {
+      setSession(null);
+      setRider(null);
+      setAccountState('pending');
+      setAccountText('รอเชื่อม Native LINE Login');
+      return;
+    }
+
+    if (!isSessionFresh(saved)) {
+      await clearRiderSession();
+      setSession(null);
+      setRider(null);
+      setAccountState('blocked');
+      setAccountText('Session หมดอายุ — ต้องเข้าสู่ระบบใหม่');
+      return;
+    }
+
+    try {
+      const profile = await getRiderProfile(saved);
+      setSession(saved);
+      setRider(profile);
+
+      if (!profile) {
+        setAccountState('blocked');
+        setAccountText('ไม่พบบัญชี Rider สำหรับผู้ใช้นี้');
+      } else if (profile.is_banned) {
+        setAccountState('blocked');
+        setAccountText('บัญชี Rider ถูกระงับ');
+      } else if (profile.deletion_requested_at) {
+        setAccountState('blocked');
+        setAccountText('บัญชีอยู่ระหว่างคำขอลบ');
+      } else if (!profile.is_approved) {
+        setAccountState('pending');
+        setAccountText('รอ Admin อนุมัติ Rider');
+      } else {
+        setAccountState('ready');
+        setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ไม่ระบุพาหนะ'}`);
+      }
+    } catch (cause) {
+      setAccountState('blocked');
+      setAccountText('อ่านบัญชี Rider ไม่สำเร็จ');
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  useEffect(() => {
+    void restoreAccount();
+  }, []);
 
   async function checkReadiness() {
     if (checking) return;
@@ -59,7 +120,7 @@ export default function RiderHomeScreen() {
       setPushState(pushResult.value.ready ? 'ready' : 'blocked');
       setPushText(
         pushResult.value.ready
-          ? 'พร้อมรับ Push Notification'
+          ? 'พร้อมรับ Native Push'
           : pushResult.value.reason ?? 'Push ยังไม่พร้อม',
       );
     } else {
@@ -88,7 +149,47 @@ export default function RiderHomeScreen() {
     setChecking(false);
   }
 
+  async function toggleOnline() {
+    if (!session || !rider || updatingOnline) return;
+
+    setUpdatingOnline(true);
+    setError(null);
+
+    try {
+      if (rider.is_online) {
+        await setRiderOnline(session, rider, false);
+      } else {
+        if (pushState !== 'ready') {
+          throw new Error('ต้องเปิด Native Push Notification ก่อน Online');
+        }
+
+        let freshLocation = location;
+        if (!freshLocation || !isLocationFresh(freshLocation.capturedAt)) {
+          const refreshed = await ensureForegroundLocation();
+          if (!refreshed.ready || !refreshed.location) {
+            throw new Error(refreshed.reason ?? 'ต้องมีตำแหน่งล่าสุดก่อน Online');
+          }
+          freshLocation = refreshed.location;
+          setLocation(freshLocation);
+          setLocationState('ready');
+          setLocationText('ได้ตำแหน่งปัจจุบันแล้ว');
+        }
+
+        await setRiderOnline(session, rider, true, freshLocation);
+      }
+
+      const profile = await getRiderProfile(session);
+      setRider(profile);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setUpdatingOnline(false);
+    }
+  }
+
   const nativeReady = pushState === 'ready' && locationState === 'ready';
+  const accountReady = accountState === 'ready' && !!session && !!rider;
+  const canToggleOnline = accountReady && (rider?.is_online === true || nativeReady);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -97,18 +198,18 @@ export default function RiderHomeScreen() {
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
           <Text style={styles.title}>พร้อมรับงาน</Text>
           <Text style={styles.subtitle}>
-            ตรวจ Push และตำแหน่งก่อนเชื่อมบัญชี MyTree และเปิดสถานะ Online
+            Rider ต้องมีบัญชีที่อนุมัติแล้ว พร้อม Native Push และตำแหน่งล่าสุดก่อนเปิด Online
           </Text>
         </View>
 
         <View style={styles.card}>
-          <HealthRow label="บัญชีไรเดอร์" value="รอเชื่อม MyTree session" />
+          <HealthRow label="บัญชีไรเดอร์" value={accountText} state={accountState} />
           <HealthRow label="การแจ้งเตือน" value={pushText} state={pushState} />
           <HealthRow label="ตำแหน่ง" value={locationText} state={locationState} />
           <HealthRow
             label="สถานะรับงาน"
-            value={nativeReady ? 'Native readiness ผ่าน — รอเชื่อมบัญชี' : 'Offline'}
-            state={nativeReady ? 'ready' : 'pending'}
+            value={rider?.is_online ? 'Online — พร้อมรับงานส่งอาหาร' : 'Offline'}
+            state={rider?.is_online ? 'ready' : 'pending'}
           />
         </View>
 
@@ -131,15 +232,33 @@ export default function RiderHomeScreen() {
           onPress={checkReadiness}
         >
           <Text style={styles.primaryButtonText}>
-            {checking ? 'กำลังตรวจสอบ...' : 'ตั้งค่าความพร้อมรับงาน'}
+            {checking ? 'กำลังตรวจสอบ...' : 'ตรวจ Push + Location'}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[
+            styles.onlineButton,
+            rider?.is_online && styles.onlineButtonActive,
+            (!canToggleOnline || updatingOnline) && styles.buttonDisabled,
+          ]}
+          accessibilityRole="button"
+          disabled={!canToggleOnline || updatingOnline}
+          onPress={toggleOnline}
+        >
+          <Text style={styles.onlineButtonText}>
+            {updatingOnline
+              ? 'กำลังอัปเดต...'
+              : rider?.is_online
+                ? 'ออก Offline'
+                : 'เปิด Online รับงาน'}
           </Text>
         </Pressable>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.note}>
-          Native Push ใช้แจ้งงานใหม่และการเปลี่ยน assignment ส่วนตำแหน่งนี้ยังไม่ถูกส่งขึ้น backend
-          จนกว่าจะเชื่อม MyTree rider session อย่างปลอดภัย
+          Native LINE Login เป็น gate ถัดไป เมื่อ LINE Developers mobile configuration พร้อมแล้ว ID token จะถูกแลกกับ MyTree Worker เป็น Supabase JWT และเก็บเฉพาะใน SecureStore ของเครื่อง
         </Text>
       </View>
     </SafeAreaView>
@@ -148,7 +267,7 @@ export default function RiderHomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 20 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 18 },
   header: { gap: 8 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: '#246B50' },
   title: { fontSize: 30, fontWeight: '800', color: '#112235' },
@@ -187,8 +306,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#163E72',
     paddingHorizontal: 18,
   },
-  buttonDisabled: { opacity: 0.55 },
+  onlineButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: '#667085',
+    paddingHorizontal: 18,
+  },
+  onlineButtonActive: { backgroundColor: '#067647' },
+  buttonDisabled: { opacity: 0.45 },
   primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  onlineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   error: { fontSize: 13, lineHeight: 19, color: '#B42318' },
   note: { fontSize: 13, lineHeight: 19, color: '#667085' },
 });
