@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "MyTree Rider",
+    "slug": "mytree-rider",
+    "scheme": "mytreerider",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "cc.mytree.rider",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "MyTree Rider uses your location to show nearby food-delivery jobs and navigate to pickup and delivery points.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "MyTree Rider may use your location while you are online to keep nearby-job matching accurate.",
+        "NSCameraUsageDescription": "MyTree Rider uses the camera to capture delivery proof when required."
+      }
+    },
+    "android": {
+      "package": "cc.mytree.rider",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow MyTree Rider to use your location to find nearby food-delivery jobs."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow MyTree Rider to take a delivery proof photo."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
