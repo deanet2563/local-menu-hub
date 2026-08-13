@@ -9,7 +9,7 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
-    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "audit:prod": "node ./scripts/audit-production.mjs",
     "setup:native-deps": "npx expo install expo-router expo-location expo-notifications expo-secure-store expo-image-picker react-native-maps react-native-safe-area-context react-native-screens react-native-gesture-handler expo-linking expo-device expo-constants expo-status-bar"
   },
   "dependencies": {
@@ -20,8 +20,5 @@
   "devDependencies": {
     "@types/react": "~19.2.0",
     "typescript": "~6.0.3"
-  },
-  "overrides": {
-    "image-size": "2.0.2"
   }
 }
