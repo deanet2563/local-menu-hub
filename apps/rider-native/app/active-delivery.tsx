@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
@@ -19,6 +20,7 @@ function mapsUrl(input: { lat?: number | null; lng?: number | null; address?: st
 }
 
 export default function ActiveDeliveryScreen() {
+  const router = useRouter();
   const [session, setSession] = useState<RiderSession | null>(null);
   const [job, setJob] = useState<AssignedDelivery | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,10 +172,17 @@ export default function ActiveDeliveryScreen() {
 
         {pickedUpState && (
           <View style={styles.proofCard}>
-            <Text style={styles.proofTitle}>ขั้นถัดไป: Proof of Delivery</Text>
+            <Text style={styles.proofTitle}>Proof of Delivery</Text>
             <Text style={styles.proofText}>
-              Native camera + upload จะเปิดเมื่อเราตรวจ Storage policy ของ `delivery-proofs` ก่อน เพื่อไม่เพิ่มช่องโหว่จาก public upload โดยไม่ตั้งใจ
+              กล้อง Native พร้อมทดสอบแบบ local preview แล้ว ส่วน upload/ปิดงานยังล็อกไว้จนกว่า private Storage policy จะผ่าน gate
             </Text>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.proofButton}
+              onPress={() => router.push({ pathname: '/proof-delivery', params: { subId: job.sub_id } })}
+            >
+              <Text style={styles.proofButtonText}>ถ่ายรูปยืนยันการส่ง</Text>
+            </Pressable>
           </View>
         )}
 
@@ -210,8 +219,10 @@ const styles = StyleSheet.create({
   privacyCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#FFFAEB', borderWidth: 1, borderColor: '#FEDF89' },
   privacyTitle: { fontSize: 14, fontWeight: '800', color: '#93370D' },
   privacyText: { fontSize: 13, lineHeight: 19, color: '#854A0E' },
-  proofCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#F9F5FF', borderWidth: 1, borderColor: '#D6BBFB' },
+  proofCard: { gap: 8, padding: 14, borderRadius: 14, backgroundColor: '#F9F5FF', borderWidth: 1, borderColor: '#D6BBFB' },
   proofTitle: { fontSize: 14, fontWeight: '800', color: '#53389E' },
   proofText: { fontSize: 13, lineHeight: 19, color: '#6941C6' },
+  proofButton: { alignItems: 'center', marginTop: 4, paddingVertical: 11, borderRadius: 12, backgroundColor: '#6941C6' },
+  proofButtonText: { fontWeight: '800', color: '#FFFFFF' },
   message: { fontSize: 13, lineHeight: 19, color: '#667085' },
 });
