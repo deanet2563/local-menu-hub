@@ -9,7 +9,7 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "doctor": "expo-doctor",
-    "setup:native-deps": "npx expo install expo-router expo-location expo-notifications expo-secure-store expo-image-picker react-native-maps react-native-safe-area-context react-native-screens react-native-gesture-handler expo-linking expo-device expo-constants"
+    "setup:native-deps": "npx expo install expo-router expo-location expo-notifications expo-secure-store expo-image-picker react-native-maps react-native-safe-area-context react-native-screens react-native-gesture-handler expo-linking expo-device expo-constants expo-status-bar"
   },
   "dependencies": {
     "expo": "^57.0.0",
