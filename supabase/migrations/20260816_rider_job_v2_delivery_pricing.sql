@@ -71,22 +71,22 @@ security invoker
 set search_path = public
 as $$
   select
-    base.sub_id,
-    base.shop_id,
-    base.shop_name,
-    base.shop_address,
-    base.shop_lat,
-    base.shop_lng,
-    base.distance_to_shop_km,
-    base.confirmed_at,
-    so.created_at,
-    so.delivery_address as delivery_address_preview,
-    so.delivery_distance_km,
-    so.delivery_fee,
-    so.delivery_fee_payer
+    base.sub_id::uuid,
+    base.shop_id::text,
+    base.shop_name::text,
+    base.shop_address::text,
+    base.shop_lat::double precision,
+    base.shop_lng::double precision,
+    base.distance_to_shop_km::double precision,
+    base.confirmed_at::timestamptz,
+    so.created_at::timestamptz,
+    so.delivery_address::text as delivery_address_preview,
+    so.delivery_distance_km::numeric,
+    so.delivery_fee::numeric,
+    so.delivery_fee_payer::text
   from public.fn_rider_nearby_delivery_jobs(p_radius_km) as base
   join public.sub_orders so on so.sub_id = base.sub_id
-  order by coalesce(base.confirmed_at, so.created_at) desc;
+  order by coalesce(base.confirmed_at::timestamptz, so.created_at) desc;
 $$;
 
 grant execute on function public.fn_rider_nearby_delivery_jobs_v2(numeric) to authenticated;
