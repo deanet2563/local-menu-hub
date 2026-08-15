@@ -44,16 +44,30 @@ function headers(session: RiderSession) {
   };
 }
 
-export async function listNearbyDeliveryJobs(
+async function callNearbyRpc(
   session: RiderSession,
-  radiusKm = 1,
-): Promise<NearbyDeliveryJob[]> {
+  rpcName: string,
+  radiusKm: number,
+): Promise<Response> {
   const { url } = config();
-  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_nearby_delivery_jobs`, {
+  return fetch(`${url}/rest/v1/rpc/${rpcName}`, {
     method: 'POST',
     headers: headers(session),
     body: JSON.stringify({ p_radius_km: radiusKm }),
   });
+}
+
+export async function listNearbyDeliveryJobs(
+  session: RiderSession,
+  radiusKm = 1,
+): Promise<NearbyDeliveryJob[]> {
+  let response = await callNearbyRpc(session, 'fn_rider_nearby_delivery_jobs_v2', radiusKm);
+
+  // Safe rollout: older production DBs can keep serving the proven V1 RPC
+  // until the Rider Job V2 migration is applied.
+  if (response.status === 404 || response.status === 400) {
+    response = await callNearbyRpc(session, 'fn_rider_nearby_delivery_jobs', radiusKm);
+  }
 
   if (!response.ok) {
     throw new Error(`nearby delivery lookup failed: ${response.status}`);
