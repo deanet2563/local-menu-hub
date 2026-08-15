@@ -1,0 +1,44 @@
+name: Rider Native CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/rider-native/**'
+      - '.github/workflows/rider-native-ci.yml'
+  push:
+    branches:
+      - 'agent/rider-native-foundation'
+    paths:
+      - 'apps/rider-native/**'
+      - '.github/workflows/rider-native-ci.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/rider-native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install base dependencies
+        run: npm install
+
+      - name: Install Expo-managed native dependencies
+        run: npm run setup:native-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Expo Doctor
+        run: npm run doctor
+
+      - name: Production dependency audit
+        run: npm run audit:prod

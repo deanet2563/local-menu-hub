@@ -1,13 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  loadInterestedRiders,
+  requestNearbyRiders,
+  selectInterestedRider,
+  type RiderCandidate,
+} from "@/lib/riderDispatch";
 
 // ============================================================
-// MyTree — Shop order management (directory model: shop picks rider)
-// Flow: รับออเดอร์ -> พิมพ์ครัว -> ทำอาหาร -> (delivery) เลือกวิน -> ส่ง
-//
-// No push notification from the server (removed to control LINE messaging
-// cost — see worker /order handler). Instead: auto-poll + an in-page sound
-// chime when a new order appears, so the shop must keep this page open.
+// MyTree — Shop order management
+// Rider flow: Shop sends Nearby Rider Offer -> Rider Interested -> Shop selects.
+// Final assignment is server-side/atomic; the shop UI never assigns a Rider
+// directly to sub_orders.
 // ============================================================
 
 type Item = { item_name_snapshot: string; qty: number; line_total: number };
@@ -21,12 +25,10 @@ type Order = {
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
   order_items: Item[];
 };
-type Rider = { rider_id: string; name: string; phone: string; distance_km: number; is_busy: boolean; location_age_min: number };
 
-const POLL_MS = 15_000; // auto-refresh interval while the tab is visible
+const POLL_MS = 15_000;
 const SOUND_PREF_KEY = "mytree_shop_sound_enabled";
 
-/** Two-tone ascending chime via Web Audio — no external asset needed. */
 function playChime(ctx: AudioContext) {
   const now = ctx.currentTime;
   [880, 1108.73].forEach((freq, i) => {
@@ -48,21 +50,26 @@ function playChime(ctx: AudioContext) {
 export function OrderManagement({ shopId }: { shopId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pickerFor, setPickerFor] = useState<string | null>(null);
-  const [riders, setRiders] = useState<Rider[]>([]);
+  const [candidateFor, setCandidateFor] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<RiderCandidate[]>([]);
+  const [dispatching, setDispatching] = useState(false);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [selectingRiderId, setSelectingRiderId] = useState<string | null>(null);
+  const [dispatchMessage, setDispatchMessage] = useState<string | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
   const [riderInfo, setRiderInfo] = useState<Record<string, { name: string; phone: string }>>({});
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [live, setLive] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const seenPendingIdsRef = useRef<Set<string> | null>(null); // null = not initialized yet (skip sound on first load)
+  const seenPendingIdsRef = useRef<Set<string> | null>(null);
 
   const enableSound = () => {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!audioCtxRef.current) audioCtxRef.current = new AC();
     if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
-    playChime(audioCtxRef.current); // audible confirmation right away
+    playChime(audioCtxRef.current);
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
@@ -83,7 +90,6 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     const list = (data as unknown as Order[]) ?? [];
     setOrders(list);
 
-    // detect newly-arrived pending orders since the last poll
     const currentPendingIds = new Set(list.filter((o) => o.order_status === "pending").map((o) => o.sub_id));
     if (seenPendingIdsRef.current) {
       const newOnes = [...currentPendingIds].filter((id) => !seenPendingIdsRef.current!.has(id));
@@ -114,8 +120,6 @@ export function OrderManagement({ shopId }: { shopId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-poll while the tab is visible; pause when hidden (saves requests + battery).
-  // Also does one immediate refresh whenever the tab becomes visible again.
   useEffect(() => {
     const onVisibility = () => {
       const visible = document.visibilityState === "visible";
@@ -125,10 +129,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     document.addEventListener("visibilitychange", onVisibility);
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
-    if (document.visibilityState === "visible") {
-      intervalId = setInterval(load, POLL_MS);
-    }
-    // re-arm the interval whenever visibility flips to visible
+    if (document.visibilityState === "visible") intervalId = setInterval(load, POLL_MS);
     const armInterval = () => {
       if (intervalId) clearInterval(intervalId);
       intervalId = document.visibilityState === "visible" ? setInterval(load, POLL_MS) : null;
@@ -142,22 +143,75 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     };
   }, [load]);
 
+  useEffect(() => {
+    if (!candidateFor) return;
+    const interval = setInterval(() => {
+      void refreshCandidates(candidateFor, true);
+    }, 5_000);
+    return () => clearInterval(interval);
+  }, [candidateFor]);
+
   const upd = async (sub_id: string, patch: Record<string, unknown>) => {
     await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
     load();
   };
 
-  const openPicker = async (sub_id: string) => {
-    setPickerFor(sub_id);
-    const { data } = await supabase.rpc("fn_riders_near_shop", { p_shop_id: shopId, p_service: "delivery" });
-    setRiders((data as Rider[]) ?? []);
+  const refreshCandidates = async (subId: string, silent = false) => {
+    if (!silent) setCandidateLoading(true);
+    setDispatchError(null);
+    try {
+      const rows = await loadInterestedRiders(subId);
+      setCandidates(rows);
+    } catch (error) {
+      if (!silent) setDispatchError(error instanceof Error ? error.message : "โหลดผู้สนใจไม่สำเร็จ");
+    } finally {
+      if (!silent) setCandidateLoading(false);
+    }
   };
 
-  const assign = async (sub_id: string, r: Rider) => {
-    setRiderInfo((m) => ({ ...m, [r.rider_id]: { name: r.name, phone: r.phone } }));
-    await supabase.from("sub_orders").update({ assigned_rider_id: r.rider_id, delivery_status: "rider_called" }).eq("sub_id", sub_id);
-    setPickerFor(null);
-    load();
+  const findNearbyRiders = async (subId: string) => {
+    setCandidateFor(subId);
+    setCandidates([]);
+    setDispatching(true);
+    setDispatchMessage(null);
+    setDispatchError(null);
+    try {
+      const result = await requestNearbyRiders(subId);
+      if (result.candidates === 0) {
+        setDispatchMessage(`ยังไม่พบ Rider ที่พร้อมรับงานภายใน ${result.usedRadiusKm} กม.`);
+      } else {
+        setDispatchMessage(
+          `ส่งงานให้ Rider ใกล้ร้าน ${result.candidates} คนแล้ว · รัศมี ${result.usedRadiusKm} กม. รอ Rider กดสนใจ`,
+        );
+      }
+      await refreshCandidates(subId, true);
+    } catch (error) {
+      setDispatchError(error instanceof Error ? error.message : "ส่งงานหา Rider ไม่สำเร็จ");
+    } finally {
+      setDispatching(false);
+    }
+  };
+
+  const chooseCandidate = async (subId: string, candidate: RiderCandidate) => {
+    if (selectingRiderId) return;
+    setSelectingRiderId(candidate.riderId);
+    setDispatchError(null);
+    try {
+      await selectInterestedRider(subId, candidate.riderId);
+      setRiderInfo((prev) => ({
+        ...prev,
+        [candidate.riderId]: { name: candidate.name, phone: prev[candidate.riderId]?.phone ?? "" },
+      }));
+      setCandidateFor(null);
+      setCandidates([]);
+      setDispatchMessage(null);
+      await load();
+    } catch (error) {
+      setDispatchError(error instanceof Error ? error.message : "เลือกรายเดอร์ไม่สำเร็จ");
+      await refreshCandidates(subId, true);
+    } finally {
+      setSelectingRiderId(null);
+    }
   };
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
@@ -186,13 +240,12 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           🔔 <span className="font-medium">กดเปิดเสียงแจ้งเตือนออเดอร์</span>
           <br />
           <span className="text-xs text-orange-600">
-            ระบบไม่ส่งแจ้งเตือนผ่าน LINE แล้ว — ต้องเปิดเสียงตรงนี้ + เปิดหน้านี้ทิ้งไว้ตลอดเวลาขายของ
-            เพื่อไม่พลาดออเดอร์ใหม่
+            เปิดเสียงตรงนี้ + เปิดหน้านี้ทิ้งไว้ระหว่างขาย ระบบจะเตือนเมื่อมีออเดอร์ใหม่
           </span>
         </button>
       ) : (
         <p className="text-xs text-gray-400">
-          🔊 เสียงแจ้งเตือนเปิดอยู่ — เปิดหน้านี้ทิ้งไว้ที่ร้านตลอดเวลาขาย ระบบจะเช็คออเดอร์ใหม่ให้ทุก 15 วินาที
+          🔊 เสียงแจ้งเตือนเปิดอยู่ — ระบบเช็คออเดอร์ใหม่ทุก 15 วินาที
         </p>
       )}
 
@@ -259,7 +312,6 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               </div>
             )}
 
-            {/* actions */}
             <div className="flex flex-wrap gap-2 pt-1">
               {o.order_status === "pending" && (
                 <button onClick={() => upd(o.sub_id, { order_status: "confirmed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">รับออเดอร์</button>
@@ -273,20 +325,24 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                 <button onClick={() => upd(o.sub_id, { order_status: "preparing" })} className="rounded-lg bg-orange-100 text-orange-700 text-xs px-3 py-1.5">เริ่มทำอาหาร</button>
               )}
 
-              {/* pickup completion */}
               {o.fulfillment_type === "pickup" && (o.order_status === "confirmed" || o.order_status === "preparing") && (
                 <button onClick={() => upd(o.sub_id, { order_status: "completed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">ลูกค้ารับแล้ว ✓</button>
               )}
 
-              {/* delivery flow */}
               {o.fulfillment_type === "delivery" && o.delivery_status === "needs_rider" && o.order_status !== "pending" && (
-                <button onClick={() => openPicker(o.sub_id)} className="rounded-lg bg-blue-500 text-white text-xs px-3 py-1.5">🛵 เลือกวิน</button>
+                <button
+                  onClick={() => findNearbyRiders(o.sub_id)}
+                  disabled={dispatching && candidateFor === o.sub_id}
+                  className="rounded-lg bg-blue-500 disabled:opacity-50 text-white text-xs px-3 py-1.5"
+                >
+                  {dispatching && candidateFor === o.sub_id ? "กำลังหา Rider..." : "📡 หา Rider ใกล้ร้าน"}
+                </button>
               )}
               {o.fulfillment_type === "delivery" && o.delivery_status === "rider_called" && (() => {
                 const riderContact = o.assigned_rider_id ? riderInfo[o.assigned_rider_id] : undefined;
                 return (
                   <>
-                    {riderContact && (
+                    {riderContact && riderContact.phone && (
                       <a href={`tel:${riderContact.phone}`} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
                         📞 {riderContact.name}
                       </a>
@@ -300,20 +356,61 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               )}
             </div>
 
-            {/* rider picker (directory) */}
-            {pickerFor === o.sub_id && (
-              <div className="rounded-lg bg-gray-50 p-2 space-y-1 mt-1">
-                <p className="text-xs text-gray-500 mb-1">เลือกวิน (เรียงใกล้+ว่างก่อน)</p>
-                {riders.length === 0 && <p className="text-xs text-gray-400">ไม่มีวินออนไลน์ตอนนี้</p>}
-                {riders.map((r) => (
-                  <button key={r.rider_id} onClick={() => assign(o.sub_id, r)} className="w-full flex items-center justify-between rounded-lg bg-white border border-gray-100 px-3 py-2 text-sm">
-                    <span>{r.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {r.distance_km != null ? `${(r.distance_km * 1000).toFixed(0)} ม.` : ""} · {r.is_busy ? "🟠 กำลังส่ง" : "🟢 ว่าง"}
-                    </span>
+            {candidateFor === o.sub_id && o.delivery_status === "needs_rider" && (
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 space-y-2 mt-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-blue-800">Rider ที่กดสนใจงานนี้</p>
+                  <button
+                    onClick={() => refreshCandidates(o.sub_id)}
+                    disabled={candidateLoading}
+                    className="text-xs text-blue-600 disabled:opacity-50"
+                  >
+                    {candidateLoading ? "กำลังอัปเดต..." : "↻ อัปเดต"}
                   </button>
+                </div>
+
+                {dispatchMessage && <p className="text-xs text-blue-700">{dispatchMessage}</p>}
+                {dispatchError && <p className="text-xs text-red-600">{dispatchError}</p>}
+
+                {!dispatching && candidates.length === 0 && (
+                  <p className="text-xs text-gray-500">ยังไม่มี Rider กดสนใจ ระบบจะอัปเดตให้อัตโนมัติทุก 5 วินาที</p>
+                )}
+
+                {candidates.map((candidate) => (
+                  <div key={candidate.riderId} className="rounded-lg bg-white border border-blue-100 px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{candidate.name}</p>
+                      <p className="text-[11px] text-gray-500">
+                        {candidate.vehicleType || "ไม่ระบุพาหนะ"}
+                        {candidate.distanceKm != null ? ` · ${(candidate.distanceKm * 1000).toFixed(0)} ม.` : ""}
+                        {candidate.online ? " · 🟢 Online" : " · ⚪ Offline"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => chooseCandidate(o.sub_id, candidate)}
+                      disabled={!!selectingRiderId}
+                      className="shrink-0 rounded-lg bg-green-500 disabled:opacity-50 text-white text-xs px-3 py-1.5"
+                    >
+                      {selectingRiderId === candidate.riderId ? "กำลังเลือก..." : "เลือกคนนี้"}
+                    </button>
+                  </div>
                 ))}
-                <button onClick={() => setPickerFor(null)} className="w-full text-xs text-gray-400 pt-1">ยกเลิก</button>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => findNearbyRiders(o.sub_id)}
+                    disabled={dispatching}
+                    className="flex-1 rounded-lg bg-blue-100 text-blue-700 text-xs px-3 py-1.5 disabled:opacity-50"
+                  >
+                    ส่งแจ้งเตือนอีกครั้ง
+                  </button>
+                  <button
+                    onClick={() => { setCandidateFor(null); setCandidates([]); setDispatchMessage(null); setDispatchError(null); }}
+                    className="px-3 text-xs text-gray-500"
+                  >
+                    ปิด
+                  </button>
+                </div>
               </div>
             )}
           </div>
