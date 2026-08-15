@@ -9,6 +9,11 @@ export type NearbyDeliveryJob = {
   shop_lng: number;
   distance_to_shop_km: number;
   confirmed_at: string | null;
+  created_at?: string | null;
+  delivery_address_preview?: string | null;
+  delivery_distance_km?: number | null;
+  delivery_fee?: number | null;
+  delivery_fee_payer?: 'customer' | 'shop' | null;
 };
 
 export type DeliveryInterest = {
