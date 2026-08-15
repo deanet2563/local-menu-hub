@@ -43,3 +43,50 @@ comment on column public.sub_orders.delivery_distance_km is
   'Shop-to-customer delivery distance snapshot used for Rider decision and fee calculation.';
 comment on column public.shops.delivery_pricing_mode is
   'flat_zone or per_km. Initial Sammakorn model uses flat_zone 40 THB.';
+
+-- Safe V2 wrapper around the already-proven Rider nearby-job RPC.
+-- It exposes destination/address + delivery commercial facts needed by Rider
+-- before expressing interest, while still excluding customer name/phone.
+create or replace function public.fn_rider_nearby_delivery_jobs_v2(
+  p_radius_km numeric default 1
+)
+returns table (
+  sub_id uuid,
+  shop_id text,
+  shop_name text,
+  shop_address text,
+  shop_lat double precision,
+  shop_lng double precision,
+  distance_to_shop_km double precision,
+  confirmed_at timestamptz,
+  created_at timestamptz,
+  delivery_address_preview text,
+  delivery_distance_km numeric,
+  delivery_fee numeric,
+  delivery_fee_payer text
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select
+    base.sub_id,
+    base.shop_id,
+    base.shop_name,
+    base.shop_address,
+    base.shop_lat,
+    base.shop_lng,
+    base.distance_to_shop_km,
+    base.confirmed_at,
+    so.created_at,
+    so.delivery_address as delivery_address_preview,
+    so.delivery_distance_km,
+    so.delivery_fee,
+    so.delivery_fee_payer
+  from public.fn_rider_nearby_delivery_jobs(p_radius_km) as base
+  join public.sub_orders so on so.sub_id = base.sub_id
+  order by coalesce(base.confirmed_at, so.created_at) desc;
+$$;
+
+grant execute on function public.fn_rider_nearby_delivery_jobs_v2(numeric) to authenticated;
