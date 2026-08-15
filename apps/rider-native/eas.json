@@ -9,10 +9,18 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_RIDER_CANDIDATE_FLOW": "true",
+        "EXPO_PUBLIC_ENABLE_RIDER_PUSH_REGISTRY": "true"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_ENABLE_RIDER_CANDIDATE_FLOW": "true",
+        "EXPO_PUBLIC_ENABLE_RIDER_PUSH_REGISTRY": "true"
+      }
     }
   },
   "submit": {
