@@ -23,6 +23,9 @@ type Order = {
   hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
   payment_method: "cash" | "qr_transfer"; payment_slip_url: string | null;
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
+  delivery_fee: number;
+  delivery_fee_payer: "customer" | "shop";
+  delivery_distance_km: number | null;
   order_items: Item[];
 };
 
@@ -61,6 +64,8 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [live, setLive] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [feePayerSavingFor, setFeePayerSavingFor] = useState<string | null>(null);
+  const [feePayerError, setFeePayerError] = useState<Record<string, string>>({});
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const seenPendingIdsRef = useRef<Set<string> | null>(null);
@@ -84,7 +89,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,delivery_fee,delivery_fee_payer,delivery_distance_km,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as unknown as Order[]) ?? [];
@@ -154,6 +159,23 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const upd = async (sub_id: string, patch: Record<string, unknown>) => {
     await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
     load();
+  };
+
+  const setDeliveryFeePayer = async (subId: string, payer: "customer" | "shop") => {
+    if (feePayerSavingFor) return;
+    setFeePayerSavingFor(subId);
+    setFeePayerError((prev) => ({ ...prev, [subId]: "" }));
+    const { error } = await supabase
+      .from("sub_orders")
+      .update({ delivery_fee_payer: payer })
+      .eq("sub_id", subId)
+      .eq("delivery_status", "needs_rider");
+    if (error) {
+      setFeePayerError((prev) => ({ ...prev, [subId]: error.message }));
+    } else {
+      await load();
+    }
+    setFeePayerSavingFor(null);
   };
 
   const refreshCandidates = async (subId: string, silent = false) => {
@@ -253,6 +275,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
 
       {active.map((o) => {
         const paid = o.payment_status === "paid";
+        const feePayerLocked = o.delivery_status !== "needs_rider";
         return (
           <div key={o.sub_id} className="rounded-xl border border-gray-200 p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -290,6 +313,50 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             {o.fulfillment_type === "delivery" && o.delivery_address && (
               <p className="text-xs text-gray-500">📍 {o.delivery_address}</p>
             )}
+
+            {o.fulfillment_type === "delivery" && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-medium text-emerald-700">ค่าส่งที่ Rider ต้องได้รับ</p>
+                    <p className="text-lg font-bold text-emerald-800">฿{Number(o.delivery_fee ?? 40).toFixed(0)}</p>
+                  </div>
+                  {o.delivery_distance_km != null && (
+                    <p className="text-xs font-medium text-emerald-700">ร้าน → ลูกค้า {Number(o.delivery_distance_km).toFixed(1)} กม.</p>
+                  )}
+                </div>
+                <p className="text-xs font-medium text-gray-700">Rider เก็บค่าส่งจากใคร</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryFeePayer(o.sub_id, "customer")}
+                    disabled={feePayerLocked || feePayerSavingFor === o.sub_id}
+                    className={`rounded-lg border px-2 py-2 text-xs font-medium disabled:opacity-50 ${
+                      o.delivery_fee_payer !== "shop"
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-gray-200 bg-white text-gray-600"
+                    }`}
+                  >
+                    👤 ลูกค้าจ่าย
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryFeePayer(o.sub_id, "shop")}
+                    disabled={feePayerLocked || feePayerSavingFor === o.sub_id}
+                    className={`rounded-lg border px-2 py-2 text-xs font-medium disabled:opacity-50 ${
+                      o.delivery_fee_payer === "shop"
+                        ? "border-blue-500 bg-blue-500 text-white"
+                        : "border-gray-200 bg-white text-gray-600"
+                    }`}
+                  >
+                    🏪 ร้านจ่าย
+                  </button>
+                </div>
+                {feePayerLocked && <p className="text-[11px] text-gray-500">ล็อกผู้จ่ายแล้วหลังเลือก Rider เพื่อไม่ให้ข้อมูลเปลี่ยนกลางงาน</p>}
+                {feePayerError[o.sub_id] && <p className="text-[11px] text-red-600">{feePayerError[o.sub_id]}</p>}
+              </div>
+            )}
+
             {o.delivery_photo_url && (
               <div>
                 <p className="text-xs text-gray-500 mb-1">📷 รูปยืนยันส่งของ</p>
