@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "176963222062",
+    "project_id": "mytree-rider",
+    "storage_bucket": "mytree-rider.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:176963222062:android:b28ca2b564ab519ec83dbf",
+        "android_client_info": {
+          "package_name": "cc.mytree.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3oc9dqGtaT6MS251FY8Pf4c1_FdwAFb0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

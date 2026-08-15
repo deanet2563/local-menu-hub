@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MyTree Rider",
-    "slug": "mytree-rider",
+    "slug": "mytree",
     "scheme": "mytreerider",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -17,11 +17,12 @@
     },
     "android": {
       "package": "cc.mytree.rider",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "CAMERA",
-        "POST_NOTIFICATIONS"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "plugins": [
@@ -37,12 +38,21 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow MyTree Rider to take a delivery proof photo."
+          "cameraPermission": "Allow MyTree Rider to take a delivery proof photo.",
+          "microphonePermission": false
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1b22c0a8-abbc-43a7-adc3-6f77c9ce0135"
+      }
+    },
+    "owner": "kompakorns-team"
   }
 }
