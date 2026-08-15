@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -44,14 +44,14 @@ export default function RiderHomeScreen() {
   const [signingIn, setSigningIn] = useState(false);
   const [updatingOnline, setUpdatingOnline] = useState(false);
   const [pushState, setPushState] = useState<ReadinessState>('pending');
-  const [pushText, setPushText] = useState('à¸£à¸­à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š');
+  const [pushText, setPushText] = useState('รอตรวจสอบ');
   const [locationState, setLocationState] = useState<ReadinessState>('pending');
-  const [locationText, setLocationText] = useState('à¸£à¸­à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š');
+  const [locationText, setLocationText] = useState('รอตรวจสอบ');
   const [location, setLocation] = useState<RiderLocation | null>(null);
   const [session, setSession] = useState<RiderSession | null>(null);
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [accountState, setAccountState] = useState<ReadinessState>('checking');
-  const [accountText, setAccountText] = useState('à¸à¸³à¸¥à¸±à¸‡à¸•à¸£à¸§à¸ˆ MyTree session...');
+  const [accountText, setAccountText] = useState('กำลังตรวจ MyTree session...');
   const [error, setError] = useState<string | null>(null);
 
   function applyRiderProfile(profile: RiderProfile | null) {
@@ -59,32 +59,32 @@ export default function RiderHomeScreen() {
 
     if (!profile) {
       setAccountState('blocked');
-      setAccountText('à¹„à¸¡à¹ˆà¸žà¸šà¸šà¸±à¸à¸Šà¸µ Rider à¸ªà¸³à¸«à¸£à¸±à¸šà¸œà¸¹à¹‰à¹ƒà¸Šà¹‰à¸™à¸µà¹‰');
+      setAccountText('ไม่พบบัญชี Rider สำหรับผู้ใช้นี้');
     } else if (profile.is_banned) {
       setAccountState('blocked');
-      setAccountText('à¸šà¸±à¸à¸Šà¸µ Rider à¸–à¸¹à¸à¸£à¸°à¸‡à¸±à¸š');
+      setAccountText('บัญชี Rider ถูกระงับ');
     } else if (profile.deletion_requested_at) {
       setAccountState('blocked');
-      setAccountText('à¸šà¸±à¸à¸Šà¸µà¸­à¸¢à¸¹à¹ˆà¸£à¸°à¸«à¸§à¹ˆà¸²à¸‡à¸„à¸³à¸‚à¸­à¸¥à¸š');
+      setAccountText('บัญชีอยู่ระหว่างคำขอลบ');
     } else if (!profile.is_approved) {
       setAccountState('pending');
-      setAccountText('à¸£à¸­ Admin à¸­à¸™à¸¸à¸¡à¸±à¸•à¸´ Rider');
+      setAccountText('รอ Admin อนุมัติ Rider');
     } else {
       setAccountState('ready');
-      setAccountText(`${profile.name} Â· ${profile.vehicle_type ?? 'à¹„à¸¡à¹ˆà¸£à¸°à¸šà¸¸à¸žà¸²à¸«à¸™à¸°'}`);
+      setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ไม่ระบุพาหนะ'}`);
     }
   }
 
   async function restoreAccount() {
     setAccountState('checking');
-    setAccountText('à¸à¸³à¸¥à¸±à¸‡à¸•à¸£à¸§à¸ˆ MyTree session...');
+    setAccountText('กำลังตรวจ MyTree session...');
 
     const saved = await loadRiderSession();
     if (!saved) {
       setSession(null);
       setRider(null);
       setAccountState('pending');
-      setAccountText('à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸šà¸”à¹‰à¸§à¸¢ LINE à¹€à¸žà¸·à¹ˆà¸­à¹€à¸Šà¸·à¹ˆà¸­à¸¡à¸šà¸±à¸à¸Šà¸µ Rider');
+      setAccountText('เข้าสู่ระบบด้วย LINE เพื่อเชื่อมบัญชี Rider');
       return;
     }
 
@@ -93,7 +93,7 @@ export default function RiderHomeScreen() {
       setSession(null);
       setRider(null);
       setAccountState('blocked');
-      setAccountText('Session à¸«à¸¡à¸”à¸­à¸²à¸¢à¸¸ â€” à¸•à¹‰à¸­à¸‡à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸šà¹ƒà¸«à¸¡à¹ˆ');
+      setAccountText('Session หมดอายุ — ต้องเข้าสู่ระบบใหม่');
       return;
     }
 
@@ -103,7 +103,7 @@ export default function RiderHomeScreen() {
       applyRiderProfile(profile);
     } catch (cause) {
       setAccountState('blocked');
-      setAccountText('à¸­à¹ˆà¸²à¸™à¸šà¸±à¸à¸Šà¸µ Rider à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ');
+      setAccountText('อ่านบัญชี Rider ไม่สำเร็จ');
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }
@@ -118,7 +118,7 @@ export default function RiderHomeScreen() {
     setSigningIn(true);
     setError(null);
     setAccountState('checking');
-    setAccountText('à¸à¸³à¸¥à¸±à¸‡à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸š LINE...');
+    setAccountText('กำลังเข้าสู่ระบบ LINE...');
 
     try {
       const { idToken } = await nativeLineLogin();
@@ -133,14 +133,14 @@ export default function RiderHomeScreen() {
         if (push.ready && push.token) {
           await registerPushDevice(newSession, profile.id, push.token);
           setPushState('ready');
-          setPushText('à¸žà¸£à¹‰à¸­à¸¡à¸£à¸±à¸š Native Push Â· à¸¥à¸‡à¸—à¸°à¹€à¸šà¸µà¸¢à¸™à¸­à¸¸à¸›à¸à¸£à¸“à¹Œà¹à¸¥à¹‰à¸§');
+          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
         }
       }
     } catch (cause) {
       setSession(null);
       setRider(null);
       setAccountState('blocked');
-      setAccountText('à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸š LINE à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ');
+      setAccountText('เข้าสู่ระบบ LINE ไม่สำเร็จ');
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSigningIn(false);
@@ -154,8 +154,8 @@ export default function RiderHomeScreen() {
     setError(null);
     setPushState('checking');
     setLocationState('checking');
-    setPushText('à¸à¸³à¸¥à¸±à¸‡à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š...');
-    setLocationText('à¸à¸³à¸¥à¸±à¸‡à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š...');
+    setPushText('กำลังตรวจสอบ...');
+    setLocationText('กำลังตรวจสอบ...');
 
     const [pushResult, locationResult] = await Promise.allSettled([
       ensurePushReadiness(),
@@ -166,21 +166,21 @@ export default function RiderHomeScreen() {
       setPushState(pushResult.value.ready ? 'ready' : 'blocked');
       setPushText(
         pushResult.value.ready
-          ? 'à¸žà¸£à¹‰à¸­à¸¡à¸£à¸±à¸š Native Push'
-          : pushResult.value.reason ?? 'Push à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸žà¸£à¹‰à¸­à¸¡',
+          ? 'พร้อมรับ Native Push'
+          : pushResult.value.reason ?? 'Push ยังไม่พร้อม',
       );
 
       if (pushResult.value.ready && pushResult.value.token && session && rider) {
         try {
           await registerPushDevice(session, rider.id, pushResult.value.token);
-          setPushText('à¸žà¸£à¹‰à¸­à¸¡à¸£à¸±à¸š Native Push Â· à¸¥à¸‡à¸—à¸°à¹€à¸šà¸µà¸¢à¸™à¸­à¸¸à¸›à¸à¸£à¸“à¹Œà¹à¸¥à¹‰à¸§');
+          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
       }
     } else {
       setPushState('blocked');
-      setPushText('à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š Push à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ');
+      setPushText('ตรวจสอบ Push ไม่สำเร็จ');
     }
 
     if (locationResult.status === 'fulfilled') {
@@ -189,8 +189,8 @@ export default function RiderHomeScreen() {
       setLocation(currentLocation);
       setLocationText(
         locationResult.value.ready
-          ? 'à¹„à¸”à¹‰à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™à¹à¸¥à¹‰à¸§'
-          : locationResult.value.reason ?? 'à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸žà¸£à¹‰à¸­à¸¡',
+          ? 'ได้ตำแหน่งปัจจุบันแล้ว'
+          : locationResult.value.reason ?? 'ตำแหน่งยังไม่พร้อม',
       );
 
       if (locationResult.value.ready && currentLocation && session && rider) {
@@ -198,16 +198,16 @@ export default function RiderHomeScreen() {
           await updateRiderLocation(session, rider.id, currentLocation);
           const refreshedProfile = await getRiderProfile(session);
           if (refreshedProfile) setRider(refreshedProfile);
-          setLocationText('à¹„à¸”à¹‰à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™à¹à¸¥à¹‰à¸§ Â· à¸­à¸±à¸›à¹€à¸”à¸• MyTree à¹à¸¥à¹‰à¸§');
+          setLocationText('ได้ตำแหน่งปัจจุบันแล้ว · อัปเดต MyTree แล้ว');
         } catch (cause) {
           setLocationState('blocked');
-          setLocationText('à¹„à¸”à¹‰ GPS à¹à¸¥à¹‰à¸§ à¹à¸•à¹ˆà¸šà¸±à¸™à¸—à¸¶à¸à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¹ƒà¸™ MyTree à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ');
+          setLocationText('ได้ GPS แล้ว แต่บันทึกตำแหน่งใน MyTree ไม่สำเร็จ');
           setError(cause instanceof Error ? cause.message : String(cause));
         }
       }
     } else {
       setLocationState('blocked');
-      setLocationText('à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ');
+      setLocationText('ตรวจสอบตำแหน่งไม่สำเร็จ');
     }
 
     const failures = [pushResult, locationResult]
@@ -229,19 +229,19 @@ export default function RiderHomeScreen() {
         await setRiderOnline(session, rider, false);
       } else {
         if (pushState !== 'ready') {
-          throw new Error('à¸•à¹‰à¸­à¸‡à¹€à¸›à¸´à¸” Native Push Notification à¸à¹ˆà¸­à¸™ Online');
+          throw new Error('ต้องเปิด Native Push Notification ก่อน Online');
         }
 
         let freshLocation = location;
         if (!freshLocation || !isLocationFresh(freshLocation.capturedAt)) {
           const refreshed = await ensureForegroundLocation();
           if (!refreshed.ready || !refreshed.location) {
-            throw new Error(refreshed.reason ?? 'à¸•à¹‰à¸­à¸‡à¸¡à¸µà¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸¥à¹ˆà¸²à¸ªà¸¸à¸”à¸à¹ˆà¸­à¸™ Online');
+            throw new Error(refreshed.reason ?? 'ต้องมีตำแหน่งล่าสุดก่อน Online');
           }
           freshLocation = refreshed.location;
           setLocation(freshLocation);
           setLocationState('ready');
-          setLocationText('à¹„à¸”à¹‰à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™à¹à¸¥à¹‰à¸§');
+          setLocationText('ได้ตำแหน่งปัจจุบันแล้ว');
         }
 
         await setRiderOnline(session, rider, true, freshLocation);
@@ -265,19 +265,19 @@ export default function RiderHomeScreen() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
-          <Text style={styles.title}>à¸žà¸£à¹‰à¸­à¸¡à¸£à¸±à¸šà¸‡à¸²à¸™</Text>
+          <Text style={styles.title}>พร้อมรับงาน</Text>
           <Text style={styles.subtitle}>
-            Rider à¸•à¹‰à¸­à¸‡à¸¡à¸µà¸šà¸±à¸à¸Šà¸µà¸—à¸µà¹ˆà¸­à¸™à¸¸à¸¡à¸±à¸•à¸´à¹à¸¥à¹‰à¸§ à¸žà¸£à¹‰à¸­à¸¡ Native Push à¹à¸¥à¸°à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸¥à¹ˆà¸²à¸ªà¸¸à¸”à¸à¹ˆà¸­à¸™à¹€à¸›à¸´à¸” Online
+            Rider ต้องมีบัญชีที่อนุมัติแล้ว พร้อม Native Push และตำแหน่งล่าสุดก่อนเปิด Online
           </Text>
         </View>
 
         <View style={styles.card}>
-          <HealthRow label="à¸šà¸±à¸à¸Šà¸µà¹„à¸£à¹€à¸”à¸­à¸£à¹Œ" value={accountText} state={accountState} />
-          <HealthRow label="à¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™" value={pushText} state={pushState} />
-          <HealthRow label="à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡" value={locationText} state={locationState} />
+          <HealthRow label="บัญชีไรเดอร์" value={accountText} state={accountState} />
+          <HealthRow label="การแจ้งเตือน" value={pushText} state={pushState} />
+          <HealthRow label="ตำแหน่ง" value={locationText} state={locationState} />
           <HealthRow
-            label="à¸ªà¸–à¸²à¸™à¸°à¸£à¸±à¸šà¸‡à¸²à¸™"
-            value={rider?.is_online ? 'Online â€” à¸žà¸£à¹‰à¸­à¸¡à¸£à¸±à¸šà¸‡à¸²à¸™à¸ªà¹ˆà¸‡à¸­à¸²à¸«à¸²à¸£' : 'Offline'}
+            label="สถานะรับงาน"
+            value={rider?.is_online ? 'Online — พร้อมรับงานส่งอาหาร' : 'Offline'}
             state={rider?.is_online ? 'ready' : 'pending'}
           />
         </View>
@@ -290,14 +290,14 @@ export default function RiderHomeScreen() {
             onPress={signInWithLine}
           >
             <Text style={styles.lineButtonText}>
-              {signingIn ? 'à¸à¸³à¸¥à¸±à¸‡à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸š LINE...' : 'à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸šà¸”à¹‰à¸§à¸¢ LINE'}
+              {signingIn ? 'กำลังเข้าสู่ระบบ LINE...' : 'เข้าสู่ระบบด้วย LINE'}
             </Text>
           </Pressable>
         )}
 
         {location && (
           <View style={styles.locationCard}>
-            <Text style={styles.locationLabel}>à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸¥à¹ˆà¸²à¸ªà¸¸à¸”à¸šà¸™à¸­à¸¸à¸›à¸à¸£à¸“à¹Œ</Text>
+            <Text style={styles.locationLabel}>ตำแหน่งล่าสุดบนอุปกรณ์</Text>
             <Text style={styles.locationValue}>
               {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
             </Text>
@@ -314,7 +314,7 @@ export default function RiderHomeScreen() {
           onPress={checkReadiness}
         >
           <Text style={styles.primaryButtonText}>
-            {checking ? 'à¸à¸³à¸¥à¸±à¸‡à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸š...' : 'à¸•à¸£à¸§à¸ˆ Push + Location'}
+            {checking ? 'กำลังตรวจสอบ...' : 'ตรวจ Push + Location'}
           </Text>
         </Pressable>
 
@@ -330,10 +330,10 @@ export default function RiderHomeScreen() {
         >
           <Text style={styles.onlineButtonText}>
             {updatingOnline
-              ? 'à¸à¸³à¸¥à¸±à¸‡à¸­à¸±à¸›à¹€à¸”à¸•...'
+              ? 'กำลังอัปเดต...'
               : rider?.is_online
-                ? 'à¸­à¸­à¸ Offline'
-                : 'à¹€à¸›à¸´à¸” Online à¸£à¸±à¸šà¸‡à¸²à¸™'}
+                ? 'ออก Offline'
+                : 'เปิด Online รับงาน'}
           </Text>
         </Pressable>
 
@@ -344,8 +344,8 @@ export default function RiderHomeScreen() {
             onPress={() => router.push('/active-delivery')}
             style={[styles.workButton, !accountReady && styles.buttonDisabled]}
           >
-            <Text style={styles.workButtonTitle}>à¸‡à¸²à¸™à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™</Text>
-            <Text style={styles.workButtonMeta}>Pickup â†’ Delivery</Text>
+            <Text style={styles.workButtonTitle}>งานปัจจุบัน</Text>
+            <Text style={styles.workButtonMeta}>Pickup → Delivery</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -356,9 +356,9 @@ export default function RiderHomeScreen() {
               (!rider?.is_online || !riderFeatures.candidateFlow) && styles.buttonDisabled,
             ]}
           >
-            <Text style={styles.workButtonTitle}>à¸‡à¸²à¸™à¹ƒà¸à¸¥à¹‰à¸‰à¸±à¸™</Text>
+            <Text style={styles.workButtonTitle}>งานใกล้ฉัน</Text>
             <Text style={styles.workButtonMeta}>
-              {riderFeatures.candidateFlow ? 'Nearby Rider Offer' : 'à¸£à¸­ backend gate'}
+              {riderFeatures.candidateFlow ? 'Nearby Rider Offer' : 'รอ backend gate'}
             </Text>
           </Pressable>
         </View>
@@ -366,7 +366,7 @@ export default function RiderHomeScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.note}>
-          LINE SDK à¸„à¸·à¸™à¹€à¸‰à¸žà¸²à¸° OpenID Connect ID token à¹ƒà¸«à¹‰ MyTree Worker à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¹à¸¥à¸°à¹à¸¥à¸à¹€à¸›à¹‡à¸™ Supabase JWT; session à¹€à¸à¹‡à¸šà¹ƒà¸™ SecureStore à¹à¸¥à¸° Push token à¸–à¸¹à¸à¸œà¸¹à¸à¸à¸±à¸š Rider à¸«à¸¥à¸±à¸‡à¸¢à¸·à¸™à¸¢à¸±à¸™à¸•à¸±à¸§à¸•à¸™à¹à¸¥à¹‰à¸§à¹€à¸—à¹ˆà¸²à¸™à¸±à¹‰à¸™
+          LINE SDK คืนเฉพาะ OpenID Connect ID token ให้ MyTree Worker ตรวจสอบและแลกเป็น Supabase JWT; session เก็บใน SecureStore และ Push token ถูกผูกกับ Rider หลังยืนยันตัวตนแล้วเท่านั้น
         </Text>
       </ScrollView>
     </SafeAreaView>
