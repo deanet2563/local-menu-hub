@@ -7,7 +7,7 @@ import { nativeLineLogin } from '@/auth/lineNative';
 import { clearRiderSession, isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { registerPushDevice } from '@/data/pushDeviceRepository';
-import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
+import { getRiderProfile, setRiderOnline, updateRiderLocation, type RiderProfile } from '@/data/riderRepository';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
 
@@ -184,13 +184,27 @@ export default function RiderHomeScreen() {
     }
 
     if (locationResult.status === 'fulfilled') {
+      const currentLocation = locationResult.value.location;
       setLocationState(locationResult.value.ready ? 'ready' : 'blocked');
-      setLocation(locationResult.value.location);
+      setLocation(currentLocation);
       setLocationText(
         locationResult.value.ready
           ? 'ได้ตำแหน่งปัจจุบันแล้ว'
           : locationResult.value.reason ?? 'ตำแหน่งยังไม่พร้อม',
       );
+
+      if (locationResult.value.ready && currentLocation && session && rider) {
+        try {
+          await updateRiderLocation(session, rider.id, currentLocation);
+          const refreshedProfile = await getRiderProfile(session);
+          if (refreshedProfile) setRider(refreshedProfile);
+          setLocationText('ได้ตำแหน่งปัจจุบันแล้ว · อัปเดต MyTree แล้ว');
+        } catch (cause) {
+          setLocationState('blocked');
+          setLocationText('ได้ GPS แล้ว แต่บันทึกตำแหน่งใน MyTree ไม่สำเร็จ');
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
     } else {
       setLocationState('blocked');
       setLocationText('ตรวจสอบตำแหน่งไม่สำเร็จ');
