@@ -1,5 +1,6 @@
 package cc.mytree.linelogin
 
+import android.util.Base64
 import com.linecorp.linesdk.LineApiResponseCode
 import com.linecorp.linesdk.Scope
 import com.linecorp.linesdk.auth.LineAuthenticationParams
@@ -7,9 +8,11 @@ import com.linecorp.linesdk.auth.LineLoginApi
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.security.SecureRandom
 
 class MyTreeLineLoginModule : Module() {
   private var pendingPromise: Promise? = null
+  private var pendingNonce: String? = null
 
   override fun definition() = ModuleDefinition {
     Name("MyTreeLineLogin")
@@ -31,12 +34,21 @@ class MyTreeLineLoginModule : Module() {
         return@AsyncFunction
       }
 
+      val nonceBytes = ByteArray(32)
+      SecureRandom().nextBytes(nonceBytes)
+      val nonce = Base64.encodeToString(
+        nonceBytes,
+        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+      )
+
       val params = LineAuthenticationParams.Builder()
         .scopes(listOf(Scope.PROFILE, Scope.OPENID_CONNECT))
+        .nonce(nonce)
         .build()
 
       val intent = LineLoginApi.getLoginIntent(activity, channelId, params)
       pendingPromise = promise
+      pendingNonce = nonce
       activity.startActivityForResult(intent, REQUEST_CODE_LINE_LOGIN)
     }
 
@@ -46,18 +58,20 @@ class MyTreeLineLoginModule : Module() {
       }
 
       val promise = pendingPromise ?: return@OnActivityResult
+      val nonce = pendingNonce
       pendingPromise = null
+      pendingNonce = null
 
       val result = LineLoginApi.getLoginResultFromIntent(payload.data)
       when (result.responseCode) {
         LineApiResponseCode.SUCCESS -> {
           val rawIdToken = result.lineIdToken?.rawString
-          if (rawIdToken.isNullOrBlank()) {
-            promise.reject("E_LINE_ID_TOKEN", "LINE Login did not return an OpenID Connect ID token", null)
+          if (rawIdToken.isNullOrBlank() || nonce.isNullOrBlank()) {
+            promise.reject("E_LINE_ID_TOKEN", "LINE Login did not return a valid OpenID Connect result", null)
             return@OnActivityResult
           }
 
-          promise.resolve(mapOf("idToken" to rawIdToken))
+          promise.resolve(mapOf("idToken" to rawIdToken, "nonce" to nonce))
         }
 
         LineApiResponseCode.CANCEL -> {
