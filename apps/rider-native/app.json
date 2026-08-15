@@ -49,6 +49,9 @@
     },
     "extra": {
       "router": {},
+      "lineLogin": {
+        "channelId": "2010936243"
+      },
       "eas": {
         "projectId": "1b22c0a8-abbc-43a7-adc3-6f77c9ce0135"
       }
