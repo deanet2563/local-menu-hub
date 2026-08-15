@@ -2,6 +2,7 @@ import { requireNativeModule } from 'expo-modules-core';
 
 type LineLoginResult = {
   idToken: string;
+  nonce: string;
 };
 
 type MyTreeLineLoginNative = {
