@@ -8,6 +8,9 @@ export type AssignedDelivery = {
   delivery_photo_url: string | null;
   amount: number;
   created_at: string;
+  delivery_fee?: number | null;
+  delivery_fee_payer?: 'customer' | 'shop' | null;
+  delivery_distance_km?: number | null;
   shops: {
     name: string;
     phone: string | null;
@@ -53,7 +56,7 @@ export async function getActiveAssignedDelivery(session: RiderSession): Promise<
   const query = new URLSearchParams({
     select: SELECT,
     delivery_status: 'in.(rider_called,picked_up)',
-    order: 'created_at.asc',
+    order: 'created_at.desc',
     limit: '1',
   });
 
