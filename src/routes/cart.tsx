@@ -8,11 +8,15 @@ export const Route = createFileRoute("/cart")({
   component: CartCheckout,
 });
 
+type DeliveryPoint = { lat: number; lng: number; accuracy: number | null };
+
 function CartCheckout() {
   const c = useCart();
   const [shopName, setShopName] = useState("");
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
+  const [deliveryPoint, setDeliveryPoint] = useState<DeliveryPoint | null>(null);
+  const [locating, setLocating] = useState(false);
   const [note, setNote] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -29,7 +33,6 @@ function CartCheckout() {
     })();
   }, [c.shopId]);
 
-  // Prefill name/phone from the customer's saved profile, if they've ordered before.
   useEffect(() => {
     (async () => {
       try {
@@ -41,10 +44,36 @@ function CartCheckout() {
         if (row?.name) setCustomerName(row.name);
         if (row?.phone) setCustomerPhone(row.phone);
       } catch {
-        /* not logged in yet — fields stay blank, still required at submit */
+        // profile stays blank until customer signs in
       }
     })();
   }, []);
+
+  function captureDeliveryPoint() {
+    if (!("geolocation" in navigator)) {
+      setError("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
+      return;
+    }
+
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDeliveryPoint({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+        });
+        setLocating(false);
+      },
+      (geoError) => {
+        setLocating(false);
+        setDeliveryPoint(null);
+        setError(geoError.code === 1 ? "กรุณาอนุญาตตำแหน่งเพื่อใช้เป็นจุดส่ง" : "อ่านตำแหน่งจุดส่งไม่สำเร็จ ลองอีกครั้ง");
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 },
+    );
+  }
 
   async function confirm() {
     if (!c.shopId) return;
@@ -56,11 +85,14 @@ function CartCheckout() {
       setError("กรอกที่อยู่จัดส่ง");
       return;
     }
+    if (fulfillment === "delivery" && !deliveryPoint) {
+      setError("กดใช้ตำแหน่งปัจจุบันเป็นจุดส่ง เพื่อให้ระบบคำนวณระยะทางและค่าส่ง");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
-    // Save/refresh the customer profile — this is how MyTree starts building
-    // real customer history (name + phone), not just an anonymous LINE id.
     const cid = await getCurrentCustomerId();
     if (cid) {
       await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
@@ -72,6 +104,8 @@ function CartCheckout() {
       fulfillment,
       payment: "cash",
       address: fulfillment === "delivery" ? address.trim() : null,
+      destinationLat: fulfillment === "delivery" ? deliveryPoint!.lat : null,
+      destinationLng: fulfillment === "delivery" ? deliveryPoint!.lng : null,
       note: note.trim() || null,
     });
     setSubmitting(false);
@@ -141,8 +175,25 @@ function CartCheckout() {
           <button onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "delivery" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>ส่งถึงบ้าน</button>
           <button onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "pickup" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>รับเอง</button>
         </div>
+
         {fulfillment === "delivery" && (
-          <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ / ซอย)" value={address} onChange={(e) => setAddress(e.target.value)} />
+          <div className="space-y-2">
+            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ / ซอย)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <button
+              type="button"
+              onClick={captureDeliveryPoint}
+              disabled={locating}
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium ${deliveryPoint ? "border-green-300 bg-green-50 text-green-700" : "border-blue-200 bg-blue-50 text-blue-700"} disabled:opacity-50`}
+            >
+              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 จุดส่งพร้อมแล้ว · กดเพื่ออัปเดตตำแหน่ง" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดส่ง"}
+            </button>
+            {deliveryPoint && (
+              <p className="text-xs text-green-700">
+                ระบบจะใช้จุดนี้คำนวณระยะทางร้าน → ลูกค้าและค่าส่งให้ Rider
+                {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
