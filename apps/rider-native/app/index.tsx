@@ -75,6 +75,28 @@ export default function RiderHomeScreen() {
     }
   }
 
+  async function syncPushRegistration(activeSession: RiderSession, profile: RiderProfile) {
+    setPushState('checking');
+    setPushText('กำลังตรวจ Push และลงทะเบียนอุปกรณ์...');
+
+    try {
+      const push = await ensurePushReadiness();
+      if (!push.ready || !push.token) {
+        setPushState('blocked');
+        setPushText(push.reason ?? 'Push ยังไม่พร้อม');
+        return;
+      }
+
+      await registerPushDevice(activeSession, profile.id, push.token);
+      setPushState('ready');
+      setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
+    } catch (cause) {
+      setPushState('blocked');
+      setPushText('ลงทะเบียน Push อุปกรณ์ไม่สำเร็จ');
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function restoreAccount() {
     setAccountState('checking');
     setAccountText('กำลังตรวจ MyTree session...');
@@ -101,6 +123,7 @@ export default function RiderHomeScreen() {
       const profile = await getRiderProfile(saved);
       setSession(saved);
       applyRiderProfile(profile);
+      if (profile) await syncPushRegistration(saved, profile);
     } catch (cause) {
       setAccountState('blocked');
       setAccountText('อ่านบัญชี Rider ไม่สำเร็จ');
@@ -128,14 +151,7 @@ export default function RiderHomeScreen() {
       setSession(newSession);
       applyRiderProfile(profile);
 
-      if (profile) {
-        const push = await ensurePushReadiness();
-        if (push.ready && push.token) {
-          await registerPushDevice(newSession, profile.id, push.token);
-          setPushState('ready');
-          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
-        }
-      }
+      if (profile) await syncPushRegistration(newSession, profile);
     } catch (cause) {
       setSession(null);
       setRider(null);
