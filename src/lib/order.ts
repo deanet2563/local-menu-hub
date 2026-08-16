@@ -15,6 +15,8 @@ export type OrderPayload = {
   fulfillment: "delivery" | "pickup";
   payment: "cash";
   address: string | null;
+  destinationLat: number | null;
+  destinationLng: number | null;
   note: string | null;
 };
 
