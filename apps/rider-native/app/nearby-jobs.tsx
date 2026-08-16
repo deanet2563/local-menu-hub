@@ -32,7 +32,13 @@ function shortJobId(subId: string) {
 function payerText(payer: NearbyDeliveryJob['delivery_fee_payer']) {
   if (payer === 'shop') return 'เก็บค่าส่งจากร้าน';
   if (payer === 'customer') return 'เก็บค่าส่งจากลูกค้า';
-  return null;
+  return 'ตรวจผู้จ่ายในรายละเอียด';
+}
+
+function compactDestination(address: string | null | undefined) {
+  const value = address?.trim();
+  if (!value) return null;
+  return value.length > 34 ? `${value.slice(0, 34)}…` : value;
 }
 
 export default function NearbyJobsScreen() {
@@ -152,6 +158,10 @@ export default function NearbyJobsScreen() {
 
         {jobs.map((job) => {
           const payer = payerText(job.delivery_fee_payer);
+          const destination = compactDestination(job.delivery_address_preview);
+          const fee = job.delivery_fee == null ? null : Number(job.delivery_fee);
+          const deliveryDistance = job.delivery_distance_km == null ? null : Number(job.delivery_distance_km);
+
           return (
             <View key={job.sub_id} style={styles.jobCard}>
               <View style={styles.topRow}>
@@ -160,17 +170,28 @@ export default function NearbyJobsScreen() {
               </View>
               <Text style={styles.time}>{jobTime(job)}</Text>
 
-              {job.delivery_distance_km != null && (
-                <View style={styles.decisionBox}>
-                  <Text style={styles.routeText}>ร้าน → ลูกค้า {Number(job.delivery_distance_km).toFixed(1)} กม.</Text>
-                  {job.delivery_fee != null && <Text style={styles.feeText}>ค่าส่ง ฿{Number(job.delivery_fee).toFixed(0)}</Text>}
-                  {payer && <Text style={styles.payerText}>{payer}</Text>}
-                </View>
-              )}
+              <View style={styles.decisionBox}>
+                <Text style={styles.routeText}>
+                  ร้าน → ลูกค้า {deliveryDistance != null ? `${deliveryDistance.toFixed(1)} กม.` : 'รอคำนวณระยะทาง'}
+                </Text>
 
-              {job.delivery_distance_km == null && (
-                <Text style={styles.distance}>ห่างจากคุณถึงร้านประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
-              )}
+                <View style={styles.moneyRow}>
+                  <Text style={styles.feeLabel}>ค่าส่ง</Text>
+                  <Text style={styles.feeText}>{fee != null ? `฿${fee.toFixed(0)}` : 'รอยืนยัน'}</Text>
+                </View>
+
+                <Text style={styles.payerText}>{payer}</Text>
+
+                {destination && (
+                  <Text style={styles.destinationText} numberOfLines={1}>
+                    จุดส่ง: {destination}
+                  </Text>
+                )}
+              </View>
+
+              <Text style={styles.shopDistance}>
+                คุณ → ร้าน {Number(job.distance_to_shop_km).toFixed(2)} กม.
+              </Text>
 
               <View style={styles.actions}>
                 <Pressable
@@ -216,11 +237,14 @@ const styles = StyleSheet.create({
   shopName: { flex: 1, fontSize: 18, fontWeight: '800', color: '#1D2939' },
   jobId: { fontSize: 12, fontWeight: '800', color: '#667085' },
   time: { fontSize: 12, fontWeight: '700', color: '#98A2B3' },
-  decisionBox: { gap: 3, marginTop: 2, padding: 12, borderRadius: 12, backgroundColor: '#ECFDF3' },
-  routeText: { fontSize: 16, fontWeight: '800', color: '#067647' },
-  feeText: { fontSize: 22, fontWeight: '900', color: '#B54708' },
-  payerText: { fontSize: 13, fontWeight: '800', color: '#344054' },
-  distance: { fontSize: 14, fontWeight: '700', color: '#067647' },
+  decisionBox: { gap: 6, marginTop: 4, padding: 13, borderRadius: 13, backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6' },
+  routeText: { fontSize: 16, fontWeight: '900', color: '#067647' },
+  moneyRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  feeLabel: { fontSize: 14, fontWeight: '800', color: '#7A2E0E' },
+  feeText: { fontSize: 24, fontWeight: '900', color: '#B54708' },
+  payerText: { alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: '#EAF2FF', fontSize: 13, fontWeight: '900', color: '#1849A9' },
+  destinationText: { fontSize: 13, fontWeight: '700', color: '#475467' },
+  shopDistance: { fontSize: 12, fontWeight: '700', color: '#667085' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   detailButton: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F2F4F7' },
   detailButtonText: { fontWeight: '700', color: '#344054' },
