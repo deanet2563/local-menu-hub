@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { exchangeLineIdToken } from '@/auth/broker';
+import { nativeLineLogin } from '@/auth/lineNative';
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import {
@@ -41,6 +43,10 @@ function compactDestination(address: string | null | undefined) {
   return value.length > 34 ? `${value.slice(0, 34)}…` : value;
 }
 
+function isUnauthorizedError(cause: unknown) {
+  return cause instanceof Error && cause.message.includes(': 401');
+}
+
 export default function NearbyJobsScreen() {
   const router = useRouter();
   const [session, setSession] = useState<RiderSession | null>(null);
@@ -52,6 +58,19 @@ export default function NearbyJobsScreen() {
   const [message, setMessage] = useState<string | null>(null);
 
   const radius = RADII[radiusIndex];
+
+  async function renewSession() {
+    setMessage('กำลังต่ออายุการเข้าสู่ระบบ...');
+    const { idToken } = await nativeLineLogin();
+    const freshSession = await exchangeLineIdToken(idToken);
+    setSession(freshSession);
+    return freshSession;
+  }
+
+  async function ensureFreshSession(activeSession: RiderSession) {
+    if (isSessionFresh(activeSession)) return activeSession;
+    return renewSession();
+  }
 
   const loadJobs = useCallback(async (activeSession: RiderSession, requestedRadius: number, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -103,14 +122,25 @@ export default function NearbyJobsScreen() {
 
   async function refresh() {
     if (!session) return;
-    await loadJobs(session, radius, true);
+    try {
+      const activeSession = await ensureFreshSession(session);
+      await loadJobs(activeSession, radius, true);
+    } catch (cause) {
+      setRefreshing(false);
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+    }
   }
 
   async function expandRadius() {
     if (!session || radiusIndex >= RADII.length - 1) return;
     const nextIndex = radiusIndex + 1;
     setRadiusIndex(nextIndex);
-    await loadJobs(session, RADII[nextIndex]);
+    try {
+      const activeSession = await ensureFreshSession(session);
+      await loadJobs(activeSession, RADII[nextIndex]);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+    }
   }
 
   async function expressInterest(job: NearbyDeliveryJob) {
@@ -118,7 +148,14 @@ export default function NearbyJobsScreen() {
     setInterestedSubId(job.sub_id);
     setMessage(null);
     try {
-      await expressDeliveryInterest(session, job.sub_id);
+      let activeSession = await ensureFreshSession(session);
+      try {
+        await expressDeliveryInterest(activeSession, job.sub_id);
+      } catch (cause) {
+        if (!isUnauthorizedError(cause)) throw cause;
+        activeSession = await renewSession();
+        await expressDeliveryInterest(activeSession, job.sub_id);
+      }
       setMessage(`แจ้งร้านแล้วว่าคุณสนใจงาน #${shortJobId(job.sub_id)} — รอร้านเลือก Rider`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
