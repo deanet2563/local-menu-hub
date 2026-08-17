@@ -1,0 +1,1 @@
+Push registry is now refreshed automatically whenever an existing Rider session is restored, so app upgrades/reinstalls do not rely on a manual readiness check to register the current Expo push token.

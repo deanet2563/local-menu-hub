@@ -1,3 +1,4 @@
+import { consumeLineNonce } from '@/auth/lineNonce';
 import { saveRiderSession, type RiderSession } from '@/auth/session';
 
 type BrokerResponse = {
@@ -10,15 +11,16 @@ function workerUrl() {
   return (process.env.EXPO_PUBLIC_MYTREE_WORKER_URL ?? '').replace(/\/$/, '');
 }
 
-export async function exchangeLineIdToken(lineIdToken: string): Promise<RiderSession> {
+export async function exchangeLineIdToken(lineIdToken: string, nonce?: string): Promise<RiderSession> {
   const baseUrl = workerUrl();
   if (!baseUrl) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
   if (!lineIdToken) throw new Error('LINE ID token is required');
 
+  const effectiveNonce = nonce ?? consumeLineNonce() ?? undefined;
   const response = await fetch(`${baseUrl}/auth/line`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken: lineIdToken }),
+    body: JSON.stringify({ idToken: lineIdToken, nonce: effectiveNonce }),
   });
 
   if (!response.ok) {

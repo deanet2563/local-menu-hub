@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
@@ -9,6 +9,18 @@ import {
   listNearbyDeliveryJobs,
   type NearbyDeliveryJob,
 } from '@/data/nearbyJobsRepository';
+
+function jobDateTime(job: NearbyDeliveryJob) {
+  const raw = job.confirmed_at ?? job.created_at;
+  if (!raw) return 'ไม่ระบุเวลา';
+  return new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(raw));
+}
 
 export default function NearbyJobDetailScreen() {
   const router = useRouter();
@@ -76,14 +88,25 @@ export default function NearbyJobDetailScreen() {
     void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
   }
 
+  function openCustomerMap() {
+    if (!job?.delivery_address_preview?.trim()) {
+      setMessage('งานนี้ยังไม่มีที่อยู่จุดส่งสำหรับเปิดแผนที่');
+      return;
+    }
+    void Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.delivery_address_preview.trim())}`,
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>JOB PREVIEW</Text>
           <Text style={styles.title}>{job?.shop_name ?? 'รายละเอียดงาน'}</Text>
+          {job && <Text style={styles.time}>{jobDateTime(job)} · #{job.sub_id.slice(0, 6).toUpperCase()}</Text>}
           <Text style={styles.subtitle}>
-            ก่อนร้านเลือก Rider หน้านี้จะแสดงเฉพาะข้อมูลที่จำเป็นต่อการตัดสินใจรับงาน
+            แสดงจุดส่งและค่าส่งก่อนรับงาน แต่ยังซ่อนชื่อและเบอร์ลูกค้าจนกว่าร้านจะเลือก Rider
           </Text>
         </View>
 
@@ -95,16 +118,37 @@ export default function NearbyJobDetailScreen() {
               <Text style={styles.label}>ร้าน</Text>
               <Text style={styles.value}>{job.shop_name}</Text>
               <Text style={styles.address}>{job.shop_address ?? 'ยังไม่ได้ระบุที่อยู่ร้าน'}</Text>
-              <Text style={styles.distance}>ระยะถึงร้านประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
+              <Text style={styles.distance}>จากตำแหน่งคุณถึงร้านประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
               <Pressable accessibilityRole="button" style={styles.mapButton} onPress={openShopMap}>
                 <Text style={styles.mapButtonText}>ดูตำแหน่งร้าน</Text>
               </Pressable>
             </View>
 
+            <View style={styles.deliveryCard}>
+              <Text style={styles.label}>จุดส่งลูกค้า</Text>
+              <Text style={styles.address}>{job.delivery_address_preview ?? 'ยังไม่มีข้อมูลจุดส่ง'}</Text>
+              {job.delivery_distance_km != null && (
+                <Text style={styles.routeText}>ร้าน → ลูกค้า {Number(job.delivery_distance_km).toFixed(1)} กม.</Text>
+              )}
+              {job.delivery_fee != null && (
+                <Text style={styles.feeText}>ค่าส่ง ฿{Number(job.delivery_fee).toFixed(0)}</Text>
+              )}
+              {job.delivery_fee_payer && (
+                <Text style={styles.payerText}>
+                  {job.delivery_fee_payer === 'shop' ? 'เก็บค่าส่งจากร้าน' : 'เก็บค่าส่งจากลูกค้า'}
+                </Text>
+              )}
+              {job.delivery_address_preview && (
+                <Pressable accessibilityRole="button" style={styles.mapButton} onPress={openCustomerMap}>
+                  <Text style={styles.mapButtonText}>ดูจุดส่งบนแผนที่</Text>
+                </Pressable>
+              )}
+            </View>
+
             <View style={styles.privacyCard}>
-              <Text style={styles.privacyTitle}>ข้อมูลลูกค้ายังถูกซ่อน</Text>
+              <Text style={styles.privacyTitle}>ข้อมูลส่วนตัวลูกค้ายังถูกซ่อน</Text>
               <Text style={styles.privacyText}>
-                ที่อยู่ เบอร์โทร และข้อมูลจุดส่งของลูกค้าจะไม่ถูกส่งผ่าน Nearby Job preview ก่อนร้านเลือกคุณเป็น Rider ของงานนี้
+                Rider เห็นเฉพาะข้อมูลที่จำเป็นต่อการประเมินงานก่อนถูกเลือก ชื่อและเบอร์โทรลูกค้าจะเปิดหลัง assignment เท่านั้น
               </Text>
             </View>
 
@@ -124,23 +168,28 @@ export default function NearbyJobDetailScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>กลับ</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { flex: 1, padding: 20, gap: 16 },
+  container: { padding: 20, gap: 16, paddingBottom: 32 },
   header: { gap: 6 },
   eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1.1, color: '#246B50' },
   title: { fontSize: 28, fontWeight: '800', color: '#112235' },
+  time: { fontSize: 12, fontWeight: '700', color: '#667085' },
   subtitle: { fontSize: 14, lineHeight: 20, color: '#667085' },
   card: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
+  deliveryCard: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6' },
   label: { fontSize: 12, fontWeight: '800', color: '#667085' },
   value: { fontSize: 19, fontWeight: '800', color: '#1D2939' },
   address: { fontSize: 14, lineHeight: 20, color: '#475467' },
   distance: { fontSize: 14, fontWeight: '800', color: '#067647' },
+  routeText: { fontSize: 16, fontWeight: '800', color: '#067647' },
+  feeText: { fontSize: 24, fontWeight: '900', color: '#B54708' },
+  payerText: { fontSize: 14, fontWeight: '800', color: '#344054' },
   mapButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#EEF4FF' },
   mapButtonText: { fontWeight: '700', color: '#163E72' },
   privacyCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#FFFAEB', borderWidth: 1, borderColor: '#FEDF89' },

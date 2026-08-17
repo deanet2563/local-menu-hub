@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import {
@@ -19,16 +19,28 @@ function mapsUrl(input: { lat?: number | null; lng?: number | null; address?: st
   return null;
 }
 
+function jobDateTime(createdAt: string) {
+  return new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(createdAt));
+}
+
 export default function ActiveDeliveryScreen() {
   const router = useRouter();
   const [session, setSession] = useState<RiderSession | null>(null);
   const [job, setJob] = useState<AssignedDelivery | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async (saved: RiderSession) => {
-    setLoading(true);
+  const load = useCallback(async (saved: RiderSession, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
       const active = await getActiveAssignedDelivery(saved);
       setJob(active);
@@ -36,7 +48,8 @@ export default function ActiveDeliveryScreen() {
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -52,6 +65,11 @@ export default function ActiveDeliveryScreen() {
       await load(saved);
     })();
   }, [load]);
+
+  async function refresh() {
+    if (!session) return;
+    await load(session, true);
+  }
 
   async function pickedUp() {
     if (!session || !job || updating || job.delivery_status !== 'rider_called') return;
@@ -86,10 +104,14 @@ export default function ActiveDeliveryScreen() {
   if (!job) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.empty}>
+        <ScrollView
+          contentContainerStyle={styles.empty}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+        >
           <Text style={styles.emptyTitle}>ไม่มีงานปัจจุบัน</Text>
           <Text style={styles.message}>{message ?? 'เมื่อร้านเลือกคุณ งานจะปรากฏที่นี่'}</Text>
-        </View>
+          <Text style={styles.refreshHint}>ลากหน้าจอลงเพื่ออัปเดต</Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -101,12 +123,30 @@ export default function ActiveDeliveryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+      >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>ASSIGNED DELIVERY</Text>
           <Text style={styles.title}>{pickedUpState ? 'กำลังนำส่ง' : 'ไปรับอาหารที่ร้าน'}</Text>
+          <Text style={styles.time}>{jobDateTime(job.created_at)} · #{job.sub_id.slice(0, 6).toUpperCase()}</Text>
           <Text style={styles.status}>{job.delivery_status}</Text>
         </View>
+
+        {(job.delivery_fee != null || job.delivery_distance_km != null) && (
+          <View style={styles.feeCard}>
+            {job.delivery_distance_km != null && (
+              <Text style={styles.routeText}>ร้าน → ลูกค้า {Number(job.delivery_distance_km).toFixed(1)} กม.</Text>
+            )}
+            {job.delivery_fee != null && <Text style={styles.feeText}>ค่าส่ง ฿{Number(job.delivery_fee).toFixed(0)}</Text>}
+            {job.delivery_fee_payer && (
+              <Text style={styles.payerText}>
+                {job.delivery_fee_payer === 'shop' ? 'เก็บค่าส่งจากร้าน' : 'เก็บค่าส่งจากลูกค้า'}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>จุดรับสินค้า</Text>
@@ -142,9 +182,9 @@ export default function ActiveDeliveryScreen() {
           </View>
         ) : (
           <View style={styles.privacyCard}>
-            <Text style={styles.privacyTitle}>ข้อมูลจุดส่งจะใช้หลังรับสินค้า</Text>
+            <Text style={styles.privacyTitle}>จุดส่งถูกผูกกับงานนี้แล้ว</Text>
             <Text style={styles.privacyText}>
-              งานนี้ถูก assign ให้คุณแล้ว แต่ UI จะเน้นจุดรับสินค้าก่อน เพื่อลดการเปิดเผยข้อมูลลูกค้าที่ไม่จำเป็นระหว่างทางไปร้าน
+              ก่อนรับสินค้า ระบบยังซ่อนชื่อและเบอร์ลูกค้า แต่ข้อมูลระยะทางและค่าส่งใช้ตัดสินใจรับงานตั้งแต่หน้า Nearby Jobs แล้ว
             </Text>
           </View>
         )}
@@ -194,14 +234,20 @@ export default function ActiveDeliveryScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { padding: 20, gap: 14 },
+  container: { padding: 20, gap: 14, paddingBottom: 32 },
   loading: { margin: 24, fontSize: 14, color: '#667085' },
-  empty: { padding: 24, gap: 8 },
+  empty: { flexGrow: 1, padding: 24, gap: 8 },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: '#1D2939' },
+  refreshHint: { marginTop: 8, fontSize: 12, color: '#98A2B3' },
   header: { gap: 5 },
   eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1.1, color: '#246B50' },
   title: { fontSize: 28, fontWeight: '800', color: '#112235' },
+  time: { fontSize: 12, fontWeight: '700', color: '#667085' },
   status: { fontSize: 13, fontWeight: '700', color: '#F79009' },
+  feeCard: { gap: 3, padding: 14, borderRadius: 14, backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6' },
+  routeText: { fontSize: 16, fontWeight: '800', color: '#067647' },
+  feeText: { fontSize: 22, fontWeight: '900', color: '#B54708' },
+  payerText: { fontSize: 13, fontWeight: '800', color: '#344054' },
   card: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
   deliveryCard: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#B2DDFF' },
   sectionLabel: { fontSize: 12, fontWeight: '800', color: '#667085' },

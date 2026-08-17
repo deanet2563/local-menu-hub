@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { exchangeLineIdToken } from '@/auth/broker';
+import { nativeLineLogin } from '@/auth/lineNative';
 import { clearRiderSession, isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
-import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
+import { registerPushDevice } from '@/data/pushDeviceRepository';
+import { getRiderProfile, setRiderOnline, updateRiderLocation, type RiderProfile } from '@/data/riderRepository';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
 
@@ -38,6 +41,7 @@ function HealthRow({ label, value, state = 'pending' }: HealthRowProps) {
 export default function RiderHomeScreen() {
   const router = useRouter();
   const [checking, setChecking] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [updatingOnline, setUpdatingOnline] = useState(false);
   const [pushState, setPushState] = useState<ReadinessState>('pending');
   const [pushText, setPushText] = useState('รอตรวจสอบ');
@@ -50,6 +54,49 @@ export default function RiderHomeScreen() {
   const [accountText, setAccountText] = useState('กำลังตรวจ MyTree session...');
   const [error, setError] = useState<string | null>(null);
 
+  function applyRiderProfile(profile: RiderProfile | null) {
+    setRider(profile);
+
+    if (!profile) {
+      setAccountState('blocked');
+      setAccountText('ไม่พบบัญชี Rider สำหรับผู้ใช้นี้');
+    } else if (profile.is_banned) {
+      setAccountState('blocked');
+      setAccountText('บัญชี Rider ถูกระงับ');
+    } else if (profile.deletion_requested_at) {
+      setAccountState('blocked');
+      setAccountText('บัญชีอยู่ระหว่างคำขอลบ');
+    } else if (!profile.is_approved) {
+      setAccountState('pending');
+      setAccountText('รอ Admin อนุมัติ Rider');
+    } else {
+      setAccountState('ready');
+      setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ไม่ระบุพาหนะ'}`);
+    }
+  }
+
+  async function syncPushRegistration(activeSession: RiderSession, profile: RiderProfile) {
+    setPushState('checking');
+    setPushText('กำลังตรวจ Push และลงทะเบียนอุปกรณ์...');
+
+    try {
+      const push = await ensurePushReadiness();
+      if (!push.ready || !push.token) {
+        setPushState('blocked');
+        setPushText(push.reason ?? 'Push ยังไม่พร้อม');
+        return;
+      }
+
+      await registerPushDevice(activeSession, profile.id, push.token);
+      setPushState('ready');
+      setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
+    } catch (cause) {
+      setPushState('blocked');
+      setPushText('ลงทะเบียน Push อุปกรณ์ไม่สำเร็จ');
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function restoreAccount() {
     setAccountState('checking');
     setAccountText('กำลังตรวจ MyTree session...');
@@ -59,7 +106,7 @@ export default function RiderHomeScreen() {
       setSession(null);
       setRider(null);
       setAccountState('pending');
-      setAccountText('รอเชื่อม Native LINE Login');
+      setAccountText('เข้าสู่ระบบด้วย LINE เพื่อเชื่อมบัญชี Rider');
       return;
     }
 
@@ -75,24 +122,8 @@ export default function RiderHomeScreen() {
     try {
       const profile = await getRiderProfile(saved);
       setSession(saved);
-      setRider(profile);
-
-      if (!profile) {
-        setAccountState('blocked');
-        setAccountText('ไม่พบบัญชี Rider สำหรับผู้ใช้นี้');
-      } else if (profile.is_banned) {
-        setAccountState('blocked');
-        setAccountText('บัญชี Rider ถูกระงับ');
-      } else if (profile.deletion_requested_at) {
-        setAccountState('blocked');
-        setAccountText('บัญชีอยู่ระหว่างคำขอลบ');
-      } else if (!profile.is_approved) {
-        setAccountState('pending');
-        setAccountText('รอ Admin อนุมัติ Rider');
-      } else {
-        setAccountState('ready');
-        setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ไม่ระบุพาหนะ'}`);
-      }
+      applyRiderProfile(profile);
+      if (profile) await syncPushRegistration(saved, profile);
     } catch (cause) {
       setAccountState('blocked');
       setAccountText('อ่านบัญชี Rider ไม่สำเร็จ');
@@ -103,6 +134,34 @@ export default function RiderHomeScreen() {
   useEffect(() => {
     void restoreAccount();
   }, []);
+
+  async function signInWithLine() {
+    if (signingIn) return;
+
+    setSigningIn(true);
+    setError(null);
+    setAccountState('checking');
+    setAccountText('กำลังเข้าสู่ระบบ LINE...');
+
+    try {
+      const { idToken } = await nativeLineLogin();
+      const newSession = await exchangeLineIdToken(idToken);
+      const profile = await getRiderProfile(newSession);
+
+      setSession(newSession);
+      applyRiderProfile(profile);
+
+      if (profile) await syncPushRegistration(newSession, profile);
+    } catch (cause) {
+      setSession(null);
+      setRider(null);
+      setAccountState('blocked');
+      setAccountText('เข้าสู่ระบบ LINE ไม่สำเร็จ');
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSigningIn(false);
+    }
+  }
 
   async function checkReadiness() {
     if (checking) return;
@@ -126,19 +185,42 @@ export default function RiderHomeScreen() {
           ? 'พร้อมรับ Native Push'
           : pushResult.value.reason ?? 'Push ยังไม่พร้อม',
       );
+
+      if (pushResult.value.ready && pushResult.value.token && session && rider) {
+        try {
+          await registerPushDevice(session, rider.id, pushResult.value.token);
+          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
     } else {
       setPushState('blocked');
       setPushText('ตรวจสอบ Push ไม่สำเร็จ');
     }
 
     if (locationResult.status === 'fulfilled') {
+      const currentLocation = locationResult.value.location;
       setLocationState(locationResult.value.ready ? 'ready' : 'blocked');
-      setLocation(locationResult.value.location);
+      setLocation(currentLocation);
       setLocationText(
         locationResult.value.ready
           ? 'ได้ตำแหน่งปัจจุบันแล้ว'
           : locationResult.value.reason ?? 'ตำแหน่งยังไม่พร้อม',
       );
+
+      if (locationResult.value.ready && currentLocation && session && rider) {
+        try {
+          await updateRiderLocation(session, rider.id, currentLocation);
+          const refreshedProfile = await getRiderProfile(session);
+          if (refreshedProfile) setRider(refreshedProfile);
+          setLocationText('ได้ตำแหน่งปัจจุบันแล้ว · อัปเดต MyTree แล้ว');
+        } catch (cause) {
+          setLocationState('blocked');
+          setLocationText('ได้ GPS แล้ว แต่บันทึกตำแหน่งใน MyTree ไม่สำเร็จ');
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
     } else {
       setLocationState('blocked');
       setLocationText('ตรวจสอบตำแหน่งไม่สำเร็จ');
@@ -196,7 +278,7 @@ export default function RiderHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
           <Text style={styles.title}>พร้อมรับงาน</Text>
@@ -215,6 +297,19 @@ export default function RiderHomeScreen() {
             state={rider?.is_online ? 'ready' : 'pending'}
           />
         </View>
+
+        {!session && (
+          <Pressable
+            style={[styles.lineButton, signingIn && styles.buttonDisabled]}
+            accessibilityRole="button"
+            disabled={signingIn}
+            onPress={signInWithLine}
+          >
+            <Text style={styles.lineButtonText}>
+              {signingIn ? 'กำลังเข้าสู่ระบบ LINE...' : 'เข้าสู่ระบบด้วย LINE'}
+            </Text>
+          </Pressable>
+        )}
 
         {location && (
           <View style={styles.locationCard}>
@@ -287,16 +382,16 @@ export default function RiderHomeScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.note}>
-          Native LINE Login เป็น gate ถัดไป เมื่อ LINE Developers mobile configuration พร้อมแล้ว ID token จะถูกแลกกับ MyTree Worker เป็น Supabase JWT และเก็บเฉพาะใน SecureStore ของเครื่อง
+          LINE SDK คืนเฉพาะ OpenID Connect ID token ให้ MyTree Worker ตรวจสอบและแลกเป็น Supabase JWT; session เก็บใน SecureStore และ Push token ถูกผูกกับ Rider หลังยืนยันตัวตนแล้วเท่านั้น
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 18 },
+  container: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32, gap: 18 },
   header: { gap: 8 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: '#246B50' },
   title: { fontSize: 30, fontWeight: '800', color: '#112235' },
@@ -327,6 +422,15 @@ const styles = StyleSheet.create({
   locationLabel: { fontSize: 12, fontWeight: '700', color: '#067647' },
   locationValue: { marginTop: 4, fontSize: 16, fontWeight: '700', color: '#074D31' },
   locationMeta: { marginTop: 2, fontSize: 12, color: '#3F6B57' },
+  lineButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: '#06C755',
+    paddingHorizontal: 18,
+  },
+  lineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   primaryButton: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -13,12 +13,31 @@
     "setup:native-deps": "npx expo install expo-router expo-location expo-notifications expo-secure-store expo-image-picker react-native-maps react-native-safe-area-context react-native-screens react-native-gesture-handler expo-linking expo-device expo-constants expo-status-bar"
   },
   "dependencies": {
-    "expo": "^57.0.0",
+    "expo": "~57.0.13",
+    "expo-constants": "~57.0.10",
+    "expo-device": "~57.0.1",
+    "expo-image-picker": "~57.0.10",
+    "expo-linking": "~57.0.6",
+    "expo-location": "~57.0.10",
+    "expo-notifications": "~57.0.11",
+    "expo-router": "~57.0.13",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.2"
+    "react-dom": "19.2.3",
+    "react-native": "^0.86.2",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-maps": "1.27.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "autolinking": {
+      "nativeModulesDir": "./modules"
+    }
   }
 }
