@@ -50,6 +50,23 @@ function playChime(ctx: AudioContext) {
   });
 }
 
+function formatOrderDateTime(createdAt: string) {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "ไม่ระบุเวลา";
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function shortJobId(subId: string) {
+  return subId.slice(0, 6).toUpperCase();
+}
+
 export function OrderManagement({ shopId }: { shopId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +86,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const seenPendingIdsRef = useRef<Set<string> | null>(null);
+  const seenCandidateIdsRef = useRef<Record<string, Set<string>>>({});
 
   const enableSound = () => {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
@@ -154,7 +172,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
       void refreshCandidates(candidateFor, true);
     }, 5_000);
     return () => clearInterval(interval);
-  }, [candidateFor]);
+  }, [candidateFor, soundEnabled]);
 
   const upd = async (sub_id: string, patch: Record<string, unknown>) => {
     await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
@@ -183,6 +201,25 @@ export function OrderManagement({ shopId }: { shopId: string }) {
     setDispatchError(null);
     try {
       const rows = await loadInterestedRiders(subId);
+      const currentIds = new Set(rows.map((row) => row.riderId));
+      const previousIds = seenCandidateIdsRef.current[subId];
+      if (previousIds) {
+        const newRiders = rows.filter((row) => !previousIds.has(row.riderId));
+        if (newRiders.length > 0) {
+          if (soundEnabled && audioCtxRef.current) {
+            if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+            playChime(audioCtxRef.current);
+          }
+          if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+            new Notification("🛵 Rider สนใจงานแล้ว", {
+              body: newRiders.length === 1
+                ? `${newRiders[0].name} กดสนใจรับงาน #${shortJobId(subId)}`
+                : `มี Rider ${newRiders.length} คนใหม่กดสนใจงาน #${shortJobId(subId)}`,
+            });
+          }
+        }
+      }
+      seenCandidateIdsRef.current[subId] = currentIds;
       setCandidates(rows);
     } catch (error) {
       if (!silent) setDispatchError(error instanceof Error ? error.message : "โหลดผู้สนใจไม่สำเร็จ");
@@ -194,6 +231,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const findNearbyRiders = async (subId: string) => {
     setCandidateFor(subId);
     setCandidates([]);
+    seenCandidateIdsRef.current[subId] = new Set();
     setDispatching(true);
     setDispatchMessage(null);
     setDispatchError(null);
@@ -224,6 +262,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
         ...prev,
         [candidate.riderId]: { name: candidate.name, phone: prev[candidate.riderId]?.phone ?? "" },
       }));
+      delete seenCandidateIdsRef.current[subId];
       setCandidateFor(null);
       setCandidates([]);
       setDispatchMessage(null);
@@ -259,15 +298,15 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           onClick={enableSound}
           className="w-full rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-sm px-3 py-2.5 text-left"
         >
-          🔔 <span className="font-medium">กดเปิดเสียงแจ้งเตือนออเดอร์</span>
+          🔔 <span className="font-medium">กดเปิดเสียงแจ้งเตือน</span>
           <br />
           <span className="text-xs text-orange-600">
-            เปิดเสียงตรงนี้ + เปิดหน้านี้ทิ้งไว้ระหว่างขาย ระบบจะเตือนเมื่อมีออเดอร์ใหม่
+            เปิดเสียงตรงนี้ + เปิดหน้านี้ทิ้งไว้ ระบบจะเตือนทั้งออเดอร์ใหม่และเมื่อ Rider กดสนใจงาน
           </span>
         </button>
       ) : (
         <p className="text-xs text-gray-400">
-          🔊 เสียงแจ้งเตือนเปิดอยู่ — ระบบเช็คออเดอร์ใหม่ทุก 15 วินาที
+          🔊 เสียงแจ้งเตือนเปิดอยู่ — เตือนออเดอร์ใหม่ + Rider สนใจงาน
         </p>
       )}
 
@@ -286,6 +325,10 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                 {paid ? "จ่ายแล้ว" : o.payment_method === "qr_transfer" ? "รอยืนยันโอน" : "เก็บปลายทาง"}
               </span>
             </div>
+
+            <p className="text-xs font-medium text-gray-500">
+              🕐 {formatOrderDateTime(o.created_at)} · #{shortJobId(o.sub_id)}
+            </p>
 
             {o.hub_orders?.customers && (
               <p className="text-sm text-gray-600">
@@ -472,7 +515,13 @@ export function OrderManagement({ shopId }: { shopId: string }) {
                     ส่งแจ้งเตือนอีกครั้ง
                   </button>
                   <button
-                    onClick={() => { setCandidateFor(null); setCandidates([]); setDispatchMessage(null); setDispatchError(null); }}
+                    onClick={() => {
+                      delete seenCandidateIdsRef.current[o.sub_id];
+                      setCandidateFor(null);
+                      setCandidates([]);
+                      setDispatchMessage(null);
+                      setDispatchError(null);
+                    }}
                     className="px-3 text-xs text-gray-500"
                   >
                     ปิด
