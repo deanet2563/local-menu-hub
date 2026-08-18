@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { confirmShopOrder } from "@/lib/shopOrderConfirm";
 import {
   loadInterestedRiders,
   requestNearbyRiders,
@@ -83,6 +84,8 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [feePayerSavingFor, setFeePayerSavingFor] = useState<string | null>(null);
   const [feePayerError, setFeePayerError] = useState<Record<string, string>>({});
+  const [confirmingFor, setConfirmingFor] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const seenPendingIdsRef = useRef<Set<string> | null>(null);
@@ -177,6 +180,19 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const upd = async (sub_id: string, patch: Record<string, unknown>) => {
     await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
     load();
+  };
+
+  const confirmOrder = async (subId: string) => {
+    if (confirmingFor) return;
+    setConfirmingFor(subId);
+    setConfirmError(null);
+    const result = await confirmShopOrder(subId);
+    if (!result.ok) {
+      setConfirmError(result.error ?? "รับออเดอร์ไม่สำเร็จ");
+    } else {
+      await load();
+    }
+    setConfirmingFor(null);
   };
 
   const setDeliveryFeePayer = async (subId: string, payer: "customer" | "shop") => {
@@ -293,6 +309,8 @@ export function OrderManagement({ shopId }: { shopId: string }) {
           <button onClick={load} className="text-xs text-orange-500">↻</button>
         </div>
       </div>
+
+      {confirmError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{confirmError}</p>}
 
       {!soundEnabled ? (
         <button
@@ -425,7 +443,13 @@ export function OrderManagement({ shopId }: { shopId: string }) {
 
             <div className="flex flex-wrap gap-2 pt-1">
               {o.order_status === "pending" && (
-                <button onClick={() => upd(o.sub_id, { order_status: "confirmed" })} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">รับออเดอร์</button>
+                <button
+                  onClick={() => void confirmOrder(o.sub_id)}
+                  disabled={!!confirmingFor}
+                  className="rounded-lg bg-green-500 disabled:opacity-50 text-white text-xs px-3 py-1.5"
+                >
+                  {confirmingFor === o.sub_id ? "กำลังรับออเดอร์..." : "รับออเดอร์"}
+                </button>
               )}
               {o.order_status !== "pending" && (
                 <button onClick={() => upd(o.sub_id, { print_status: o.print_status === "not_printed" ? "printed" : "reprinted" })} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">
