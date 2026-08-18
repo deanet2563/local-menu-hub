@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useLineLogin } from '../src/auth/useLineLogin';
 import { getAccessToken } from '../src/lib/tokenStore';
 import { getOwnedShopId, loadShopOrders } from '../src/data/shopOrders';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
@@ -11,7 +12,7 @@ export default function ShopHomeScreen() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null);
     try {
       const token = await getAccessToken();
@@ -24,6 +25,7 @@ export default function ShopHomeScreen() {
       const shopId = await getOwnedShopId();
       if (!shopId) {
         setError('บัญชีนี้ยังไม่มีร้านที่เป็นเจ้าของ');
+        setOrders([]);
         return;
       }
       const rows = await loadShopOrders(shopId);
@@ -33,9 +35,16 @@ export default function ShopHomeScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  const onLoginSuccess = useCallback(() => {
+    setLoading(true);
+    void load();
+  }, [load]);
+
+  const lineLogin = useLineLogin(onLoginSuccess);
+
+  useEffect(() => { void load(); }, [load]);
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" /><Text>กำลังเปิด MyTree Shop…</Text></View>;
@@ -44,12 +53,21 @@ export default function ShopHomeScreen() {
   if (signedIn === false) {
     return (
       <View style={styles.centerPad}>
+        <Text style={styles.eyebrow}>MYTREE MERCHANT</Text>
         <Text style={styles.title}>MyTree Shop</Text>
-        <Text style={styles.subtitle}>Native merchant workspace</Text>
+        <Text style={styles.subtitle}>เข้าสู่ระบบด้วยบัญชี LINE เดิมที่ใช้กับ MyTree</Text>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Native foundation พร้อมแล้ว</Text>
-          <Text style={styles.body}>ขั้นต่อไปคือเชื่อม LINE native sign-in กับ MyTree Worker เพื่อรับ JWT เดิมและใช้ RLS ชุดเดียวกับ Web/LIFF</Text>
+          <Text style={styles.cardTitle}>บัญชีเดียวกับ LINE / LIFF</Text>
+          <Text style={styles.body}>ระบบจะเชื่อมกลับไปยัง customer_id เดิมของ MyTree และใช้สิทธิ์ RLS เดิมของร้าน ไม่สร้างบัญชีร้านซ้ำ</Text>
         </View>
+        <Pressable
+          disabled={!lineLogin.ready || lineLogin.exchanging}
+          onPress={() => void lineLogin.signIn()}
+          style={({ pressed }) => [styles.loginButton, (!lineLogin.ready || lineLogin.exchanging) && styles.disabled, pressed && styles.pressed]}
+        >
+          {lineLogin.exchanging ? <ActivityIndicator /> : <Text style={styles.loginText}>เข้าสู่ระบบด้วย LINE</Text>}
+        </Pressable>
+        {lineLogin.error ? <Text style={styles.loginError}>{lineLogin.error}</Text> : null}
       </View>
     );
   }
@@ -68,7 +86,7 @@ export default function ShopHomeScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={<View style={styles.card}><Text style={styles.cardTitle}>ยังไม่มีออเดอร์</Text></View>}
         renderItem={({ item }) => (
-          <Pressable onPress={() => router.push(`/orders/${item.id}`)} style={styles.orderCard}>
+          <Pressable onPress={() => router.push(`/orders/${item.id}`)} style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}>
             <View style={styles.row}><Text style={styles.orderId}>#{item.shortId}</Text><Text style={styles.status}>{item.status}</Text></View>
             <Text style={styles.customer}>{item.customerName}</Text>
             <View style={styles.row}><Text>{item.fulfillmentLabel}</Text><Text style={styles.amount}>฿{item.amount.toFixed(0)}</Text></View>
@@ -88,9 +106,14 @@ const styles = StyleSheet.create({
   title: { marginTop: 6, fontSize: 28, fontWeight: '800', color: '#173C2C' },
   subtitle: { marginTop: 6, fontSize: 15, color: '#647168' },
   list: { padding: 16, gap: 12 },
-  card: { borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18 },
+  card: { marginTop: 22, borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
   cardTitle: { fontSize: 18, fontWeight: '800', color: '#173C2C' },
   body: { marginTop: 8, fontSize: 15, lineHeight: 22, color: '#647168' },
+  loginButton: { marginTop: 18, minHeight: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#06C755', paddingHorizontal: 18 },
+  loginText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  disabled: { opacity: 0.45 },
+  pressed: { opacity: 0.75 },
+  loginError: { marginTop: 12, color: '#A13A36', lineHeight: 20 },
   orderCard: { borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderId: { fontSize: 13, fontWeight: '800', color: '#52705B' },
