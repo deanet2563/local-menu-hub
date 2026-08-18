@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { publicSupabase, isOrderingPreview } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
@@ -6,10 +6,15 @@ import { useCart, cartCount, cartTotal } from "@/lib/cart";
 
 // ============================================================
 // MyTree — Food-first hub. Public catalog browsing must not trigger LINE login.
+// Nearby shops are automatically refreshed on first load and after the app
+// returns to the foreground if the previous GPS fix is older than 2 minutes.
 // ============================================================
 
 type Shop = { shop_id: string; name: string; category: string | null; logo_url: string | null };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+type LocationState = "idle" | "loading" | "ready" | "error";
+
+const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 
 export function HubHome() {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -18,6 +23,9 @@ export function HubHome() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string | null>(null);
   const [nearOrder, setNearOrder] = useState<string[] | null>(null);
+  const [locationState, setLocationState] = useState<LocationState>("idle");
+  const lastLocationAt = useRef(0);
+  const locating = useRef(false);
   const c = useCart();
   const staging = isOrderingPreview();
 
@@ -39,6 +47,19 @@ export function HubHome() {
     })();
   }, []);
 
+  useEffect(() => {
+    void refreshNearbyShops();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLocationAt.current < LOCATION_REFRESH_MS) return;
+      void refreshNearbyShops();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
   const shopName = (id: string) => shops.find((x) => x.shop_id === id)?.name ?? "";
   const cats = useMemo(
     () => Array.from(new Set(items.map((i) => i.category).filter(Boolean))) as string[],
@@ -47,17 +68,31 @@ export function HubHome() {
   const filtered = items.filter(
     (i) => (!cat || i.category === cat) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
   );
-  const orderedShops = nearOrder
-    ? [...shops].sort((a, b) => nearOrder.indexOf(a.shop_id) - nearOrder.indexOf(b.shop_id))
-    : shops;
+  const orderedShops = useMemo(() => {
+    if (!nearOrder) return shops;
+    const rank = new Map(nearOrder.map((shopId, index) => [shopId, index]));
+    return [...shops].sort((a, b) => {
+      const aRank = rank.get(a.shop_id) ?? Number.MAX_SAFE_INTEGER;
+      const bRank = rank.get(b.shop_id) ?? Number.MAX_SAFE_INTEGER;
+      return aRank - bRank;
+    });
+  }, [shops, nearOrder]);
 
-  async function useMyLocation() {
+  async function refreshNearbyShops() {
+    if (locating.current) return;
+    locating.current = true;
+    setLocationState("loading");
     try {
       const loc = await getCurrentLocation();
-      const { data } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
+      const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
+      if (error) throw error;
       if (data) setNearOrder((data as { shop_id: string }[]).map((r) => r.shop_id));
+      lastLocationAt.current = Date.now();
+      setLocationState("ready");
     } catch {
-      /* ignore */
+      setLocationState("error");
+    } finally {
+      locating.current = false;
     }
   }
 
@@ -92,9 +127,20 @@ export function HubHome() {
           onChange={(e) => setQ(e.target.value)}
         />
 
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-700">ร้านใกล้คุณ</p>
-          <button onClick={useMyLocation} className="text-xs text-orange-500">📍 ใช้ตำแหน่ง</button>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">ร้านใกล้คุณ</p>
+            {locationState === "ready" && <p className="text-[11px] text-green-600">เรียงตามตำแหน่งปัจจุบันแล้ว</p>}
+            {locationState === "error" && <p className="text-[11px] text-gray-400">เปิดสิทธิ์ตำแหน่งเพื่อเรียงร้านที่ใกล้ที่สุด</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => void refreshNearbyShops()}
+            disabled={locationState === "loading"}
+            className="shrink-0 text-xs text-orange-500 disabled:opacity-50"
+          >
+            {locationState === "loading" ? "📍 กำลังค้นหา..." : "📍 อัปเดตตำแหน่ง"}
+          </button>
         </div>
         <div className="flex gap-3 overflow-x-auto pb-1">
           {orderedShops.map((s) => (
