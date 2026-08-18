@@ -1,0 +1,10 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["MyTreeLineLoginModule"],
+    "appDelegateSubscribers": ["MyTreeLineLoginAppDelegateSubscriber"]
+  },
+  "android": {
+    "modules": ["cc.mytree.shop.linelogin.MyTreeLineLoginModule"]
+  }
+}
