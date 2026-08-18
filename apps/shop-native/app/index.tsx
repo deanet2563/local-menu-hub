@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useLineLogin } from '../src/auth/useLineLogin';
+import { exchangeLineIdToken } from '../src/auth/broker';
+import { loginWithLineNative } from '../src/native/lineLogin';
 import { getAccessToken } from '../src/lib/tokenStore';
 import { getOwnedShopId, loadShopOrders } from '../src/data/shopOrders';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
@@ -9,8 +10,10 @@ import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
 export default function ShopHomeScreen() {
   const [orders, setOrders] = useState<ShopOrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -37,12 +40,21 @@ export default function ShopHomeScreen() {
     }
   }, []);
 
-  const onLoginSuccess = useCallback(() => {
-    setLoading(true);
-    void load();
-  }, [load]);
-
-  const lineLogin = useLineLogin(onLoginSuccess);
+  const signIn = useCallback(async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    setLoginError(null);
+    try {
+      const { idToken } = await loginWithLineNative();
+      await exchangeLineIdToken(idToken);
+      setLoading(true);
+      await load();
+    } catch (cause) {
+      setLoginError(cause instanceof Error ? cause.message : 'เข้าสู่ระบบ LINE ไม่สำเร็จ');
+    } finally {
+      setSigningIn(false);
+    }
+  }, [load, signingIn]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -58,16 +70,16 @@ export default function ShopHomeScreen() {
         <Text style={styles.subtitle}>เข้าสู่ระบบด้วยบัญชี LINE เดิมที่ใช้กับ MyTree</Text>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>บัญชีเดียวกับ LINE / LIFF</Text>
-          <Text style={styles.body}>ระบบจะเชื่อมกลับไปยัง customer_id เดิมของ MyTree และใช้สิทธิ์ RLS เดิมของร้าน ไม่สร้างบัญชีร้านซ้ำ</Text>
+          <Text style={styles.body}>LINE SDK จะส่ง ID token ไปตรวจที่ MyTree Worker แล้วผูกกลับมายัง customer_id เดิมของร้าน ข้อมูลยังถูกควบคุมด้วย RLS ชุดเดิม</Text>
         </View>
         <Pressable
-          disabled={!lineLogin.ready || lineLogin.exchanging}
-          onPress={() => void lineLogin.signIn()}
-          style={({ pressed }) => [styles.loginButton, (!lineLogin.ready || lineLogin.exchanging) && styles.disabled, pressed && styles.pressed]}
+          disabled={signingIn}
+          onPress={() => void signIn()}
+          style={({ pressed }) => [styles.loginButton, signingIn && styles.disabled, pressed && styles.pressed]}
         >
-          {lineLogin.exchanging ? <ActivityIndicator /> : <Text style={styles.loginText}>เข้าสู่ระบบด้วย LINE</Text>}
+          {signingIn ? <ActivityIndicator /> : <Text style={styles.loginText}>เข้าสู่ระบบด้วย LINE</Text>}
         </Pressable>
-        {lineLogin.error ? <Text style={styles.loginError}>{lineLogin.error}</Text> : null}
+        {loginError ? <Text style={styles.loginError}>{loginError}</Text> : null}
       </View>
     );
   }
