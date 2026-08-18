@@ -1,0 +1,2 @@
+Trigger Cloudflare Pages after GitHub reconnection.
+Expected production branch includes shop order card date/time + short Job ID and Rider-interest sound alert.
