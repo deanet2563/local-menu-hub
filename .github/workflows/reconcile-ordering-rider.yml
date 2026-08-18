@@ -1,0 +1,20 @@
+name: Reconcile Ordering + Rider
+
+on:
+  push:
+    branches:
+      - agent/reconcile-ordering-rider-v2
+  pull_request:
+    branches:
+      - claude/scaffold-custom-shop-platform-xlicka
+
+jobs:
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build and typecheck
+        run: bun run build

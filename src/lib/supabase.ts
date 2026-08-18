@@ -2,42 +2,69 @@ import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 
 // ============================================================
-// MyTree — Supabase client wired to LINE LIFF auth (#5)
+// MyTree — Supabase clients
 //
-// Flow: LIFF login -> getIDToken -> POST /auth/line (broker) ->
-//       Supabase JWT with customer_id claim -> attached to every request.
+// publicSupabase: anonymous/public catalog reads only. This must never trigger
+// LINE login, so menu/options/bundles can render in preview/external browsers.
 //
-// The `accessToken` callback lets supabase-js fetch a fresh token whenever
-// it needs one (auto-refresh). Every DB call then carries customer_id, so
-// RLS / RPCs / rider signup / admin all work.
+// supabase: authenticated client for customer/profile/shop-management flows.
+// Flow: LIFF login -> getIDToken -> POST /auth/line -> Supabase JWT.
 // ============================================================
 
-const LIFF_ID = "2010936243-3kPykppE";
+const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
+export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
 
-/** Initialise LIFF exactly once. */
+/** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
+export function isOrderingPreview(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+}
+
+/** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
+export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+/** Initialise the environment-selected LIFF app exactly once. */
 export function initLiff(): Promise<void> {
-  if (!liffReady) liffReady = liff.init({ liffId: LIFF_ID });
+  if (!liffReady) {
+    liffReady = liff.init({
+      liffId: LIFF_ID,
+      // Do not auto-login when somebody opens the raw Pages URL in Safari.
+      // When launched through the LIFF URL inside LINE, LIFF handles the
+      // in-client session automatically.
+      withLoginOnExternalBrowser: false,
+    });
+  }
   return liffReady;
 }
 
-/** Get a valid MyTree (Supabase) access token, logging in via LINE if needed. */
+/** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
   await initLiff();
   if (!liff.isLoggedIn()) {
-    liff.login(); // redirects to LINE; page reloads after login
-    // return a dummy so the current (pre-redirect) call doesn't throw
+    // Raw preview browsing intentionally works outside LINE. Authenticated
+    // actions are allowed only after the same preview is launched through its
+    // configured staging LIFF URL.
+    if (isOrderingPreview()) return "";
+    liff.login();
     return "";
   }
 
   const idToken = liff.getIDToken();
-  if (!idToken) throw new Error("no LINE idToken");
+  if (!idToken) {
+    if (isOrderingPreview()) return "";
+    throw new Error("no LINE idToken");
+  }
 
   const res = await fetch(AUTH_BROKER, {
     method: "POST",
@@ -65,10 +92,6 @@ export async function getCurrentCustomerId(): Promise<string | null> {
   }
 }
 
-export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-  {
-    accessToken: async () => (await getAccessToken()) || null,
-  }
-);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  accessToken: async () => (await getAccessToken()) || null,
+});
