@@ -44,3 +44,14 @@ export async function loadShopOrders(shopId: string): Promise<ShopOrder[]> {
   if (error) throw error;
   return (data as unknown as ShopOrder[]) ?? [];
 }
+
+export async function loadShopOrderById(subId: string): Promise<ShopOrder | null> {
+  const { data, error } = await supabase
+    .from('sub_orders')
+    .select(ORDER_SELECT)
+    .eq('sub_id', subId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as unknown as ShopOrder | null) ?? null;
+}
