@@ -158,7 +158,7 @@ function CartCheckout() {
       (geoError) => {
         setLocating(false);
         setDeliveryPoint(null);
-        setError(geoError.code === 1 ? "กรุณาอนุญาตตำแหน่งเพื่อใช้เป็นจุดส่ง" : "อ่านตำแหน่งจุดส่งไม่สำเร็จ ลองอีกครั้ง");
+        setError(geoError.code === 1 ? "ยังไม่ได้อนุญาตตำแหน่ง สามารถกรอกที่อยู่จัดส่งอื่นแล้วสั่งต่อได้" : "อ่านตำแหน่งปัจจุบันไม่สำเร็จ สามารถกรอกที่อยู่จัดส่งอื่นได้");
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 },
     );
@@ -168,7 +168,6 @@ function CartCheckout() {
     if (!c.shopId) return;
     if (!customerName.trim() || !customerPhone.trim()) return setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
     if (fulfillment === "delivery" && !address.trim()) return setError("กรอกที่อยู่จัดส่ง");
-    if (fulfillment === "delivery" && !deliveryPoint) return setError("กดใช้ตำแหน่งปัจจุบันเป็นจุดส่ง เพื่อให้ระบบคำนวณระยะทางและค่าส่ง");
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
     if (fulfillment === "pickup" && shop?.pickup_enabled === false) return setError("ร้านนี้ไม่เปิดบริการรับเอง");
     if (payment === "cash" && shop && !shop.payment_cash_enabled) return setError("ร้านนี้ไม่รับเงินสด");
@@ -202,8 +201,8 @@ function CartCheckout() {
       fulfillment,
       payment,
       address: fulfillment === "delivery" ? address.trim() : null,
-      destinationLat: fulfillment === "delivery" ? deliveryPoint!.lat : null,
-      destinationLng: fulfillment === "delivery" ? deliveryPoint!.lng : null,
+      destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
+      destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
       note: note.trim() || null,
       requestedFor,
     });
@@ -355,20 +354,26 @@ function CartCheckout() {
         </div>
         {fulfillment === "delivery" && (
           <div className="space-y-2">
-            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ / ซอย)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ / ซอย / จุดสังเกต)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <p className="text-xs text-gray-500">สั่งให้คนอื่นหรือส่งไปบ้านอีกหลังได้ — กรอกที่อยู่ปลายทางด้านบน ไม่จำเป็นต้องอยู่ที่จุดนั้นตอนสั่ง</p>
             <button
               type="button"
               onClick={captureDeliveryPoint}
               disabled={locating}
               className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium ${deliveryPoint ? "border-green-300 bg-green-50 text-green-700" : "border-blue-200 bg-blue-50 text-blue-700"} disabled:opacity-50`}
             >
-              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 จุดส่งพร้อมแล้ว · กดเพื่ออัปเดตตำแหน่ง" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดส่ง"}
+              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดรับสินค้าแล้ว · กดเพื่ออัปเดต" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดรับสินค้า"}
             </button>
-            {deliveryPoint && (
-              <p className="text-xs text-green-700">
-                ระบบจะใช้จุดนี้คำนวณระยะทางร้าน → ลูกค้าและค่าส่งให้ Rider
-                {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
-              </p>
+            {deliveryPoint ? (
+              <div className="space-y-2">
+                <p className="text-xs text-green-700">
+                  ระบบจะใช้พิกัดนี้ช่วยคำนวณระยะทางและให้ Rider หาเป้าหมายได้แม่นขึ้น
+                  {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
+                </p>
+                <button type="button" onClick={() => setDeliveryPoint(null)} className="text-xs text-gray-500 underline">ไม่ใช้ตำแหน่งเครื่องนี้ — ใช้ที่อยู่ที่กรอกแทน</button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400">ไม่บังคับใช้ GPS หากส่งไปที่อยู่อื่น ระบบจะใช้ที่อยู่ที่กรอกเป็นปลายทาง</p>
             )}
           </div>
         )}

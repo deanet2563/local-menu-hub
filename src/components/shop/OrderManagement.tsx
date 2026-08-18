@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { acceptShopOrder } from "@/lib/shopOrderActions";
 import {
   loadInterestedRiders,
   requestNearbyRiders,
@@ -175,8 +176,18 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   }, [candidateFor, soundEnabled]);
 
   const upd = async (sub_id: string, patch: Record<string, unknown>) => {
-    await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
-    load();
+    if (patch.order_status === "confirmed") {
+      const result = await acceptShopOrder(sub_id);
+      if (!result.ok) {
+        window.alert(result.error ?? "รับออเดอร์ไม่สำเร็จ");
+        return;
+      }
+      await load();
+      return;
+    }
+    const { error } = await supabase.from("sub_orders").update(patch).eq("sub_id", sub_id);
+    if (error) window.alert(error.message);
+    await load();
   };
 
   const setDeliveryFeePayer = async (subId: string, payer: "customer" | "shop") => {
