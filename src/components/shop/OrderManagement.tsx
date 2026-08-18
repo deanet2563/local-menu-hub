@@ -16,6 +16,13 @@ import {
 // ============================================================
 
 type Item = { item_name_snapshot: string; qty: number; line_total: number };
+type StoredItem = {
+  item_name?: string;
+  qty?: number;
+  unit_price?: number;
+  set_id?: string | null;
+  set_name?: string | null;
+};
 type Order = {
   sub_id: string; order_id: string; fulfillment_type: "pickup" | "delivery";
   order_status: string; payment_status: string; print_status: string; delivery_status: string;
@@ -27,6 +34,7 @@ type Order = {
   delivery_fee: number;
   delivery_fee_payer: "customer" | "shop";
   delivery_distance_km: number | null;
+  items_json: StoredItem[] | null;
   order_items: Item[];
 };
 
@@ -66,6 +74,43 @@ function formatOrderDateTime(createdAt: string) {
 
 function shortJobId(subId: string) {
   return subId.slice(0, 6).toUpperCase();
+}
+
+type ShopDisplayItem = { name: string; qty: number; total: number; setId: string | null; setName: string | null };
+
+function groupedOrderItems(order: Order) {
+  const source: ShopDisplayItem[] = Array.isArray(order.items_json) && order.items_json.length > 0
+    ? order.items_json.map((item, idx) => ({
+        name: item.item_name?.trim() || `รายการ ${idx + 1}`,
+        qty: Number(item.qty) || 0,
+        total: (Number(item.qty) || 0) * (Number(item.unit_price) || 0),
+        setId: item.set_id?.trim() || null,
+        setName: item.set_name?.trim() || null,
+      }))
+    : order.order_items.map((item) => ({
+        name: item.item_name_snapshot,
+        qty: Number(item.qty) || 0,
+        total: Number(item.line_total) || 0,
+        setId: null,
+        setName: null,
+      }));
+
+  const groups: Array<{ key: string; name: string; isSet: boolean; items: ShopDisplayItem[]; total: number }> = [];
+  const index = new Map<string, number>();
+  for (const item of source) {
+    const key = item.setId ? `set:${item.setId}` : item.setName ? `set-name:${item.setName}` : 'general';
+    let groupIndex = index.get(key);
+    if (groupIndex === undefined) {
+      groupIndex = groups.length;
+      index.set(key, groupIndex);
+      groups.push({ key, name: item.setName || 'รายการทั่วไป', isSet: !!item.setName, items: [], total: 0 });
+    }
+    const group = groups[groupIndex];
+    if (!group) continue;
+    group.items.push(item);
+    group.total += item.total;
+  }
+  return [...groups.filter((g) => g.isSet), ...groups.filter((g) => !g.isSet)];
 }
 
 export function OrderManagement({ shopId }: { shopId: string }) {
@@ -110,7 +155,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,delivery_fee,delivery_fee_payer,delivery_distance_km,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,delivery_fee,delivery_fee_payer,delivery_distance_km,items_json,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as unknown as Order[]) ?? [];
@@ -358,11 +403,23 @@ export function OrderManagement({ shopId }: { shopId: string }) {
               </p>
             )}
 
-            <div className="text-sm text-gray-700">
-              {o.order_items.map((i, idx) => (
-                <div key={idx} className="flex justify-between">
-                  <span>{i.item_name_snapshot} × {i.qty}</span>
-                  <span className="text-gray-500">฿{i.line_total}</span>
+            <div className="space-y-2">
+              {groupedOrderItems(o).map((group) => (
+                <div key={group.key} className={group.isSet ? "rounded-lg border border-orange-100 bg-orange-50/60 p-2" : "py-1"}>
+                  {group.isSet && (
+                    <div className="mb-1 flex justify-between text-xs font-semibold text-orange-700">
+                      <span>{group.name}</span>
+                      <span>฿{group.total}</span>
+                    </div>
+                  )}
+                  <div className="space-y-0.5 text-sm text-gray-700">
+                    {group.items.map((i, idx) => (
+                      <div key={`${group.key}-${idx}`} className="flex justify-between gap-3">
+                        <span>{i.name} × {i.qty}</span>
+                        <span className="shrink-0 text-gray-500">฿{i.total}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
