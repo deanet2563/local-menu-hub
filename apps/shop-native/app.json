@@ -9,10 +9,20 @@
     "plugins": ["expo-router", "expo-secure-store"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "cc.mytree.shop"
+      "bundleIdentifier": "cc.mytree.shop",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleTypeRole": "Editor",
+            "CFBundleURLSchemes": ["line3rdp.cc.mytree.shop"]
+          }
+        ],
+        "LSApplicationQueriesSchemes": ["lineauth2"]
+      }
     },
     "android": {
-      "package": "cc.mytree.shop"
+      "package": "cc.mytree.shop",
+      "permissions": ["INTERNET"]
     },
     "experiments": {
       "typedRoutes": true
