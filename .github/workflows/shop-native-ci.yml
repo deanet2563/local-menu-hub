@@ -65,7 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_PUBLIC_SUPABASE_URL: https://ecrxrwfrwuoenjoyhfzw.supabase.co
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      # Supabase publishable keys are public client configuration by design.
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Qvsg8XpfUurNKewoDab9Ww_D9xvweP0
       EXPO_PUBLIC_MYTREE_WORKER_URL: https://mytree-worker.kompakorn-t.workers.dev
       EXPO_PUBLIC_LINE_LOGIN_CHANNEL_ID: '2010936243'
       NODE_ENV: production
