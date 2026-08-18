@@ -1,6 +1,6 @@
 # MyTree.cc — Project Bible
 
-**Status snapshot:** 2026-08-16  
+**Status snapshot:** 2026-08-18  
 **Pilot:** Sammakorn Village, Ramkhamhaeng 110/112, Bangkok
 
 This document is the current product/architecture sequencing source of truth for MyTree unless a later approved Bible decision supersedes it.
@@ -204,6 +204,115 @@ Pilot basic listing is free.
 
 Later premium may include enhanced profiles, richer media, promotion publishing, member offers, merchant analytics and clearly labeled sponsored discovery. Premium must not change MyTree's low/no-GP principle.
 
+## 5.8 Community Map Seed Strategy — APPROVED 2026-08-18
+
+Use **Google Places as a discovery/seed layer** so the Sammakorn Community Map does not launch empty. Google-sourced businesses are discovery results only and are **not MyTree merchant records** until the business is claimed/registered and its information is confirmed through MyTree.
+
+### Seed-layer rules
+
+- Google Places may be queried at runtime to surface nearby businesses around the active Community Map area.
+- MyTree must not bulk-copy or permanently ingest Google Places content as if it were MyTree-owned merchant data.
+- `google_place_id` may be stored as the external reference/bridge between a Google place and a future MyTree listing, subject to the current Google Maps Platform terms and policies at implementation time.
+- Google-sourced content must follow the then-current runtime, caching, display and attribution requirements of Google Maps Platform.
+- Before implementation or a material API upgrade, engineering must re-check the current Google Maps Platform / Places policies rather than relying on an old assumption in this Bible.
+- Google-sourced discovery results must be visually distinguishable from MyTree verified/claimed listings.
+- A Google result becoming visible on MyTree does not imply partnership, verification or merchant membership.
+
+### Recommended lifecycle
+
+```text
+Google Places discovery result
+        ↓
+Displayed on Community Map as external/unclaimed discovery
+        ↓
+Merchant chooses Claim / Register
+        ↓
+MyTree verifies identity/location and collects MyTree-owned business data
+        ↓
+Create/link MyTree merchant/listing
+        ↓
+Store google_place_id as external reference when useful
+        ↓
+MyTree-owned data becomes source of truth for the claimed listing
+```
+
+### Empty-map prevention without contaminating MyTree data
+
+The map may therefore contain two clearly separated discovery classes during the pilot:
+
+1. **Google-sourced / unclaimed discovery pins** — runtime discovery layer; not a MyTree merchant.
+2. **MyTree claimed / verified pins** — MyTree listing backed by MyTree-owned or merchant-provided data.
+
+This design lets Community Map feel useful from day one while allowing MyTree's own local business graph to grow organically through merchant acquisition and community verification.
+
+## 5.9 Community Map SEO / Indexing Strategy — APPROVED 2026-08-18
+
+The SEO layer and Google Places seed layer are intentionally separated.
+
+### Indexing policy
+
+**Google-sourced unclaimed shop → Map display only; do not create an indexable SEO landing page from Google-sourced content.**
+
+**Claimed / MyTree merchant → May have an indexable MyTree page once MyTree has merchant-provided/verified content sufficient to make the page genuinely MyTree-owned and useful.**
+
+**Community / verified listing using MyTree-owned data → May be indexable when the listing meets MyTree data-quality and verification requirements.**
+
+### SEO architecture direction
+
+Interactive map experience:
+
+```text
+mytree.cc/map
+  -> interactive Community Map
+  -> Google basemap + seed discovery + MyTree pins
+  -> primarily UX/discovery
+```
+
+Indexable local-discovery layer:
+
+```text
+mytree.cc/{community}
+mytree.cc/{community}/{category}
+mytree.cc/shop/{slug}
+```
+
+These indexable pages should be built from **MyTree-owned / merchant-provided / verified community content**, not copied Google Places content.
+
+Potential page classes include:
+
+- Community landing page, e.g. Sammakorn.
+- Category landing pages, e.g. food, cafe, services.
+- Claimed merchant/shop pages.
+- Verified community listings when enough original/useful MyTree information exists.
+
+### SEO implementation requirements
+
+- Public pages intended for search must be crawlable and not require LINE login merely to view basic public information.
+- Favor SSR, static generation, pre-rendering or another crawl-friendly rendering strategy for SEO-critical pages rather than depending entirely on client-only map rendering.
+- Use canonical URLs and clean stable slugs.
+- Use appropriate structured data for eligible MyTree-owned business pages after validating against current Google Search documentation at implementation time.
+- Avoid thin, duplicate or programmatically generated pages that add no original MyTree value.
+- Search indexing must never be used as a reason to persist Google Places content beyond what the applicable platform terms allow.
+
+### Strategic funnel
+
+```text
+Google Search / social / QR / direct traffic
+        ↓
+MyTree community/category/shop SEO page
+        ↓
+Community Map / Shop profile
+        ↓
+Order / Contact / Directions / Claim
+        ↓
+Merchant acquisition + customer activity
+```
+
+Community Map therefore serves two separate growth mechanisms:
+
+1. **Seed/discovery growth:** Google Places prevents an empty map and helps users find useful nearby businesses from launch.
+2. **Owned SEO growth:** claimed and verified MyTree content builds MyTree's own indexable local-search footprint over time.
+
 ---
 
 # 6. Hybrid AI Co-work Network — Architecture Decision
@@ -391,8 +500,10 @@ Only after measured adoption:
 3. Create AI Gateway Stage-A skeleton — no autonomous writes.
 4. Prepare Community Map technical spec + UX prototype.
 5. Implement shop location verification needed for map data quality.
-6. Build Community Map MVP.
-7. Build MyTree Ops Coworker V1 read-only in parallel once Rider gate is green.
-8. Run Sammakorn pilot and measure adoption, operations and cost.
+6. Implement Community Map Seed Strategy with Google Places as runtime discovery only and clear external/unclaimed labeling.
+7. Build Community Map MVP.
+8. Build crawlable MyTree community/category/claimed-listing SEO pages from MyTree-owned/verified data only.
+9. Build MyTree Ops Coworker V1 read-only in parallel once Rider gate is green.
+10. Run Sammakorn pilot and measure adoption, merchant claims, data quality, operations and cost.
 
 **This sequence is the approved roadmap until a later Bible decision supersedes it.**
