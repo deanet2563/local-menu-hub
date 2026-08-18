@@ -20,11 +20,11 @@ class MyTreeLineLoginModule : Module() {
     AsyncFunction("login") { promise: Promise ->
       val activity = appContext.currentActivity
       if (activity == null) {
-        promise.reject("LINE_NO_ACTIVITY", "No active Android activity")
+        promise.reject("LINE_NO_ACTIVITY", "No active Android activity", null)
         return@AsyncFunction
       }
       if (loginPromise != null) {
-        promise.reject("LINE_LOGIN_IN_PROGRESS", "LINE Login is already in progress")
+        promise.reject("LINE_LOGIN_IN_PROGRESS", "LINE Login is already in progress", null)
         return@AsyncFunction
       }
 
@@ -45,13 +45,13 @@ class MyTreeLineLoginModule : Module() {
 
       val result = LineLoginApi.getLoginResultFromIntent(payload.data)
       if (!result.isSuccess) {
-        promise.reject("LINE_LOGIN_FAILED", result.errorData?.message ?: "LINE Login failed")
+        promise.reject("LINE_LOGIN_FAILED", result.errorData?.message ?: "LINE Login failed", null)
         return@OnActivityResult
       }
 
       val raw = result.lineIdToken?.rawString
       if (raw.isNullOrBlank()) {
-        promise.reject("LINE_ID_TOKEN_MISSING", "LINE Login succeeded but no OpenID ID token was returned")
+        promise.reject("LINE_ID_TOKEN_MISSING", "LINE Login succeeded but no OpenID ID token was returned", null)
         return@OnActivityResult
       }
       promise.resolve(mapOf("idToken" to raw))
@@ -65,7 +65,7 @@ class MyTreeLineLoginModule : Module() {
       }
       val response = LineApiClientBuilder(context, channelId).build().logout()
       if (response.isSuccess) promise.resolve(null)
-      else promise.reject("LINE_LOGOUT_FAILED", response.errorData?.message ?: "LINE logout failed")
+      else promise.reject("LINE_LOGOUT_FAILED", response.errorData?.message ?: "LINE logout failed", null)
     }
   }
 }
