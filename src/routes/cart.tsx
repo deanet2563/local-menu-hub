@@ -158,7 +158,7 @@ function CartCheckout() {
       (geoError) => {
         setLocating(false);
         setDeliveryPoint(null);
-        setError(geoError.code === 1 ? "กรุณาอนุญาตตำแหน่งเพื่อใช้เป็นจุดส่ง" : "อ่านตำแหน่งจุดส่งไม่สำเร็จ ลองอีกครั้ง");
+        setError(geoError.code === 1 ? "ไม่ได้อนุญาตตำแหน่ง — ยังสั่งส่งได้โดยกรอกที่อยู่ผู้รับ" : "อ่านตำแหน่งจุดรับสินค้าไม่สำเร็จ — ยังสั่งส่งได้โดยกรอกที่อยู่ผู้รับ");
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 },
     );
@@ -168,7 +168,6 @@ function CartCheckout() {
     if (!c.shopId) return;
     if (!customerName.trim() || !customerPhone.trim()) return setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
     if (fulfillment === "delivery" && !address.trim()) return setError("กรอกที่อยู่จัดส่ง");
-    if (fulfillment === "delivery" && !deliveryPoint) return setError("กดใช้ตำแหน่งปัจจุบันเป็นจุดส่ง เพื่อให้ระบบคำนวณระยะทางและค่าส่ง");
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
     if (fulfillment === "pickup" && shop?.pickup_enabled === false) return setError("ร้านนี้ไม่เปิดบริการรับเอง");
     if (payment === "cash" && shop && !shop.payment_cash_enabled) return setError("ร้านนี้ไม่รับเงินสด");
@@ -202,8 +201,8 @@ function CartCheckout() {
       fulfillment,
       payment,
       address: fulfillment === "delivery" ? address.trim() : null,
-      destinationLat: fulfillment === "delivery" ? deliveryPoint!.lat : null,
-      destinationLng: fulfillment === "delivery" ? deliveryPoint!.lng : null,
+      destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
+      destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
       note: note.trim() || null,
       requestedFor,
     });
@@ -355,20 +354,33 @@ function CartCheckout() {
         </div>
         {fulfillment === "delivery" && (
           <div className="space-y-2">
-            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ / ซอย)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่ผู้รับสินค้า (บ้านเลขที่ / ซอย / จุดสังเกต)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <p className="text-xs text-gray-500">
+              ถ้าสั่งให้คนอื่นหรือส่งไปอีกบ้าน ให้กรอกที่อยู่ผู้รับด้านบนได้เลย ไม่จำเป็นต้องใช้ตำแหน่งปัจจุบันของคุณ
+            </p>
             <button
               type="button"
               onClick={captureDeliveryPoint}
               disabled={locating}
               className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium ${deliveryPoint ? "border-green-300 bg-green-50 text-green-700" : "border-blue-200 bg-blue-50 text-blue-700"} disabled:opacity-50`}
             >
-              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 จุดส่งพร้อมแล้ว · กดเพื่ออัปเดตตำแหน่ง" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดส่ง"}
+              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 จุดรับสินค้าพร้อมแล้ว · กดเพื่ออัปเดตตำแหน่ง" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดรับสินค้า"}
             </button>
-            {deliveryPoint && (
-              <p className="text-xs text-green-700">
-                ระบบจะใช้จุดนี้คำนวณระยะทางร้าน → ลูกค้าและค่าส่งให้ Rider
-                {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
+            {!deliveryPoint && (
+              <p className="text-[11px] text-gray-400">
+                ไม่บังคับ · ใช้เมื่อตำแหน่งปัจจุบันของคุณคือบ้าน/จุดที่ต้องการให้ Rider นำสินค้าไปส่ง เพื่อช่วยคำนวณระยะทางได้แม่นขึ้น
               </p>
+            )}
+            {deliveryPoint && (
+              <div className="space-y-1">
+                <p className="text-xs text-green-700">
+                  ระบบจะใช้จุดรับสินค้านี้ช่วยคำนวณระยะทางร้าน → ผู้รับและค่าส่งให้ Rider
+                  {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
+                </p>
+                <button type="button" onClick={() => setDeliveryPoint(null)} className="text-xs text-gray-500 underline">
+                  ไม่ใช้ตำแหน่งนี้
+                </button>
+              </div>
             )}
           </div>
         )}
