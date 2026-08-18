@@ -1,6 +1,7 @@
 name: Shop Native CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'apps/shop-native/**'
@@ -52,10 +53,75 @@ jobs:
       - name: Compile Android debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Android debug APK
+      - name: Upload Android compile-proof APK
         uses: actions/upload-artifact@v4
         with:
-          name: mytree-shop-android-debug
+          name: mytree-shop-android-debug-compile-proof
           path: apps/shop-native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  build-test-apk:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://ecrxrwfrwuoenjoyhfzw.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_MYTREE_WORKER_URL: https://mytree-worker.kompakorn-t.workers.dev
+      EXPO_PUBLIC_LINE_LOGIN_CHANNEL_ID: '2010936243'
+      NODE_ENV: production
+    defaults:
+      run:
+        working-directory: apps/shop-native
+
+    steps:
+      - name: Check test-build configuration
+        id: config
+        run: |
+          if [ -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY is not configured; skipping test-ready APK."
+          fi
+
+      - name: Checkout
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Java
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        if: steps.config.outputs.ready == 'true'
+        run: npm install
+
+      - name: Align Expo SDK dependencies
+        if: steps.config.outputs.ready == 'true'
+        run: npx expo install --fix
+
+      - name: Generate Android native project
+        if: steps.config.outputs.ready == 'true'
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build standalone test APK with bundled JS
+        if: steps.config.outputs.ready == 'true'
+        run: cd android && ./gradlew assembleRelease --no-daemon
+
+      - name: Upload test-ready Android APK
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mytree-shop-android-test-ready
+          path: apps/shop-native/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
