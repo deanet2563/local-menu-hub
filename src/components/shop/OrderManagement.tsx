@@ -211,9 +211,10 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             playChime(audioCtxRef.current);
           }
           if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+            const firstNewRider = newRiders[0];
             new Notification("🛵 Rider สนใจงานแล้ว", {
-              body: newRiders.length === 1
-                ? `${newRiders[0].name} กดสนใจรับงาน #${shortJobId(subId)}`
+              body: newRiders.length === 1 && firstNewRider
+                ? `${firstNewRider.name} กดสนใจรับงาน #${shortJobId(subId)}`
                 : `มี Rider ${newRiders.length} คนใหม่กดสนใจงาน #${shortJobId(subId)}`,
             });
           }
