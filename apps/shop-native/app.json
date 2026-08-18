@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "MyTree Shop",
+    "slug": "mytree-shop",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mytreeshop",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router", "expo-secure-store"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cc.mytree.shop"
+    },
+    "android": {
+      "package": "cc.mytree.shop"
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
