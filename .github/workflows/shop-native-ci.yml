@@ -74,6 +74,9 @@ jobs:
         working-directory: apps/shop-native
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Check test-build configuration
         id: config
         run: |
@@ -83,10 +86,6 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "EXPO_PUBLIC_SUPABASE_ANON_KEY is not configured; skipping test-ready APK."
           fi
-
-      - name: Checkout
-        if: steps.config.outputs.ready == 'true'
-        uses: actions/checkout@v4
 
       - name: Setup Node
         if: steps.config.outputs.ready == 'true'
