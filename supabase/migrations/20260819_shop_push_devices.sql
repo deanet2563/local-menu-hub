@@ -1,6 +1,6 @@
 create table if not exists public.shop_push_devices (
   id uuid primary key default gen_random_uuid(),
-  shop_id uuid not null references public.shops(shop_id) on delete cascade,
+  shop_id text not null references public.shops(shop_id) on delete cascade,
   expo_push_token text not null unique,
   platform text not null check (platform in ('ios','android')),
   enabled boolean not null default true,
