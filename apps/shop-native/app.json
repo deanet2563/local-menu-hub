@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "cc.mytree.shop",
+      "googleServicesFile": "./google-services.json",
       "permissions": ["INTERNET", "POST_NOTIFICATIONS"]
     },
     "experiments": {
