@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
+import { safeStoragePath } from "@/lib/storageKey";
 
 // ============================================================
 // MyTree — Supabase clients
@@ -92,6 +93,30 @@ export async function getCurrentCustomerId(): Promise<string | null> {
   }
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const authenticatedSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   accessToken: async () => (await getAccessToken()) || null,
 });
+
+// Supabase Storage follows AWS object-key naming rules. Shop IDs are user-facing
+// text and may contain Thai characters, so storage paths must be converted to a
+// stable ASCII-safe representation before they reach Storage. Database shop_id
+// values are intentionally left untouched.
+const rawStorageFrom = authenticatedSupabase.storage.from.bind(authenticatedSupabase.storage);
+authenticatedSupabase.storage.from = ((bucketId: string) => {
+  const bucket = rawStorageFrom(bucketId);
+  return new Proxy(bucket, {
+    get(target, prop, receiver) {
+      if (prop === "upload") {
+        return (path: string, fileBody: Parameters<typeof target.upload>[1], fileOptions?: Parameters<typeof target.upload>[2]) =>
+          target.upload(safeStoragePath(path), fileBody, fileOptions);
+      }
+      if (prop === "getPublicUrl") {
+        return (path: string, options?: Parameters<typeof target.getPublicUrl>[1]) =>
+          target.getPublicUrl(safeStoragePath(path), options);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}) as typeof authenticatedSupabase.storage.from;
+
+export const supabase = authenticatedSupabase;
