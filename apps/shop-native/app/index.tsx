@@ -5,7 +5,7 @@ import { exchangeLineIdToken } from '../src/auth/broker';
 import { loginWithLineNative } from '../src/native/lineLogin';
 import { getAccessToken } from '../src/lib/tokenStore';
 import { loadShopOrders } from '../src/data/shopOrders';
-import { getOwnedShopProfile, type OwnedShopProfile } from '../src/data/shopProfile';
+import { getOwnedShopProfile, setShopOpen, type OwnedShopProfile } from '../src/data/shopProfile';
 import { registerShopPushDevice } from '../src/data/pushDeviceRepository';
 import { ensureShopPushReadiness, installShopNotificationResponseHandler } from '../src/services/notifications';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
@@ -18,6 +18,7 @@ export default function ShopHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [changingOpen, setChangingOpen] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -65,6 +66,20 @@ export default function ShopHomeScreen() {
       setSigningIn(false);
     }
   }, [load, signingIn]);
+
+  const toggleShopOpen = useCallback(async () => {
+    if (!shop || changingOpen) return;
+    setChangingOpen(true);
+    setError(null);
+    try {
+      await setShopOpen(shop, !shop.is_open);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'เปลี่ยนสถานะร้านไม่สำเร็จ');
+    } finally {
+      setChangingOpen(false);
+    }
+  }, [shop, changingOpen, load]);
 
   useEffect(() => { void load(); }, [load]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -159,9 +174,21 @@ export default function ShopHomeScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>SHOP WORKSPACE</Text>
-        <Text style={styles.title}>{shop.name}</Text>
-        <Text style={styles.subtitle}>รับออเดอร์และจัดการงานส่งจากมือถือ</Text>
+        <View style={styles.row}>
+          <View style={styles.heroText}>
+            <Text style={styles.eyebrow}>SHOP WORKSPACE</Text>
+            <Text style={styles.title}>{shop.name}</Text>
+            <Text style={styles.subtitle}>รับออเดอร์และจัดการงานส่งจากมือถือ</Text>
+          </View>
+          <Pressable
+            disabled={!shop.is_approved || shop.is_banned || changingOpen}
+            onPress={() => void toggleShopOpen()}
+            style={({ pressed }) => [styles.openButton, shop.is_open ? styles.openButtonOn : styles.openButtonOff, (!shop.is_approved || shop.is_banned || changingOpen) && styles.disabled, pressed && styles.pressed]}
+          >
+            <Text style={shop.is_open ? styles.openButtonTextOn : styles.openButtonTextOff}>{changingOpen ? '...' : shop.is_open ? 'เปิดร้าน' : 'ปิดร้าน'}</Text>
+          </Pressable>
+        </View>
+        {shop.is_approved && !shop.is_banned ? <Text style={styles.openHint}>{shop.is_open ? 'ลูกค้าจะเห็นร้านและเมนูที่เปิดขายในหน้ารวม' : 'ร้านปิดอยู่ จึงยังไม่แสดงในหน้ารวมของลูกค้า'}</Text> : null}
       </View>
 
       {shop.is_banned ? (
@@ -195,9 +222,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   centerPad: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#F7FAF7' },
   hero: { padding: 20, paddingBottom: 10 },
+  heroText: { flex: 1, paddingRight: 12 },
   eyebrow: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', color: '#52705B' },
   title: { marginTop: 6, fontSize: 28, fontWeight: '800', color: '#173C2C' },
   subtitle: { marginTop: 6, fontSize: 15, color: '#647168' },
+  openHint: { marginTop: 10, fontSize: 12, color: '#647168' },
+  openButton: { minWidth: 78, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 999, paddingHorizontal: 12 },
+  openButtonOn: { backgroundColor: '#173C2C' },
+  openButtonOff: { backgroundColor: '#EEF3EF', borderWidth: 1, borderColor: '#D7E1DA' },
+  openButtonTextOn: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  openButtonTextOff: { color: '#52705B', fontSize: 13, fontWeight: '800' },
   list: { padding: 16, gap: 12, flexGrow: 1 },
   card: { marginTop: 16, borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
   cardTitle: { fontSize: 18, fontWeight: '800', color: '#173C2C' },
