@@ -35,6 +35,7 @@ export async function exchangeLineIdToken(lineIdToken: string): Promise<ShopSess
     accessToken: data.access_token,
     customerId: data.customer_id,
     expiresAt: now + data.expires_in,
+    lineIdToken,
   };
   await saveShopSession(session);
   return session;
