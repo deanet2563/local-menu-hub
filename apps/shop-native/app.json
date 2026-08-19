@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "mytreeshop",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": ["expo-router", "expo-notifications", "expo-secure-store"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "cc.mytree.shop",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "cc.mytree.shop",
-      "permissions": ["INTERNET"]
+      "permissions": ["INTERNET", "POST_NOTIFICATIONS"]
     },
     "experiments": {
       "typedRoutes": true
