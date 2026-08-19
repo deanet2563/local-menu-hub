@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { exchangeLineIdToken } from '../src/auth/broker';
 import { loginWithLineNative } from '../src/native/lineLogin';
@@ -7,6 +7,8 @@ import { getAccessToken } from '../src/lib/tokenStore';
 import { loadShopOrders } from '../src/data/shopOrders';
 import { getOwnedShopProfile, type OwnedShopProfile } from '../src/data/shopProfile';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
+
+const POLL_MS = 15_000;
 
 export default function ShopHomeScreen() {
   const [orders, setOrders] = useState<ShopOrderSummary[]>([]);
@@ -63,6 +65,29 @@ export default function ShopHomeScreen() {
 
   useEffect(() => { void load(); }, [load]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const syncNow = () => {
+      if (AppState.currentState === 'active') void load();
+    };
+    const armPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = AppState.currentState === 'active' ? setInterval(syncNow, POLL_MS) : null;
+    };
+
+    armPolling();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void load();
+      armPolling();
+    });
+
+    return () => {
+      subscription.remove();
+      if (interval) clearInterval(interval);
+    };
+  }, [load]);
 
   const refresh = () => {
     setRefreshing(true);
@@ -145,7 +170,7 @@ export default function ShopHomeScreen() {
         ListEmptyComponent={
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{shop.is_approved ? 'ยังไม่มีออเดอร์' : 'ร้านยังไม่เปิดรับออเดอร์'}</Text>
-            <Text style={styles.body}>{shop.is_approved ? 'ออเดอร์ใหม่จะปรากฏที่หน้านี้' : 'รอการอนุมัติจากแอดมินก่อนเริ่มขาย'}</Text>
+            <Text style={styles.body}>{shop.is_approved ? 'ออเดอร์ใหม่จะปรากฏที่หน้านี้อัตโนมัติขณะเปิดแอป' : 'รอการอนุมัติจากแอดมินก่อนเริ่มขาย'}</Text>
           </View>
         }
         renderItem={({ item }) => (
