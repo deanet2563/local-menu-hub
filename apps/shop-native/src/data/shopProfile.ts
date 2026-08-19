@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 export type OwnedShopProfile = {
   shop_id: string;
   name: string;
+  is_open: boolean;
   is_approved: boolean;
   is_banned: boolean;
   banned_reason: string | null;
@@ -32,12 +33,33 @@ export async function getOwnedShopProfile(): Promise<OwnedShopProfile | null> {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('shop_id,name,is_approved,is_banned,banned_reason')
+    .select('shop_id,name,is_open,is_approved,is_banned,banned_reason')
     .eq('shop_id', staff.shop_id)
     .maybeSingle();
 
   if (shopError) throw shopError;
   return (shop as OwnedShopProfile | null) ?? null;
+}
+
+export async function setShopOpen(shop: OwnedShopProfile, nextOpen: boolean): Promise<void> {
+  if (!shop.is_approved) throw new Error('ร้านยังไม่ได้รับการอนุมัติจากแอดมิน');
+  if (shop.is_banned) throw new Error('ร้านถูกระงับและยังไม่สามารถเปิดขายได้');
+
+  if (nextOpen) {
+    const { count, error: countError } = await supabase
+      .from('menu_items')
+      .select('item_id', { count: 'exact', head: true })
+      .eq('shop_id', shop.shop_id)
+      .eq('is_available', true);
+    if (countError) throw countError;
+    if (!count) throw new Error('เพิ่มเมนูที่เปิดขายอย่างน้อย 1 รายการก่อนเปิดร้าน');
+  }
+
+  const { error } = await supabase
+    .from('shops')
+    .update({ is_open: nextOpen })
+    .eq('shop_id', shop.shop_id);
+  if (error) throw error;
 }
 
 export async function registerShop(input: RegisterShopInput): Promise<string | null> {
