@@ -6,6 +6,7 @@ export type ShopSession = {
   accessToken: string;
   customerId: string;
   expiresAt: number;
+  lineIdToken?: string;
 };
 
 export async function saveShopSession(session: ShopSession) {
@@ -39,4 +40,10 @@ export async function getValidShopAccessToken(): Promise<string | null> {
   const session = await loadShopSession();
   if (!session || !isShopSessionFresh(session)) return null;
   return session.accessToken;
+}
+
+export async function getValidLineIdToken(): Promise<string | null> {
+  const session = await loadShopSession();
+  if (!session || !isShopSessionFresh(session) || !session.lineIdToken) return null;
+  return session.lineIdToken;
 }
