@@ -2,9 +2,9 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase, getCurrentCustomerId } from "@/lib/supabase";
 
 // ============================================================
-// MyTree — Unified Admin Console (supersedes the old RiderVerificationPanel)
-// 3 tabs: ร้านค้า / วิน / ลูกค้า — approve, ban/unban, and handle
-// self-service deletion requests for all three actor groups.
+// MyTree — Unified Admin Console
+// 3 tabs: ร้านค้า / วิน / ลูกค้า — approval and governance are kept
+// behind platform_admins + SECURITY DEFINER admin RPCs.
 // ============================================================
 
 type Tab = "shops" | "riders" | "customers";
@@ -15,6 +15,7 @@ export function AdminConsole() {
     <div className="max-w-md mx-auto pb-8">
       <div className="p-4 pb-0">
         <h1 className="text-lg font-bold">🛡️ ศูนย์จัดการแอดมิน</h1>
+        <p className="mt-1 text-xs text-gray-400">ตรวจร้านที่รออนุมัติและจัดการบัญชีใน MyTree</p>
       </div>
       <div className="flex gap-2 px-4 pt-3 sticky top-0 bg-white z-10">
         {([
@@ -40,9 +41,6 @@ export function AdminConsole() {
   );
 }
 
-// ============================================================
-// Reusable bits
-// ============================================================
 function ReasonPrompt({
   label, onSubmit, onCancel,
 }: { label: string; onSubmit: (reason: string) => void; onCancel: () => void }) {
@@ -80,97 +78,216 @@ function Section({ title, count, children }: { title: string; count: number; chi
 }
 
 // ============================================================
-// SHOPS TAB
+// SHOPS TAB — pending shops are always shown first.
 // ============================================================
 type ShopRow = {
-  shop_id: string; name: string; phone: string | null; category: string | null;
-  is_approved: boolean; is_banned: boolean; banned_reason: string | null;
-  deletion_requested_at: string | null; deletion_reason: string | null;
+  shop_id: string;
+  name: string;
+  phone: string | null;
+  category: string | null;
+  address: string | null;
+  google_maps_link: string | null;
+  delivery_zone: string | null;
+  logo_url: string | null;
+  open_time: string | null;
+  close_time: string | null;
+  is_open: boolean;
+  is_approved: boolean;
+  is_banned: boolean;
+  banned_reason: string | null;
+  deletion_requested_at: string | null;
+  deletion_reason: string | null;
+  created_at: string | null;
 };
+
+const SHOP_ADMIN_COLS = [
+  "shop_id", "name", "phone", "category", "address", "google_maps_link", "delivery_zone", "logo_url",
+  "open_time", "close_time", "is_open", "is_approved", "is_banned", "banned_reason",
+  "deletion_requested_at", "deletion_reason", "created_at",
+].join(",");
 
 function ShopsTab() {
   const [shops, setShops] = useState<ShopRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [banPromptFor, setBanPromptFor] = useState<string | null>(null);
+  const [expandedShopId, setExpandedShopId] = useState<string | null>(null);
+  const [busyShopId, setBusyShopId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    setLoadError(null);
+    const { data, error } = await supabase
       .from("shops")
-      .select("shop_id,name,phone,category,is_approved,is_banned,banned_reason,deletion_requested_at,deletion_reason")
+      .select(SHOP_ADMIN_COLS)
       .order("created_at", { ascending: false });
+    if (error) setLoadError(error.message);
     setShops((data as ShopRow[]) ?? []);
     setLoading(false);
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const pending = shops.filter((s) => !s.is_approved && !s.is_banned && !s.deletion_requested_at);
-  const deletionRequests = shops.filter((s) => s.deletion_requested_at && !s.is_banned);
+  const deletionRequests = shops.filter((s) => !!s.deletion_requested_at && !s.is_banned);
+  const active = shops.filter((s) => s.is_approved && !s.is_banned && !s.deletion_requested_at);
   const banned = shops.filter((s) => s.is_banned);
 
+  async function runShopAction(shopId: string, action: () => Promise<{ error: { message: string } | null }>) {
+    setBusyShopId(shopId);
+    setActionError(null);
+    const { error } = await action();
+    setBusyShopId(null);
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
+    setBanPromptFor(null);
+    await load();
+  }
+
   async function approve(shopId: string) {
-    await supabase.rpc("fn_approve_shop", { p_shop_id: shopId });
-    load();
+    await runShopAction(shopId, () => supabase.rpc("fn_approve_shop", { p_shop_id: shopId }));
   }
   async function ban(shopId: string, reason: string) {
-    await supabase.rpc("fn_ban_shop", { p_shop_id: shopId, p_reason: reason });
-    setBanPromptFor(null);
-    load();
+    await runShopAction(shopId, () => supabase.rpc("fn_ban_shop", { p_shop_id: shopId, p_reason: reason }));
   }
   async function unban(shopId: string) {
-    await supabase.rpc("fn_unban_shop", { p_shop_id: shopId });
-    load();
+    await runShopAction(shopId, () => supabase.rpc("fn_unban_shop", { p_shop_id: shopId }));
   }
   async function rejectDeletion(shopId: string) {
-    await supabase.rpc("fn_reject_shop_deletion", { p_shop_id: shopId });
-    load();
+    await runShopAction(shopId, () => supabase.rpc("fn_reject_shop_deletion", { p_shop_id: shopId }));
+  }
+
+  function Details({ shop }: { shop: ShopRow }) {
+    if (expandedShopId !== shop.shop_id) return null;
+    return (
+      <div className="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
+        {shop.logo_url && <img src={shop.logo_url} alt={shop.name} className="mb-2 h-20 w-20 rounded-lg object-cover bg-white" />}
+        <p><span className="text-gray-400">Shop ID:</span> {shop.shop_id}</p>
+        <p><span className="text-gray-400">หมวด:</span> {shop.category || "—"}</p>
+        <p><span className="text-gray-400">โทร:</span> {shop.phone || "—"}</p>
+        <p><span className="text-gray-400">ที่อยู่:</span> {shop.address || "—"}</p>
+        <p><span className="text-gray-400">พื้นที่ส่ง:</span> {shop.delivery_zone || "—"}</p>
+        <p><span className="text-gray-400">เวลา:</span> {shop.open_time || "—"} – {shop.close_time || "—"}</p>
+        <p><span className="text-gray-400">สถานะเปิดร้าน:</span> {shop.is_open ? "เปิด" : "ปิด"}</p>
+        {shop.google_maps_link && (
+          <a href={shop.google_maps_link} target="_blank" rel="noreferrer" className="inline-block pt-1 text-orange-600 underline">เปิด Google Maps</a>
+        )}
+      </div>
+    );
+  }
+
+  function ShopHeader({ shop }: { shop: ShopRow }) {
+    return (
+      <>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">{shop.name}</p>
+            <p className="text-xs text-gray-400">{shop.category || "ไม่ระบุหมวด"} · {shop.phone || "ไม่มีเบอร์"}</p>
+          </div>
+          <button
+            onClick={() => setExpandedShopId((cur) => cur === shop.shop_id ? null : shop.shop_id)}
+            className="shrink-0 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs"
+          >
+            {expandedShopId === shop.shop_id ? "ซ่อน" : "ดูรายละเอียด"}
+          </button>
+        </div>
+        <Details shop={shop} />
+      </>
+    );
   }
 
   if (loading) return <p className="text-sm text-gray-400">กำลังโหลด...</p>;
-  if (!pending.length && !deletionRequests.length && !banned.length)
-    return <p className="text-sm text-gray-400">ไม่มีร้านค้าที่รอดำเนินการ</p>;
+  if (loadError) return <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">โหลดข้อมูลร้านไม่สำเร็จ: {loadError}</p>;
 
   return (
     <div className="space-y-6">
-      <Section title="รออนุมัติ" count={pending.length}>
+      {pending.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-semibold text-amber-800">⏳ มีร้านรออนุมัติ {pending.length} ร้าน</p>
+          <p className="mt-0.5 text-xs text-amber-700">ตรวจข้อมูลแล้วกดอนุมัติเพื่อให้ร้านเปิดขายได้</p>
+        </div>
+      )}
+      {actionError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">ดำเนินการไม่สำเร็จ: {actionError}</p>}
+
+      <Section title="⏳ รออนุมัติ" count={pending.length}>
         {pending.map((s) => (
-          <div key={s.shop_id} className="rounded-lg border border-gray-200 p-3 space-y-1">
-            <p className="text-sm font-medium">{s.name}</p>
-            <p className="text-xs text-gray-400">{s.category} · {s.phone}</p>
+          <div key={s.shop_id} className="rounded-xl border border-amber-200 bg-white p-3 space-y-2">
+            <ShopHeader shop={s} />
             <div className="flex gap-2 pt-1">
-              <button onClick={() => approve(s.shop_id)} className="rounded-lg bg-green-500 text-white text-xs px-3 py-1.5">อนุมัติ</button>
-              {banPromptFor === s.shop_id ? null : (
-                <button onClick={() => setBanPromptFor(s.shop_id)} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">แบน</button>
+              <button
+                onClick={() => void approve(s.shop_id)}
+                disabled={busyShopId === s.shop_id}
+                className="rounded-lg bg-green-600 text-white text-xs px-4 py-2 disabled:opacity-50"
+              >
+                {busyShopId === s.shop_id ? "กำลังทำ..." : "✓ อนุมัติร้าน"}
+              </button>
+              {banPromptFor !== s.shop_id && (
+                <button onClick={() => setBanPromptFor(s.shop_id)} className="rounded-lg bg-red-50 text-red-600 text-xs px-3 py-2">ระงับ</button>
               )}
             </div>
             {banPromptFor === s.shop_id && (
-              <ReasonPrompt label="เหตุผลที่แบน" onSubmit={(r) => ban(s.shop_id, r)} onCancel={() => setBanPromptFor(null)} />
+              <ReasonPrompt label="เหตุผลที่ระงับร้าน" onSubmit={(r) => void ban(s.shop_id, r)} onCancel={() => setBanPromptFor(null)} />
             )}
           </div>
         ))}
       </Section>
 
-      <Section title="คำขอปิด/ลบร้าน" count={deletionRequests.length}>
+      <Section title="🗑️ คำขอปิด/ลบร้าน" count={deletionRequests.length}>
         {deletionRequests.map((s) => (
-          <div key={s.shop_id} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-1">
-            <p className="text-sm font-medium">{s.name}</p>
-            <p className="text-xs text-gray-600">เหตุผล: {s.deletion_reason}</p>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => ban(s.shop_id, s.deletion_reason ?? "ร้านขอปิดกิจการ")} className="rounded-lg bg-red-500 text-white text-xs px-3 py-1.5">อนุมัติปิดร้าน</button>
-              <button onClick={() => rejectDeletion(s.shop_id)} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5">ปฏิเสธคำขอ</button>
+          <div key={s.shop_id} className="rounded-xl border border-orange-200 bg-orange-50/40 p-3 space-y-2">
+            <ShopHeader shop={s} />
+            <p className="text-xs text-gray-600">เหตุผล: {s.deletion_reason || "ไม่ระบุ"}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                onClick={() => void ban(s.shop_id, s.deletion_reason ?? "ร้านขอปิดกิจการ")}
+                disabled={busyShopId === s.shop_id}
+                className="rounded-lg bg-red-600 text-white text-xs px-3 py-2 disabled:opacity-50"
+              >
+                อนุมัติปิดร้าน
+              </button>
+              <button
+                onClick={() => void rejectDeletion(s.shop_id)}
+                disabled={busyShopId === s.shop_id}
+                className="rounded-lg bg-white border border-gray-200 text-xs px-3 py-2 disabled:opacity-50"
+              >
+                ปฏิเสธคำขอลบ
+              </button>
             </div>
           </div>
         ))}
       </Section>
 
-      <Section title="ถูกระงับ" count={banned.length}>
-        {banned.map((s) => (
-          <div key={s.shop_id} className="rounded-lg border border-red-200 p-3 space-y-1">
-            <p className="text-sm font-medium">{s.name}</p>
-            <p className="text-xs text-red-600">เหตุผล: {s.banned_reason}</p>
-            <button onClick={() => unban(s.shop_id)} className="rounded-lg bg-gray-100 text-xs px-3 py-1.5 mt-1">ปลดแบน</button>
+      <Section title="✅ ร้านที่ใช้งานอยู่" count={active.length}>
+        {active.map((s) => (
+          <div key={s.shop_id} className="rounded-xl border border-gray-200 p-3 space-y-2">
+            <ShopHeader shop={s} />
+            {banPromptFor === s.shop_id ? (
+              <ReasonPrompt label="เหตุผลที่ระงับร้าน" onSubmit={(r) => void ban(s.shop_id, r)} onCancel={() => setBanPromptFor(null)} />
+            ) : (
+              <button onClick={() => setBanPromptFor(s.shop_id)} className="rounded-lg bg-red-50 text-red-600 text-xs px-3 py-2">ระงับร้าน</button>
+            )}
           </div>
         ))}
       </Section>
+
+      <Section title="⛔ ถูกระงับ" count={banned.length}>
+        {banned.map((s) => (
+          <div key={s.shop_id} className="rounded-xl border border-red-200 p-3 space-y-2">
+            <ShopHeader shop={s} />
+            <p className="text-xs text-red-600">เหตุผล: {s.banned_reason || "ไม่ระบุ"}</p>
+            <button
+              onClick={() => void unban(s.shop_id)}
+              disabled={busyShopId === s.shop_id}
+              className="rounded-lg bg-gray-100 text-xs px-3 py-2 disabled:opacity-50"
+            >
+              ปลดระงับ
+            </button>
+          </div>
+        ))}
+      </Section>
+
+      {!shops.length && <p className="text-sm text-gray-400">ยังไม่มีร้านค้าในระบบ</p>}
     </div>
   );
 }
