@@ -6,6 +6,8 @@ import { loginWithLineNative } from '../src/native/lineLogin';
 import { getAccessToken } from '../src/lib/tokenStore';
 import { loadShopOrders } from '../src/data/shopOrders';
 import { getOwnedShopProfile, type OwnedShopProfile } from '../src/data/shopProfile';
+import { registerShopPushDevice } from '../src/data/pushDeviceRepository';
+import { ensureShopPushReadiness, installShopNotificationResponseHandler } from '../src/services/notifications';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
 
 const POLL_MS = 15_000;
@@ -19,6 +21,7 @@ export default function ShopHomeScreen() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -67,22 +70,44 @@ export default function ShopHomeScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
+    const subscription = installShopNotificationResponseHandler((subId) => {
+      router.push(`/orders/${subId}`);
+    });
+    return () => subscription.remove();
+  }, []);
 
-    const syncNow = () => {
-      if (AppState.currentState === 'active') void load();
-    };
+  useEffect(() => {
+    if (!shop?.is_approved || shop.is_banned) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const readiness = await ensureShopPushReadiness();
+        if (cancelled) return;
+        if (!readiness.ready || !readiness.token) {
+          setPushMessage(readiness.reason);
+          return;
+        }
+        await registerShopPushDevice(shop.shop_id, readiness.token);
+        if (!cancelled) setPushMessage(null);
+      } catch (cause) {
+        if (!cancelled) setPushMessage(cause instanceof Error ? cause.message : 'ตั้งค่าแจ้งเตือนไม่สำเร็จ');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shop?.shop_id, shop?.is_approved, shop?.is_banned]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const syncNow = () => { if (AppState.currentState === 'active') void load(); };
     const armPolling = () => {
       if (interval) clearInterval(interval);
       interval = AppState.currentState === 'active' ? setInterval(syncNow, POLL_MS) : null;
     };
-
     armPolling();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void load();
       armPolling();
     });
-
     return () => {
       subscription.remove();
       if (interval) clearInterval(interval);
@@ -94,9 +119,7 @@ export default function ShopHomeScreen() {
     void load();
   };
 
-  if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" /><Text>กำลังเปิด MyTree Shop…</Text></View>;
-  }
+  if (loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text>กำลังเปิด MyTree Shop…</Text></View>;
 
   if (signedIn === false) {
     return (
@@ -108,11 +131,7 @@ export default function ShopHomeScreen() {
           <Text style={styles.cardTitle}>บัญชีเดียวกับ LINE / LIFF</Text>
           <Text style={styles.body}>LINE SDK จะส่ง ID token ไปตรวจที่ MyTree Worker แล้วผูกกลับมายัง customer_id เดิมของร้าน ข้อมูลยังถูกควบคุมด้วย RLS ชุดเดิม</Text>
         </View>
-        <Pressable
-          disabled={signingIn}
-          onPress={() => void signIn()}
-          style={({ pressed }) => [styles.loginButton, signingIn && styles.disabled, pressed && styles.pressed]}
-        >
+        <Pressable disabled={signingIn} onPress={() => void signIn()} style={({ pressed }) => [styles.loginButton, signingIn && styles.disabled, pressed && styles.pressed]}>
           {signingIn ? <ActivityIndicator /> : <Text style={styles.loginText}>เข้าสู่ระบบด้วย LINE</Text>}
         </Pressable>
         {loginError ? <Text style={styles.loginError}>{loginError}</Text> : null}
@@ -130,12 +149,8 @@ export default function ShopHomeScreen() {
           <Text style={styles.cardTitle}>สมัครร้านผ่านแอปได้เลย</Text>
           <Text style={styles.body}>กรอกข้อมูลร้าน ส่งใบสมัคร แล้วรอแอดมินอนุมัติ เมื่ออนุมัติแล้ว Order Inbox จะใช้ร้านเดิมจาก customer_id นี้อัตโนมัติ</Text>
         </View>
-        <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-          <Text style={styles.primaryText}>สมัครร้านค้า</Text>
-        </Pressable>
-        <Pressable onPress={refresh} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-          <Text style={styles.secondaryText}>ฉันสมัครแล้ว · ตรวจสอบอีกครั้ง</Text>
-        </Pressable>
+        <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryText}>สมัครร้านค้า</Text></Pressable>
+        <Pressable onPress={refresh} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>ฉันสมัครแล้ว · ตรวจสอบอีกครั้ง</Text></Pressable>
         {error ? <Text style={styles.loginError}>{error}</Text> : null}
       </View>
     );
@@ -150,29 +165,19 @@ export default function ShopHomeScreen() {
       </View>
 
       {shop.is_banned ? (
-        <View style={styles.dangerBanner}>
-          <Text style={styles.dangerTitle}>ร้านนี้ถูกระงับ</Text>
-          <Text style={styles.dangerText}>{shop.banned_reason || 'กรุณาติดต่อแอดมิน MyTree'}</Text>
-        </View>
+        <View style={styles.dangerBanner}><Text style={styles.dangerTitle}>ร้านนี้ถูกระงับ</Text><Text style={styles.dangerText}>{shop.banned_reason || 'กรุณาติดต่อแอดมิน MyTree'}</Text></View>
       ) : !shop.is_approved ? (
-        <View style={styles.pendingBanner}>
-          <Text style={styles.pendingTitle}>⏳ รอแอดมินอนุมัติร้าน</Text>
-          <Text style={styles.pendingText}>ระบบพบร้านของคุณแล้ว เมื่ออนุมัติสถานะใน Admin Dashboard แอปจะอัปเดตเมื่อดึงลงเพื่อรีเฟรช</Text>
-        </View>
+        <View style={styles.pendingBanner}><Text style={styles.pendingTitle}>⏳ รอแอดมินอนุมัติร้าน</Text><Text style={styles.pendingText}>ระบบพบร้านของคุณแล้ว เมื่ออนุมัติสถานะใน Admin Dashboard แอปจะอัปเดตเมื่อดึงลงเพื่อรีเฟรช</Text></View>
       ) : null}
 
+      {pushMessage ? <View style={styles.pushBanner}><Text style={styles.pushText}>🔔 {pushMessage}</Text></View> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{shop.is_approved ? 'ยังไม่มีออเดอร์' : 'ร้านยังไม่เปิดรับออเดอร์'}</Text>
-            <Text style={styles.body}>{shop.is_approved ? 'ออเดอร์ใหม่จะปรากฏที่หน้านี้อัตโนมัติขณะเปิดแอป' : 'รอการอนุมัติจากแอดมินก่อนเริ่มขาย'}</Text>
-          </View>
-        }
+        ListEmptyComponent={<View style={styles.card}><Text style={styles.cardTitle}>{shop.is_approved ? 'ยังไม่มีออเดอร์' : 'ร้านยังไม่เปิดรับออเดอร์'}</Text><Text style={styles.body}>{shop.is_approved ? 'ออเดอร์ใหม่จะปรากฏที่หน้านี้อัตโนมัติขณะเปิดแอป' : 'รอการอนุมัติจากแอดมินก่อนเริ่มขาย'}</Text></View>}
         renderItem={({ item }) => (
           <Pressable onPress={() => router.push(`/orders/${item.id}`)} style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}>
             <View style={styles.row}><Text style={styles.orderId}>#{item.shortId}</Text><Text style={styles.status}>{item.status}</Text></View>
@@ -219,4 +224,6 @@ const styles = StyleSheet.create({
   dangerBanner: { marginHorizontal: 16, borderRadius: 16, padding: 14, backgroundColor: '#FFF0EF', borderWidth: 1, borderColor: '#E8B3AF' },
   dangerTitle: { fontSize: 15, fontWeight: '800', color: '#8B302B' },
   dangerText: { marginTop: 4, fontSize: 13, lineHeight: 19, color: '#A13A36' },
+  pushBanner: { marginHorizontal: 16, marginTop: 8, borderRadius: 14, padding: 12, backgroundColor: '#EEF3EF' },
+  pushText: { fontSize: 13, color: '#52705B', lineHeight: 18 },
 });
