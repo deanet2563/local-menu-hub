@@ -13,6 +13,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'MyTree Shop' }} />
+        <Stack.Screen name="signup" options={{ title: 'สมัครร้านค้า' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'รายละเอียดออเดอร์' }} />
       </Stack>
     </>
