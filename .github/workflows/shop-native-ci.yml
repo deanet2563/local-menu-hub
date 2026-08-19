@@ -69,6 +69,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Qvsg8XpfUurNKewoDab9Ww_D9xvweP0
       EXPO_PUBLIC_MYTREE_WORKER_URL: https://mytree-worker.kompakorn-t.workers.dev
       EXPO_PUBLIC_LINE_LOGIN_CHANNEL_ID: '2010936243'
+      EXPO_PUBLIC_EAS_PROJECT_ID: '1f668663-9e83-4f8f-91b6-666e97fb26df'
       NODE_ENV: production
     defaults:
       run:
@@ -81,11 +82,11 @@ jobs:
       - name: Check test-build configuration
         id: config
         run: |
-          if [ -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+          if [ -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ] && [ -n "$EXPO_PUBLIC_EAS_PROJECT_ID" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY is not configured; skipping test-ready APK."
+            echo "Required Shop test-build configuration is missing; skipping test-ready APK."
           fi
 
       - name: Setup Node
