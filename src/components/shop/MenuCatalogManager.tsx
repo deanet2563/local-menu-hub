@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { shopStorageFolder, safeImageExtension } from "@/lib/storageKey";
 import { OptionGroupManager } from "@/components/shop/OptionGroupManager";
 
 type Item = { item_id: string; name: string; price: number; category: string | null; image_url: string | null; is_available: boolean };
@@ -27,8 +28,8 @@ export function MenuCatalogManager({ shopId, showWelcome }: { shopId: string; sh
   useEffect(() => { void load(); }, [load]);
 
   async function uploadPhoto(itemId: string, file: File) {
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const path = `${shopId}/items/${itemId}.${ext}`;
+    const ext = safeImageExtension(file.name, "jpg");
+    const path = `${shopStorageFolder(shopId)}/items/${itemId}.${ext}`;
     const { error } = await supabase.storage.from("shop-assets").upload(path, file, { contentType: file.type || "image/jpeg", upsert: true });
     if (error) throw error;
     const { data } = supabase.storage.from("shop-assets").getPublicUrl(path);
