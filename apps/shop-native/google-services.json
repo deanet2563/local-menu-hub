@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "532751053459",
+    "project_id": "mytree-2dc5a",
+    "storage_bucket": "mytree-2dc5a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:532751053459:android:7b5af844d7558dee83d366",
+        "android_client_info": {
+          "package_name": "cc.mytree.shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4jOJpMSp4buBXTpY9uSKwF30csRdRVvM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
