@@ -31,6 +31,7 @@ type Order = {
   hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
   payment_method: "cash" | "qr_transfer"; payment_slip_url: string | null;
   delivery_address: string | null; amount: number; assigned_rider_id: string | null; created_at: string;
+  requested_for: string | null;
   delivery_fee: number;
   delivery_fee_payer: "customer" | "shop";
   delivery_distance_km: number | null;
@@ -66,6 +67,20 @@ function formatOrderDateTime(createdAt: string) {
     day: "numeric",
     month: "short",
     year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function formatRequestedFor(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "ไม่ระบุวันเวลา";
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -155,7 +170,7 @@ export function OrderManagement({ shopId }: { shopId: string }) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("sub_orders")
-      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,delivery_fee,delivery_fee_payer,delivery_distance_km,items_json,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
+      .select("sub_id,order_id,fulfillment_type,order_status,payment_status,print_status,delivery_status,delivery_address,delivery_photo_url,payment_method,payment_slip_url,customer_note,amount,assigned_rider_id,created_at,requested_for,delivery_fee,delivery_fee_payer,delivery_distance_km,items_json,order_items(item_name_snapshot,qty,line_total),hub_orders(customers(name,phone))")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false });
     const list = (data as unknown as Order[]) ?? [];
@@ -393,6 +408,15 @@ export function OrderManagement({ shopId }: { shopId: string }) {
             <p className="text-xs font-medium text-gray-500">
               🕐 {formatOrderDateTime(o.created_at)} · #{shortJobId(o.sub_id)}
             </p>
+
+            {o.requested_for && (
+              <div className="rounded-xl border-2 border-orange-300 bg-orange-50 px-3 py-2.5">
+                <p className="text-xs font-bold text-orange-700">🗓️ สั่งล่วงหน้า</p>
+                <p className="mt-1 text-sm font-bold text-orange-900">
+                  {o.fulfillment_type === "delivery" ? "ส่งวันที่" : "รับวันที่"} {formatRequestedFor(o.requested_for)}
+                </p>
+              </div>
+            )}
 
             {o.hub_orders?.customers && (
               <p className="text-sm text-gray-600">
