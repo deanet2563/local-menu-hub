@@ -15,6 +15,7 @@ const ORDER_SELECT = [
   'amount',
   'assigned_rider_id',
   'created_at',
+  'requested_for',
   'delivery_fee',
   'delivery_fee_payer',
   'delivery_distance_km',
