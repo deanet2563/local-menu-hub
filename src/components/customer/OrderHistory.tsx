@@ -24,6 +24,7 @@ type OrderRow = {
   customer_note: string | null;
   amount: number;
   created_at: string;
+  requested_for: string | null;
   items_json: StoredItem[] | null;
   shops: { name: string; qr_code_url: string | null } | null;
   order_items: { item_name_snapshot: string; qty: number; line_total: number }[];
@@ -54,6 +55,14 @@ const DELIVERY_LABEL: Record<string, string> = {
   delivered: "ส่งถึงแล้ว",
   failed: "ส่งไม่สำเร็จ",
 };
+
+function formatRequestedFor(value: string): string {
+  return new Date(value).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+}
 
 function displayItems(order: OrderRow): DisplayItem[] {
   if (Array.isArray(order.items_json) && order.items_json.length > 0) {
@@ -109,7 +118,7 @@ export function OrderHistory() {
     const { data, error: loadError } = await supabase
       .from("sub_orders")
       .select(
-        "sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, created_at, items_json, shops(name,qr_code_url), order_items(item_name_snapshot,qty,line_total), riders:assigned_rider_id(name,phone)"
+        "sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, created_at, requested_for, items_json, shops(name,qr_code_url), order_items(item_name_snapshot,qty,line_total), riders:assigned_rider_id(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(30);
@@ -194,6 +203,15 @@ export function OrderHistory() {
                 {ORDER_LABEL[o.order_status] ?? o.order_status}
               </span>
             </div>
+
+            {o.requested_for && (
+              <div className="rounded-xl border-2 border-orange-300 bg-orange-50 px-3 py-2.5">
+                <p className="text-xs font-bold text-orange-700">🗓️ สั่งล่วงหน้า</p>
+                <p className="mt-1 text-sm font-bold text-orange-900">
+                  {o.fulfillment_type === "delivery" ? "ส่งวันที่" : "รับวันที่"} {formatRequestedFor(o.requested_for)}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               {groups.map((group) => (

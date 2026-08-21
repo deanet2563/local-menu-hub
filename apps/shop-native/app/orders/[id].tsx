@@ -6,6 +6,14 @@ import { acceptShopOrder, setShopOrderStatus } from '../../src/data/shopOrderAct
 import { loadInterestedRiders, requestNearbyRiders, selectInterestedRider, type RiderCandidate } from '../../src/data/riderDispatch';
 import type { ShopOrder } from '../../src/domain/orders';
 
+function formatRequestedFor(value: string): string {
+  return new Date(value).toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    dateStyle: 'long',
+    timeStyle: 'short',
+  });
+}
+
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<ShopOrder | null>(null);
@@ -113,6 +121,16 @@ export default function OrderDetailScreen() {
         <Text style={styles.body}>{order.hub_orders?.customers?.phone || 'ไม่มีเบอร์โทร'}</Text>
         <Text style={styles.body}>{order.fulfillment_type === 'delivery' ? 'จัดส่ง' : 'รับเอง'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
       </View>
+
+      {order.requested_for ? (
+        <View style={styles.preorderCard}>
+          <Text style={styles.preorderLabel}>🗓️ สั่งล่วงหน้า</Text>
+          <Text style={styles.preorderTime}>
+            {order.fulfillment_type === 'delivery' ? 'ส่งวันที่' : 'รับวันที่'} {formatRequestedFor(order.requested_for)}
+          </Text>
+          <Text style={styles.preorderHint}>กรุณาเตรียมออเดอร์ให้พร้อมตามวันและเวลานี้</Text>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>รายการอาหาร</Text>
@@ -239,6 +257,10 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerPad: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: { borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
+  preorderCard: { borderRadius: 20, backgroundColor: '#FFF7E8', padding: 18, borderWidth: 2, borderColor: '#F4A62A' },
+  preorderLabel: { fontSize: 15, fontWeight: '900', color: '#B85C00' },
+  preorderTime: { marginTop: 6, fontSize: 18, lineHeight: 26, fontWeight: '900', color: '#6F3500' },
+  preorderHint: { marginTop: 6, fontSize: 12, lineHeight: 18, color: '#91643A' },
   actionCard: { borderRadius: 20, backgroundColor: '#F0F7F2', padding: 18, borderWidth: 1, borderColor: '#D8E8DC' },
   riderCard: { borderRadius: 20, backgroundColor: '#F5F7FF', padding: 18, borderWidth: 1, borderColor: '#DDE4F7' },
   eyebrow: { fontSize: 12, letterSpacing: 1.2, fontWeight: '800', color: '#52705B' },
