@@ -51,9 +51,24 @@ function withSetMetadata(order: OrderPayload): OrderPayload {
   };
 }
 
+function validateDeliveryDestination(order: OrderPayload): string | null {
+  if (order.fulfillment !== "delivery") return null;
+  const hasLat = typeof order.destinationLat === "number" && Number.isFinite(order.destinationLat);
+  const hasLng = typeof order.destinationLng === "number" && Number.isFinite(order.destinationLng);
+  if (!hasLat || !hasLng) {
+    return "กรุณากดใช้ตำแหน่งจุดส่งก่อนยืนยันออเดอร์ เพื่อให้ระบบบันทึกพิกัดสำหรับ Rider";
+  }
+  if (order.destinationLat! < -90 || order.destinationLat! > 90) return "ตำแหน่งละติจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
+  if (order.destinationLng! < -180 || order.destinationLng! > 180) return "ตำแหน่งลองจิจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
+  return null;
+}
+
 export async function submitOrder(
   order: OrderPayload
 ): Promise<{ ok: boolean; order_id?: string; error?: string }> {
+  const deliveryDestinationError = validateDeliveryDestination(order);
+  if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
+
   await initLiff();
 
   if (!liff.isLoggedIn()) {
