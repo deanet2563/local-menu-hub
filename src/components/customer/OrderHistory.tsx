@@ -2,13 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 
-// ============================================================
-// MyTree — Customer order history + live status tracking.
-// New Ordering Flow v2 orders use sub_orders.items_json as the authoritative
-// display snapshot so customer-created set grouping survives after checkout.
-// Older orders transparently fall back to order_items.
-// ============================================================
-
 type StoredItem = {
   item_name?: string;
   qty?: number;
@@ -32,7 +25,7 @@ type OrderRow = {
   amount: number;
   created_at: string;
   items_json: StoredItem[] | null;
-  shops: { name: string } | null;
+  shops: { name: string; qr_code_url: string | null } | null;
   order_items: { item_name_snapshot: string; qty: number; line_total: number }[];
   riders: { name: string; phone: string } | null;
 };
@@ -46,12 +39,20 @@ type DisplayItem = {
 };
 
 const ORDER_LABEL: Record<string, string> = {
-  pending: "รอร้านรับออเดอร์", confirmed: "ร้านรับออเดอร์แล้ว", preparing: "กำลังเตรียมอาหาร",
-  completed: "เสร็จสิ้น", cancelled: "ยกเลิก",
+  pending: "รอร้านรับออเดอร์",
+  confirmed: "ร้านรับออเดอร์แล้ว",
+  preparing: "กำลังเตรียมอาหาร",
+  completed: "เสร็จสิ้น",
+  cancelled: "ยกเลิก",
 };
+
 const DELIVERY_LABEL: Record<string, string> = {
-  not_needed: "รับเองที่ร้าน", needs_rider: "รอเรียกวิน", rider_called: "วินกำลังไปรับของ",
-  picked_up: "วินรับของแล้ว กำลังส่ง", delivered: "ส่งถึงแล้ว", failed: "ส่งไม่สำเร็จ",
+  not_needed: "รับเองที่ร้าน",
+  needs_rider: "รอเรียกวิน",
+  rider_called: "วินกำลังไปรับของ",
+  picked_up: "วินรับของแล้ว กำลังส่ง",
+  delivered: "ส่งถึงแล้ว",
+  failed: "ส่งไม่สำเร็จ",
 };
 
 function displayItems(order: OrderRow): DisplayItem[] {
@@ -64,6 +65,7 @@ function displayItems(order: OrderRow): DisplayItem[] {
       setId: i.set_id?.trim() || null,
     }));
   }
+
   return order.order_items.map((i) => ({
     name: i.item_name_snapshot,
     qty: Number(i.qty) || 0,
@@ -104,13 +106,15 @@ export function OrderHistory() {
   const pendingSubIdRef = useRef<string | null>(null);
 
   async function load() {
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from("sub_orders")
       .select(
-        "sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, created_at, items_json, shops(name), order_items(item_name_snapshot,qty,line_total), riders:assigned_rider_id(name,phone)"
+        "sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, created_at, items_json, shops(name,qr_code_url), order_items(item_name_snapshot,qty,line_total), riders:assigned_rider_id(name,phone)"
       )
       .order("created_at", { ascending: false })
       .limit(30);
+
+    if (loadError) setError(loadError.message);
     setOrders((data as unknown as OrderRow[]) ?? []);
     setLoading(false);
   }
@@ -137,9 +141,12 @@ export function OrderHistory() {
         .upload(path, file, { contentType: file.type || "image/jpeg" });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("payment-slips").getPublicUrl(path);
-      const { error: updErr } = await supabase.from("sub_orders").update({ payment_slip_url: pub.publicUrl }).eq("sub_id", sub_id);
+      const { error: updErr } = await supabase
+        .from("sub_orders")
+        .update({ payment_slip_url: pub.publicUrl })
+        .eq("sub_id", sub_id);
       if (updErr) throw updErr;
-      load();
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "แนบสลิปไม่สำเร็จ");
     } finally {
@@ -159,15 +166,25 @@ export function OrderHistory() {
   return (
     <div className="p-4 pb-8 space-y-3 max-w-md mx-auto">
       <h1 className="text-lg font-bold">📋 ประวัติออเดอร์</h1>
+
       {orders.map((o) => {
         const groups = groupedDisplayItems(o);
+        const showShopQr =
+          o.payment_method === "qr_transfer" &&
+          o.payment_status !== "paid" &&
+          Boolean(o.shops?.qr_code_url);
+
         return (
           <div key={o.sub_id} className="rounded-xl border border-gray-200 p-3 space-y-2">
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-sm font-medium">{o.shops?.name ?? o.shop_id}</p>
                 <p className="text-xs text-gray-400">
-                  {new Date(o.created_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })}
+                  {new Date(o.created_at).toLocaleString("th-TH", {
+                    timeZone: "Asia/Bangkok",
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
                 </p>
               </div>
               <span className={`text-[11px] rounded-full px-2 py-0.5 whitespace-nowrap ${
@@ -229,16 +246,54 @@ export function OrderHistory() {
             )}
 
             {o.payment_method === "qr_transfer" ? (
-              <div className="rounded-lg bg-purple-50 p-2 text-xs text-purple-700 space-y-1">
-                <p>💳 {o.payment_status === "paid" ? "✅ ร้านยืนยันรับเงินแล้ว" : o.payment_slip_url ? "⏳ รอร้านยืนยันรับเงิน" : "ยังไม่ได้แนบสลิป"}</p>
+              <div className="rounded-lg bg-purple-50 p-2 text-xs text-purple-700 space-y-2">
+                <p>
+                  💳 {o.payment_status === "paid"
+                    ? "✅ ร้านยืนยันรับเงินแล้ว"
+                    : o.payment_slip_url
+                      ? "⏳ รอร้านยืนยันรับเงิน"
+                      : "ยังไม่ได้แนบสลิป"}
+                </p>
+
+                {showShopQr && o.shops?.qr_code_url && (
+                  <div className="rounded-xl bg-white border border-purple-100 p-3 text-center space-y-2">
+                    <p className="font-medium text-purple-800">QR ชำระเงินของร้าน</p>
+                    <a
+                      href={o.shops.qr_code_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block"
+                      aria-label="เปิด QR ร้านแบบเต็มจอ"
+                    >
+                      <img
+                        src={o.shops.qr_code_url}
+                        alt={`QR ชำระเงินร้าน ${o.shops.name}`}
+                        className="w-48 h-48 object-contain mx-auto rounded-lg border border-gray-100 bg-white"
+                      />
+                    </a>
+                    <a
+                      href={o.shops.qr_code_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex rounded-lg border border-purple-200 bg-purple-100 text-purple-700 px-3 py-2 text-xs font-medium"
+                    >
+                      🔍 เปิด QR เต็มจอ / บันทึกภาพ
+                    </a>
+                    <p className="text-[11px] text-gray-500">
+                      หากยังไม่ได้ชำระ สามารถเปิด QR นี้อีกครั้งแล้วบันทึกภาพหรือสแกนจากอีกอุปกรณ์ได้
+                    </p>
+                  </div>
+                )}
+
                 {o.payment_slip_url && (
                   <img src={o.payment_slip_url} alt="payment slip" className="w-32 rounded-lg object-cover" />
                 )}
+
                 {o.payment_status !== "paid" && !o.payment_slip_url && (
                   <button
                     onClick={() => openSlipPicker(o.sub_id)}
                     disabled={uploadingFor === o.sub_id}
-                    className="rounded-lg bg-purple-500 text-white text-xs px-3 py-1.5 disabled:opacity-50"
+                    className="rounded-lg bg-purple-500 text-white text-xs px-3 py-2 disabled:opacity-50"
                   >
                     {uploadingFor === o.sub_id ? "กำลังส่ง..." : "📎 แนบสลิปโอนเงิน"}
                   </button>
