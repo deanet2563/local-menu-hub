@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "MyTree Shop",
+    "slug": "mytree-shop",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mytreeshop",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router", "expo-notifications", "expo-secure-store"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cc.mytree.shop",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleTypeRole": "Editor",
+            "CFBundleURLSchemes": ["line3rdp.cc.mytree.shop"]
+          }
+        ],
+        "LSApplicationQueriesSchemes": ["lineauth2"]
+      }
+    },
+    "android": {
+      "package": "cc.mytree.shop",
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["INTERNET", "POST_NOTIFICATIONS"]
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "1f668663-9e83-4f8f-91b6-666e97fb26df"
+      }
+    }
+  }
+}
