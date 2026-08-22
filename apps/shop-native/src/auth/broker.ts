@@ -12,7 +12,7 @@ function workerUrl() {
   return (process.env.EXPO_PUBLIC_MYTREE_WORKER_URL ?? '').replace(/\/$/, '');
 }
 
-function toSession(data: BrokerResponse): ShopSession {
+function toSession(data: BrokerResponse, lineIdToken?: string): ShopSession {
   if (!data.access_token || !data.customer_id || !data.expires_in || !data.refresh_token || !data.refresh_expires_in) {
     throw new Error('MyTree auth broker returned an invalid session');
   }
@@ -23,6 +23,7 @@ function toSession(data: BrokerResponse): ShopSession {
     expiresAt: now + data.expires_in,
     refreshToken: data.refresh_token,
     refreshExpiresAt: now + data.refresh_expires_in,
+    lineIdToken,
   };
 }
 
@@ -41,12 +42,12 @@ export async function exchangeLineIdToken(lineIdToken: string): Promise<ShopSess
     throw new Error(`MyTree auth broker failed: ${response.status}`);
   }
 
-  const session = toSession((await response.json()) as BrokerResponse);
+  const session = toSession((await response.json()) as BrokerResponse, lineIdToken);
   await saveShopSession(session);
   return session;
 }
 
-export async function refreshShopSession(refreshToken: string): Promise<ShopSession> {
+export async function refreshShopSession(refreshToken: string, lineIdToken?: string): Promise<ShopSession> {
   const baseUrl = workerUrl();
   if (!baseUrl) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
 
@@ -59,7 +60,7 @@ export async function refreshShopSession(refreshToken: string): Promise<ShopSess
     throw new Error(`MyTree session refresh failed: ${response.status}`);
   }
 
-  const session = toSession((await response.json()) as BrokerResponse);
+  const session = toSession((await response.json()) as BrokerResponse, lineIdToken);
   await saveShopSession(session);
   return session;
 }
