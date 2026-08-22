@@ -18,7 +18,7 @@ export async function getAccessToken(): Promise<string | null> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
-        const refreshed = await refreshShopSession(session.refreshToken!);
+        const refreshed = await refreshShopSession(session.refreshToken!, session.lineIdToken);
         return refreshed.accessToken;
       } catch {
         await clearShopSession();
