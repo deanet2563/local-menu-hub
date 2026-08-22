@@ -8,6 +8,9 @@ export type ShopSession = {
   expiresAt: number;
   refreshToken?: string;
   refreshExpiresAt?: number;
+  // Temporary compatibility for the legacy Rider V2 dispatch endpoints.
+  // Phase 2 removes this when Rider V3 uses the app access session directly.
+  lineIdToken?: string;
 };
 
 export async function saveShopSession(session: ShopSession) {
@@ -39,4 +42,11 @@ export function isShopSessionFresh(session: ShopSession, skewSeconds = 60) {
 
 export function isShopRefreshSessionFresh(session: ShopSession, skewSeconds = 60) {
   return !!session.refreshToken && !!session.refreshExpiresAt && session.refreshExpiresAt - skewSeconds > Math.floor(Date.now() / 1000);
+}
+
+export async function getValidLineIdToken(): Promise<string | null> {
+  const session = await loadShopSession();
+  if (!session?.lineIdToken) return null;
+  if (!isShopSessionFresh(session) && !isShopRefreshSessionFresh(session)) return null;
+  return session.lineIdToken;
 }
