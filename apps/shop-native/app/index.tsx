@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { exchangeLineIdToken } from '../src/auth/broker';
 import { loginWithLineNative } from '../src/native/lineLogin';
-import { getAccessToken } from '../src/lib/tokenStore';
+import { getAccessToken, logoutShopSession } from '../src/lib/tokenStore';
 import { loadShopOrders } from '../src/data/shopOrders';
 import { getOwnedShopProfile, setShopOpen, type OwnedShopProfile } from '../src/data/shopProfile';
 import { registerShopPushDevice } from '../src/data/pushDeviceRepository';
@@ -18,6 +18,7 @@ export default function ShopHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [changingOpen, setChangingOpen] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +67,37 @@ export default function ShopHomeScreen() {
       setSigningIn(false);
     }
   }, [load, signingIn]);
+
+  const signOut = useCallback(() => {
+    if (signingOut) return;
+    Alert.alert(
+      'ออกจากระบบ',
+      'ต้องการออกจาก MyTree Shop บนอุปกรณ์นี้หรือไม่?',
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ออกจากระบบ',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSigningOut(true);
+              setError(null);
+              try {
+                await logoutShopSession();
+                setShop(null);
+                setOrders([]);
+                setSignedIn(false);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : 'ออกจากระบบไม่สำเร็จ');
+              } finally {
+                setSigningOut(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [signingOut]);
 
   const toggleShopOpen = useCallback(async () => {
     if (!shop || changingOpen) return;
@@ -166,6 +198,7 @@ export default function ShopHomeScreen() {
         </View>
         <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryText}>สมัครร้านค้า</Text></Pressable>
         <Pressable onPress={refresh} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>ฉันสมัครแล้ว · ตรวจสอบอีกครั้ง</Text></Pressable>
+        <Pressable disabled={signingOut} onPress={signOut} style={({ pressed }) => [styles.logoutButton, signingOut && styles.disabled, pressed && styles.pressed]}><Text style={styles.logoutText}>{signingOut ? 'กำลังออกจากระบบ…' : 'ออกจากระบบ'}</Text></Pressable>
         {error ? <Text style={styles.loginError}>{error}</Text> : null}
       </View>
     );
@@ -189,6 +222,9 @@ export default function ShopHomeScreen() {
           </Pressable>
         </View>
         {shop.is_approved && !shop.is_banned ? <Text style={styles.openHint}>{shop.is_open ? 'ลูกค้าจะเห็นร้านและเมนูที่เปิดขายในหน้ารวม' : 'ร้านปิดอยู่ จึงยังไม่แสดงในหน้ารวมของลูกค้า'}</Text> : null}
+        <Pressable disabled={signingOut} onPress={signOut} style={({ pressed }) => [styles.heroLogoutButton, signingOut && styles.disabled, pressed && styles.pressed]}>
+          <Text style={styles.logoutText}>{signingOut ? 'กำลังออกจากระบบ…' : 'ออกจากระบบ'}</Text>
+        </Pressable>
       </View>
 
       {shop.is_banned ? (
@@ -232,6 +268,9 @@ const styles = StyleSheet.create({
   openButtonOff: { backgroundColor: '#EEF3EF', borderWidth: 1, borderColor: '#D7E1DA' },
   openButtonTextOn: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   openButtonTextOff: { color: '#52705B', fontSize: 13, fontWeight: '800' },
+  heroLogoutButton: { alignSelf: 'flex-start', marginTop: 10, minHeight: 36, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#E8B3AF', paddingHorizontal: 12, backgroundColor: '#FFF7F6' },
+  logoutButton: { marginTop: 10, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderColor: '#E8B3AF', backgroundColor: '#FFF7F6' },
+  logoutText: { color: '#A13A36', fontSize: 13, fontWeight: '800' },
   list: { padding: 16, gap: 12, flexGrow: 1 },
   card: { marginTop: 16, borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
   cardTitle: { fontSize: 18, fontWeight: '800', color: '#173C2C' },
