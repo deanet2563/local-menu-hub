@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { clearRiderSession, isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { refreshRiderSession, revokeRiderSession } from '@/auth/broker';
+import {
+  clearRiderSession,
+  isRefreshSessionFresh,
+  isSessionFresh,
+  loadRiderSession,
+  type RiderSession,
+} from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
@@ -39,6 +46,7 @@ export default function RiderHomeScreen() {
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [updatingOnline, setUpdatingOnline] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [pushState, setPushState] = useState<ReadinessState>('pending');
   const [pushText, setPushText] = useState('รอตรวจสอบ');
   const [locationState, setLocationState] = useState<ReadinessState>('pending');
@@ -53,28 +61,45 @@ export default function RiderHomeScreen() {
   async function restoreAccount() {
     setAccountState('checking');
     setAccountText('กำลังตรวจ MyTree session...');
+    setError(null);
 
     const saved = await loadRiderSession();
     if (!saved) {
       setSession(null);
       setRider(null);
       setAccountState('pending');
-      setAccountText('รอเชื่อม Native LINE Login');
+      setAccountText('รอเข้าสู่ระบบ Rider');
       return;
     }
 
-    if (!isSessionFresh(saved)) {
-      await clearRiderSession();
-      setSession(null);
-      setRider(null);
-      setAccountState('blocked');
-      setAccountText('Session หมดอายุ — ต้องเข้าสู่ระบบใหม่');
-      return;
+    let activeSession = saved;
+    if (!isSessionFresh(activeSession)) {
+      if (activeSession.refreshToken && isRefreshSessionFresh(activeSession)) {
+        try {
+          setAccountText('กำลังต่ออายุ MyTree session...');
+          activeSession = await refreshRiderSession(activeSession.refreshToken);
+        } catch (cause) {
+          await clearRiderSession();
+          setSession(null);
+          setRider(null);
+          setAccountState('blocked');
+          setAccountText('Session ต่ออายุไม่สำเร็จ — กรุณาเข้าสู่ระบบใหม่');
+          setError(cause instanceof Error ? cause.message : String(cause));
+          return;
+        }
+      } else {
+        await clearRiderSession();
+        setSession(null);
+        setRider(null);
+        setAccountState('blocked');
+        setAccountText('Session หมดอายุ — กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
     }
 
     try {
-      const profile = await getRiderProfile(saved);
-      setSession(saved);
+      const profile = await getRiderProfile(activeSession);
+      setSession(activeSession);
       setRider(profile);
 
       if (!profile) {
@@ -190,6 +215,28 @@ export default function RiderHomeScreen() {
     }
   }
 
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setError(null);
+
+    try {
+      const current = session ?? (await loadRiderSession());
+      if (current?.refreshToken) {
+        await revokeRiderSession(current.refreshToken);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      await clearRiderSession();
+      setSession(null);
+      setRider(null);
+      setAccountState('pending');
+      setAccountText('ออกจากระบบแล้ว — กรุณาเข้าสู่ระบบ Rider');
+      setLoggingOut(false);
+    }
+  }
+
   const nativeReady = pushState === 'ready' && locationState === 'ready';
   const accountReady = accountState === 'ready' && !!session && !!rider;
   const canToggleOnline = accountReady && (rider?.is_online === true || nativeReady);
@@ -284,10 +331,21 @@ export default function RiderHomeScreen() {
           </Pressable>
         </View>
 
+        {!!session && (
+          <Pressable
+            accessibilityRole="button"
+            disabled={loggingOut}
+            onPress={logout}
+            style={[styles.logoutButton, loggingOut && styles.buttonDisabled]}
+          >
+            <Text style={styles.logoutButtonText}>{loggingOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}</Text>
+          </Pressable>
+        )}
+
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.note}>
-          Native LINE Login เป็น gate ถัดไป เมื่อ LINE Developers mobile configuration พร้อมแล้ว ID token จะถูกแลกกับ MyTree Worker เป็น Supabase JWT และเก็บเฉพาะใน SecureStore ของเครื่อง
+          Phase 2 ใช้ persistent revocable session แบบเดียวกับ Shop Native; Native LINE Login ของ Rider ต้องผ่าน real-device gate ก่อนเปิดใช้งาน production
         </Text>
       </View>
     </SafeAreaView>
@@ -357,6 +415,16 @@ const styles = StyleSheet.create({
   },
   workButtonTitle: { fontSize: 15, fontWeight: '800', color: '#1D2939' },
   workButtonMeta: { marginTop: 4, fontSize: 11, color: '#667085' },
+  logoutButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    backgroundColor: '#FFFFFF',
+  },
+  logoutButtonText: { fontSize: 14, fontWeight: '700', color: '#344054' },
   buttonDisabled: { opacity: 0.45 },
   primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   onlineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },

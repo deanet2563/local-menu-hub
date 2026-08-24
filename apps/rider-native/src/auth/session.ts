@@ -6,6 +6,8 @@ export type RiderSession = {
   accessToken: string;
   customerId: string;
   expiresAt: number;
+  refreshToken?: string;
+  refreshExpiresAt?: number;
 };
 
 export async function saveRiderSession(session: RiderSession) {
@@ -33,4 +35,8 @@ export async function clearRiderSession() {
 
 export function isSessionFresh(session: RiderSession, skewSeconds = 60) {
   return session.expiresAt - skewSeconds > Math.floor(Date.now() / 1000);
+}
+
+export function isRefreshSessionFresh(session: RiderSession, skewSeconds = 60) {
+  return !!session.refreshToken && !!session.refreshExpiresAt && session.refreshExpiresAt - skewSeconds > Math.floor(Date.now() / 1000);
 }
