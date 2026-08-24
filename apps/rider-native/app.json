@@ -43,6 +43,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "lineLogin": {
+        "channelId": "2010936243"
+      }
     }
   }
 }
