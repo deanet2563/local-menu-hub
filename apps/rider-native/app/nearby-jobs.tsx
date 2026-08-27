@@ -4,11 +4,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'rea
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
-import {
-  expressDeliveryInterest,
-  listNearbyDeliveryJobs,
-  type NearbyDeliveryJob,
-} from '@/data/nearbyJobsRepository';
+import { listNearbyDeliveryJobs, type NearbyDeliveryJob } from '@/data/nearbyJobsRepository';
 import { getRiderProfile } from '@/data/riderRepository';
 
 const RADII = [1, 2, 3, 5] as const;
@@ -19,7 +15,6 @@ export default function NearbyJobsScreen() {
   const [jobs, setJobs] = useState<NearbyDeliveryJob[]>([]);
   const [radiusIndex, setRadiusIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [interestedSubId, setInterestedSubId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const radius = RADII[radiusIndex];
@@ -42,7 +37,7 @@ export default function NearbyJobsScreen() {
     void (async () => {
       if (!riderFeatures.candidateFlow) {
         setLoading(false);
-        setMessage('Nearby Rider Offer ยังปิดอยู่จนกว่า backend candidate flow จะผ่าน production gate');
+        setMessage('Nearby Rider Offer ยังปิดอยู่จนกว่า Delivery V3 backend gate จะผ่าน');
         return;
       }
 
@@ -72,28 +67,14 @@ export default function NearbyJobsScreen() {
     await loadJobs(session, RADII[nextIndex]);
   }
 
-  async function expressInterest(job: NearbyDeliveryJob) {
-    if (!session || interestedSubId) return;
-    setInterestedSubId(job.sub_id);
-    setMessage(null);
-    try {
-      await expressDeliveryInterest(session, job.sub_id);
-      setMessage(`แจ้งร้านแล้วว่าคุณสนใจงานจาก ${job.shop_name} — รอร้านเลือก Rider`);
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setInterestedSubId(null);
-    }
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>NEARBY RIDER OFFER</Text>
+          <Text style={styles.eyebrow}>DELIVERY V3 PREVIEW</Text>
           <Text style={styles.title}>งานใกล้ฉัน</Text>
           <Text style={styles.subtitle}>
-            แสดงเฉพาะข้อมูลร้านก่อนถูกเลือก เพื่อไม่เปิดเผยที่อยู่ลูกค้าก่อน assignment
+            ดูงานที่พร้อมเสนอได้ที่นี่ การกดรับงานจะเปิดเมื่อ Atomic First Accept backend ผ่าน production gate แล้วเท่านั้น
           </Text>
         </View>
 
@@ -120,25 +101,13 @@ export default function NearbyJobsScreen() {
             <Text style={styles.shopAddress}>{job.shop_address ?? 'ร้านยังไม่ได้ระบุที่อยู่'}</Text>
             <Text style={styles.distance}>ห่างจากคุณประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
 
-            <View style={styles.actions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/job-detail/[subId]', params: { subId: job.sub_id } })}
-                style={styles.detailButton}
-              >
-                <Text style={styles.detailButtonText}>ดูรายละเอียด</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={!!interestedSubId}
-                onPress={() => expressInterest(job)}
-                style={styles.interestButton}
-              >
-                <Text style={styles.interestButtonText}>
-                  {interestedSubId === job.sub_id ? 'กำลังแจ้ง...' : 'สนใจรับงาน'}
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/job-detail/[subId]', params: { subId: job.sub_id } })}
+              style={styles.detailButton}
+            >
+              <Text style={styles.detailButtonText}>ดูรายละเอียด</Text>
+            </Pressable>
           </View>
         ))}
       </ScrollView>
@@ -162,9 +131,6 @@ const styles = StyleSheet.create({
   shopName: { fontSize: 18, fontWeight: '800', color: '#1D2939' },
   shopAddress: { fontSize: 13, lineHeight: 19, color: '#667085' },
   distance: { fontSize: 14, fontWeight: '700', color: '#067647' },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  detailButton: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F2F4F7' },
+  detailButton: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F2F4F7' },
   detailButtonText: { fontWeight: '700', color: '#344054' },
-  interestButton: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#163E72' },
-  interestButtonText: { fontWeight: '800', color: '#FFFFFF' },
 });

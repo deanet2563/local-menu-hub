@@ -2,27 +2,21 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { isSessionFresh, loadRiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
-import {
-  expressDeliveryInterest,
-  listNearbyDeliveryJobs,
-  type NearbyDeliveryJob,
-} from '@/data/nearbyJobsRepository';
+import { listNearbyDeliveryJobs, type NearbyDeliveryJob } from '@/data/nearbyJobsRepository';
 
 export default function NearbyJobDetailScreen() {
   const router = useRouter();
   const { subId } = useLocalSearchParams<{ subId: string }>();
-  const [session, setSession] = useState<RiderSession | null>(null);
   const [job, setJob] = useState<NearbyDeliveryJob | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       if (!riderFeatures.candidateFlow) {
-        setMessage('Nearby Rider Offer ยังปิดอยู่จนกว่า backend gate จะผ่าน');
+        setMessage('Nearby Rider Offer ยังปิดอยู่จนกว่า Delivery V3 backend gate จะผ่าน');
         setLoading(false);
         return;
       }
@@ -40,7 +34,6 @@ export default function NearbyJobDetailScreen() {
         return;
       }
 
-      setSession(saved);
       try {
         const jobs = await listNearbyDeliveryJobs(saved, 5);
         const found = jobs.find((item) => item.sub_id === subId) ?? null;
@@ -56,20 +49,6 @@ export default function NearbyJobDetailScreen() {
     })();
   }, [subId]);
 
-  async function interested() {
-    if (!session || !job || submitting) return;
-    setSubmitting(true);
-    setMessage(null);
-    try {
-      await expressDeliveryInterest(session, job.sub_id);
-      setMessage('แจ้งร้านแล้วว่าคุณสนใจงานนี้ — ร้านจะเป็นผู้เลือก Rider ขั้นสุดท้าย');
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   function openShopMap() {
     if (!job) return;
     const query = `${job.shop_lat},${job.shop_lng}`;
@@ -80,10 +59,10 @@ export default function NearbyJobDetailScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>JOB PREVIEW</Text>
+          <Text style={styles.eyebrow}>DELIVERY V3 JOB PREVIEW</Text>
           <Text style={styles.title}>{job?.shop_name ?? 'รายละเอียดงาน'}</Text>
           <Text style={styles.subtitle}>
-            ก่อนร้านเลือก Rider หน้านี้จะแสดงเฉพาะข้อมูลที่จำเป็นต่อการตัดสินใจรับงาน
+            หน้านี้เป็นข้อมูลก่อนรับงาน การรับงานจริงจะเปิดเมื่อ Atomic First Accept backend ผ่าน production gate แล้ว
           </Text>
         </View>
 
@@ -104,18 +83,16 @@ export default function NearbyJobDetailScreen() {
             <View style={styles.privacyCard}>
               <Text style={styles.privacyTitle}>ข้อมูลลูกค้ายังถูกซ่อน</Text>
               <Text style={styles.privacyText}>
-                ที่อยู่ เบอร์โทร และข้อมูลจุดส่งของลูกค้าจะไม่ถูกส่งผ่าน Nearby Job preview ก่อนร้านเลือกคุณเป็น Rider ของงานนี้
+                ที่อยู่ เบอร์โทร และข้อมูลจุดส่งของลูกค้าจะเปิดให้เฉพาะ Rider ที่ชนะ Atomic First Accept และถูก assignment จาก backend แล้วเท่านั้น
               </Text>
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting}
-              style={[styles.primaryButton, submitting && styles.disabled]}
-              onPress={interested}
-            >
-              <Text style={styles.primaryButtonText}>{submitting ? 'กำลังแจ้งร้าน...' : 'สนใจรับงานนี้'}</Text>
-            </Pressable>
+            <View style={styles.pendingCard}>
+              <Text style={styles.pendingTitle}>รับงานยังไม่เปิดใน build นี้</Text>
+              <Text style={styles.pendingText}>
+                ระบบจะไม่ใช้ขั้นตอน “สนใจรับงาน → รอร้านเลือก Rider” อีกต่อไป ปุ่มรับงานจะเปิดพร้อม backend ที่ล็อกงานแบบ first-accept ได้อย่าง atomic เท่านั้น
+              </Text>
+            </View>
           </>
         )}
 
@@ -146,9 +123,9 @@ const styles = StyleSheet.create({
   privacyCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#FFFAEB', borderWidth: 1, borderColor: '#FEDF89' },
   privacyTitle: { fontSize: 14, fontWeight: '800', color: '#93370D' },
   privacyText: { fontSize: 13, lineHeight: 19, color: '#854A0E' },
-  primaryButton: { alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#163E72' },
-  primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  disabled: { opacity: 0.5 },
+  pendingCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#EEF4FF', borderWidth: 1, borderColor: '#B2CCFF' },
+  pendingTitle: { fontSize: 14, fontWeight: '800', color: '#1849A9' },
+  pendingText: { fontSize: 13, lineHeight: 19, color: '#175CD3' },
   message: { fontSize: 13, lineHeight: 19, color: '#667085' },
   backButton: { alignItems: 'center', paddingVertical: 10 },
   backButtonText: { fontWeight: '700', color: '#475467' },
