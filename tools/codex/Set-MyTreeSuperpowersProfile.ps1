@@ -43,11 +43,20 @@ if (-not (Test-Path (Join-Path $superpowersRepo '.git'))) {
 
 New-Item -ItemType Directory -Force -Path $skillsRoot | Out-Null
 
-# Remove only the discovery link/profile. Never delete the source repo.
+# Remove only discovery links/profile entries. Never delete the Superpowers source repo.
 if (Test-Path $profileRoot) {
-  cmd /c "rmdir \"$profileRoot\"" 2>$null | Out-Null
-  if (Test-Path $profileRoot) {
-    Remove-Item -LiteralPath $profileRoot -Force -Recurse
+  $rootItem = Get-Item -LiteralPath $profileRoot -Force
+  if (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    cmd /c "rmdir \"$profileRoot\"" | Out-Null
+  } else {
+    Get-ChildItem -LiteralPath $profileRoot -Force | ForEach-Object {
+      if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        cmd /c "rmdir \"$($_.FullName)\"" | Out-Null
+      } else {
+        throw "Unexpected non-link entry in $profileRoot: $($_.FullName). Stop to avoid deleting user files."
+      }
+    }
+    Remove-Item -LiteralPath $profileRoot -Force
   }
 }
 
