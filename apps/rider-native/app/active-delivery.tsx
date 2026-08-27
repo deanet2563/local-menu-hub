@@ -32,7 +32,7 @@ export default function ActiveDeliveryScreen() {
     try {
       const active = await getActiveAssignedDelivery(saved);
       setJob(active);
-      setMessage(active ? null : 'ยังไม่มีงานที่ร้านเลือกให้คุณ');
+      setMessage(active ? null : 'ยังไม่มีงาน Delivery V3 ที่ backend assign ให้คุณ');
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -88,7 +88,7 @@ export default function ActiveDeliveryScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>ไม่มีงานปัจจุบัน</Text>
-          <Text style={styles.message}>{message ?? 'เมื่อร้านเลือกคุณ งานจะปรากฏที่นี่'}</Text>
+          <Text style={styles.message}>{message ?? 'เมื่อคุณชนะ First Accept งานจะปรากฏที่นี่'}</Text>
         </View>
       </SafeAreaView>
     );

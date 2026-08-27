@@ -268,9 +268,9 @@ export default function RiderHomeScreen() {
             <Text style={styles.workButtonTitle}>งานปัจจุบัน</Text>
             <Text style={styles.workButtonMeta}>Pickup → Delivery</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" disabled={!rider?.is_online || !riderFeatures.candidateFlow} onPress={() => router.push('/nearby-jobs')} style={[styles.workButton, (!rider?.is_online || !riderFeatures.candidateFlow) && styles.buttonDisabled]}>
+          <Pressable accessibilityRole="button" disabled={!rider?.is_online || !riderFeatures.deliveryV3Accept} onPress={() => router.push('/nearby-jobs')} style={[styles.workButton, (!rider?.is_online || !riderFeatures.deliveryV3Accept) && styles.buttonDisabled]}>
             <Text style={styles.workButtonTitle}>งานใกล้ฉัน</Text>
-            <Text style={styles.workButtonMeta}>{riderFeatures.candidateFlow ? 'Nearby Rider Offer' : 'รอ Rider V3 backend gate'}</Text>
+            <Text style={styles.workButtonMeta}>{riderFeatures.deliveryV3Accept ? 'Delivery V3 · First Accept' : 'รอเปิด Delivery V3'}</Text>
           </Pressable>
         </View>
 
@@ -281,7 +281,7 @@ export default function RiderHomeScreen() {
         )}
 
         {error && <Text style={styles.error}>{error}</Text>}
-        <Text style={styles.note}>Phase 2 ใช้ Native LINE Login และ persistent revocable `rider_native` session; flow งานเก่าแบบ Shop เลือก Rider จะถูกแทนด้วย Rider V3 atomic first accept ในขั้นถัดไป</Text>
+        <Text style={styles.note}>Phase 2 ใช้ Native LINE Login และ persistent revocable `rider_native` session; Delivery V3 ใช้ Rider First Accept → Atomic Auto Lock → Shop Notified โดย backend เป็น source of truth</Text>
       </ScrollView>
     </SafeAreaView>
   );
