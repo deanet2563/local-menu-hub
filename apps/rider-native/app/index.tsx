@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { exchangeLineIdToken, refreshRiderSession, revokeRiderSession } from '@/auth/broker';
 import { nativeLineLogin } from '@/auth/lineNative';
@@ -227,7 +227,7 @@ export default function RiderHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
           <Text style={styles.title}>พร้อมรับงาน</Text>
@@ -282,14 +282,15 @@ export default function RiderHomeScreen() {
 
         {error && <Text style={styles.error}>{error}</Text>}
         <Text style={styles.note}>Phase 2 ใช้ Native LINE Login และ persistent revocable `rider_native` session; flow งานเก่าแบบ Shop เลือก Rider จะถูกแทนด้วย Rider V3 atomic first accept ในขั้นถัดไป</Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 18 },
+  scrollView: { flex: 1 },
+  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32, gap: 18 },
   header: { gap: 8 },
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: '#246B50' },
   title: { fontSize: 30, fontWeight: '800', color: '#112235' },
