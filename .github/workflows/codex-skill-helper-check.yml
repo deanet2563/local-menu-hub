@@ -1,0 +1,15 @@
+name: Codex Skill Helper Check
+
+on:
+  pull_request:
+    paths:
+      - 'tools/codex/**'
+
+jobs:
+  powershell-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse-check Codex helper
+        shell: pwsh
+        run: .\tools\codex\Test-SetMyTreeSuperpowersProfile.ps1
