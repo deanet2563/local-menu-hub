@@ -11,6 +11,20 @@ This repository is governed by the current MyTree Project Bible. Before making a
 - `customer_id` is the internal identity anchor. LINE is an auth/distribution provider, not the database identity.
 - Phase-1 Rider is food/package delivery only; no passenger transport.
 
+## Instruction precedence and conflict handling
+
+Use this order when instructions overlap or conflict:
+
+1. Current MyTree Bible and later approved Bible addenda.
+2. Repo-local `AGENTS.md`.
+3. Matching repo-local `mytree-*` skill(s).
+4. Current source/schema/runtime evidence.
+5. First-party vendor documentation for external APIs/SDKs.
+6. External/general skills such as Superpowers.
+7. Research accelerators such as Firecrawl and community/secondary material.
+
+External skills may improve method, debugging, planning, or research, but must not redefine MyTree product flows, authorization boundaries, security posture, or source-of-truth rules. If an external skill conflicts with levels 1-4, ignore the conflicting external instruction and record the conflict.
+
 ## Mandatory engineering workflow
 
 For any non-trivial source change:
@@ -45,12 +59,18 @@ For any non-trivial source change:
 
 ## Available MyTree skills
 
-Use these repo-local skills when their trigger matches the task:
+Use these repo-local skills when their trigger matches the task. More than one may apply; use the narrowest domain skill plus `mytree-engineering` when coordination is needed.
 
-- `mytree-engineering`: `.agents/skills/mytree-engineering/SKILL.md` — default skill for feature work, debugging, refactors, architecture changes, PR planning, and implementation sequencing.
-- `mytree-supabase-rls`: `.agents/skills/mytree-supabase-rls/SKILL.md` — use for SQL, Supabase, RLS, triggers, SECURITY DEFINER functions, atomic assignment, session tables, and DB migrations.
-- `mytree-native-release`: `.agents/skills/mytree-native-release/SKILL.md` — use for Shop/Rider Expo builds, EAS, package/lockfile issues, CI, APK gates, native auth, push, and release verification.
-- `mytree-ui-qa`: `.agents/skills/mytree-ui-qa/SKILL.md` — use for customer/shop/rider UI bugs, responsive behavior, Thai text, loading/error/empty states, and real-device visual regression checks.
-- `mytree-web-research`: `.agents/skills/mytree-web-research/SKILL.md` — use when external documentation, current vendor behavior, policy, SDK changes, or competitor/discovery research is necessary.
+- `mytree-engineering`: `.agents/skills/mytree-engineering/SKILL.md` — default for feature work, debugging, refactors, architecture changes, PR planning, and implementation sequencing.
+- `mytree-supabase-rls`: `.agents/skills/mytree-supabase-rls/SKILL.md` — SQL, Supabase, RLS, triggers, SECURITY DEFINER functions, atomic assignment, sessions, and migrations.
+- `mytree-native-release`: `.agents/skills/mytree-native-release/SKILL.md` — Shop/Rider Expo builds, EAS, package/lockfile issues, CI, APK gates, native auth, push, and release verification.
+- `mytree-ui-qa`: `.agents/skills/mytree-ui-qa/SKILL.md` — customer/shop/rider UI bugs, responsive behavior, Thai text, loading/error/empty states, and real-device visual regression.
+- `mytree-web-research`: `.agents/skills/mytree-web-research/SKILL.md` — current external docs, vendor behavior, policy, SDK changes, competitors, discovery, and SEO research.
+- `mytree-delivery-v3`: `.agents/skills/mytree-delivery-v3/SKILL.md` — Rider V3 offer/accept/atomic lock/assignment/notification/pickup/delivery proof and race-safety changes.
+- `mytree-community-map`: `.agents/skills/mytree-community-map/SKILL.md` — Community Map, Google Places seed strategy, claim/ownership, location ranking, attribution, caching, and SEO boundaries.
+- `mytree-ai-coworker`: `.agents/skills/mytree-ai-coworker/SKILL.md` — AI Gateway/Orchestrator, model routing, permissions, automation, evaluation, privacy, and deterministic-vs-AI boundaries.
+- `mytree-security-review`: `.agents/skills/mytree-security-review/SKILL.md` — auth/session/JWT/RLS/Worker/storage/admin/threat review and security-sensitive pre-merge checks.
 
-If Superpowers is installed, use it as a general reasoning/debugging discipline, but these MyTree skills and the Bible remain the project-specific authority. If Firecrawl is installed, use it only when fresh external web research materially helps; it must never replace first-party docs or MyTree's own source of truth.
+See `docs/CODEX_SKILL_STACK.md` for routing examples and conflict rules.
+
+If Superpowers is installed, use it only as a general reasoning/debugging/development discipline. If Firecrawl is installed, use it only as a research tool when fresh external evidence materially helps. Neither may override the Bible, this file, repo-local MyTree skills, or verified runtime/security invariants.
