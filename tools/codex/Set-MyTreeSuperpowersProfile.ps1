@@ -53,7 +53,7 @@ if (Test-Path $profileRoot) {
       if (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
         cmd /c "rmdir \"$($_.FullName)\"" | Out-Null
       } else {
-        throw "Unexpected non-link entry in $profileRoot: $($_.FullName). Stop to avoid deleting user files."
+        throw "Unexpected non-link entry in ${profileRoot}: $($_.FullName). Stop to avoid deleting user files."
       }
     }
     Remove-Item -LiteralPath $profileRoot -Force
