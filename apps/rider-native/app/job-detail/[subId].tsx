@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { isSessionFresh, loadRiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { listNearbyDeliveryJobs, type NearbyDeliveryJob } from '@/data/nearbyJobsRepository';
 
 export default function NearbyJobDetailScreen() {
   const router = useRouter();
   const { subId } = useLocalSearchParams<{ subId: string }>();
-  const [session, setSession] = useState<RiderSession | null>(null);
   const [job, setJob] = useState<NearbyDeliveryJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -35,7 +34,6 @@ export default function NearbyJobDetailScreen() {
         return;
       }
 
-      setSession(saved);
       try {
         const jobs = await listNearbyDeliveryJobs(saved, 5);
         const found = jobs.find((item) => item.sub_id === subId) ?? null;
