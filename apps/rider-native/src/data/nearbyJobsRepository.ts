@@ -11,14 +11,11 @@ export type NearbyDeliveryJob = {
   confirmed_at: string | null;
 };
 
-export type DeliveryInterest = {
-  id: string;
-  sub_id: string;
-  rider_id: string;
-  distance_to_shop_km: number | null;
-  status: 'interested' | 'selected' | 'not_selected' | 'withdrawn' | 'expired';
-  interested_at: string;
-  updated_at: string;
+export type RiderV3AcceptResult = {
+  ok: boolean;
+  result: 'accepted' | 'already_accepted' | 'job_already_taken';
+  subId: string;
+  assignedRiderId?: string | null;
 };
 
 function config() {
@@ -28,6 +25,12 @@ function config() {
     throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY');
   }
   return { url: url.replace(/\/$/, ''), anonKey };
+}
+
+function workerUrl() {
+  const url = process.env.EXPO_PUBLIC_MYTREE_WORKER_URL;
+  if (!url) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
+  return url.replace(/\/$/, '');
 }
 
 function headers(session: RiderSession) {
@@ -57,20 +60,29 @@ export async function listNearbyDeliveryJobs(
   return (await response.json()) as NearbyDeliveryJob[];
 }
 
-export async function expressDeliveryInterest(
+export async function acceptDeliveryV3(
   session: RiderSession,
   subId: string,
-): Promise<DeliveryInterest> {
-  const { url } = config();
-  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_express_delivery_interest`, {
+): Promise<RiderV3AcceptResult> {
+  const response = await fetch(`${workerUrl()}/rider/delivery/accept`, {
     method: 'POST',
-    headers: headers(session),
-    body: JSON.stringify({ p_sub_id: subId }),
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ subId }),
   });
 
-  if (!response.ok) {
-    throw new Error(`delivery interest failed: ${response.status}`);
+  const payload = await response.json().catch(() => null) as RiderV3AcceptResult | { error?: string } | null;
+
+  if (response.status === 409 && payload && 'result' in payload && payload.result === 'job_already_taken') {
+    return payload as RiderV3AcceptResult;
   }
 
-  return (await response.json()) as DeliveryInterest;
+  if (!response.ok) {
+    const error = payload && 'error' in payload ? payload.error : undefined;
+    throw new Error(error || `Rider V3 accept failed: ${response.status}`);
+  }
+
+  return payload as RiderV3AcceptResult;
 }
