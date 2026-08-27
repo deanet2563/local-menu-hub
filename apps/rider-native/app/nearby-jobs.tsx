@@ -35,9 +35,9 @@ export default function NearbyJobsScreen() {
 
   useEffect(() => {
     void (async () => {
-      if (!riderFeatures.candidateFlow) {
+      if (!riderFeatures.deliveryV3Accept) {
         setLoading(false);
-        setMessage('Nearby Rider Offer ยังปิดอยู่จนกว่า Delivery V3 backend gate จะผ่าน');
+        setMessage('Delivery V3 ยังไม่เปิดใน build นี้');
         return;
       }
 
@@ -71,10 +71,10 @@ export default function NearbyJobsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>DELIVERY V3 PREVIEW</Text>
+          <Text style={styles.eyebrow}>DELIVERY V3 · FIRST ACCEPT</Text>
           <Text style={styles.title}>งานใกล้ฉัน</Text>
           <Text style={styles.subtitle}>
-            ดูงานที่พร้อมเสนอได้ที่นี่ การกดรับงานจะเปิดเมื่อ Atomic First Accept backend ผ่าน production gate แล้วเท่านั้น
+            เลือกดูงานที่เปิดรับ Rider แล้วกดรับจากหน้ารายละเอียด คนแรกที่ backend ยืนยันสำเร็จจะได้งานทันที
           </Text>
         </View>
 
@@ -106,7 +106,7 @@ export default function NearbyJobsScreen() {
               onPress={() => router.push({ pathname: '/job-detail/[subId]', params: { subId: job.sub_id } })}
               style={styles.detailButton}
             >
-              <Text style={styles.detailButtonText}>ดูรายละเอียด</Text>
+              <Text style={styles.detailButtonText}>ดูรายละเอียดและรับงาน</Text>
             </Pressable>
           </View>
         ))}
