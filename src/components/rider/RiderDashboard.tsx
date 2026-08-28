@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { MyDeliveries } from "@/components/rider/MyDeliveries";
+import { MyDeliveriesV3ReadOnly } from "@/components/rider/MyDeliveriesV3ReadOnly";
 
 type RiderRow = {
   id: string;
@@ -25,6 +26,7 @@ type RiderRow = {
 
 const RIDER_COLS =
   "id, name, is_online, is_approved, is_banned, banned_reason, deletion_requested_at, deletion_reason, lat, lng, location_updated_at";
+const WEB_RIDER_V3_ENABLED = import.meta.env.VITE_ENABLE_RIDER_DELIVERY_V3 === "true";
 
 export function RiderDashboard({ riderId }: { riderId: string }) {
   const [rider, setRider] = useState<RiderRow | null>(null);
@@ -158,7 +160,9 @@ export function RiderDashboard({ riderId }: { riderId: string }) {
         </div>
       </div>
 
-      {rider.is_approved && !rider.deletion_requested_at && <MyDeliveries />}
+      {rider.is_approved && !rider.deletion_requested_at && (
+        WEB_RIDER_V3_ENABLED ? <MyDeliveriesV3ReadOnly /> : <MyDeliveries />
+      )}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
