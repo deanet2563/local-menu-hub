@@ -191,14 +191,17 @@ export default function ActiveDeliveryScreen() {
           <View style={styles.proofCard}>
             <Text style={styles.proofTitle}>Proof of Delivery</Text>
             <Text style={styles.proofText}>
-              กล้อง Native พร้อมทดสอบแบบ local preview แล้ว ส่วน upload/ปิดงานยังล็อกไว้จนกว่า private Storage policy จะผ่าน gate
+              หลังส่งอาหารให้ลูกค้า ให้ถ่ายรูปหลักฐาน ระบบจะเก็บรูปใน private Storage และ backend จะปิดงานเมื่อยืนยันว่า Rider ที่ถูก assign เป็นผู้ส่งรูปหลัง Pickup เท่านั้น
             </Text>
             <Pressable
               accessibilityRole="button"
-              style={styles.proofButton}
+              disabled={!riderFeatures.deliveryV3Accept}
+              style={[styles.proofButton, !riderFeatures.deliveryV3Accept && styles.disabled]}
               onPress={() => router.push({ pathname: '/proof-delivery', params: { subId: job.sub_id } })}
             >
-              <Text style={styles.proofButtonText}>ถ่ายรูปยืนยันการส่ง</Text>
+              <Text style={styles.proofButtonText}>
+                {riderFeatures.deliveryV3Accept ? 'ถ่ายรูปยืนยันการส่ง' : 'Proof รอ Delivery V3 production gate'}
+              </Text>
             </Pressable>
           </View>
         )}
