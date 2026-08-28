@@ -27,6 +27,34 @@ export async function acceptShopOrder(subId: string): Promise<void> {
   }
 }
 
+export async function cancelShopDeliveryV3(subId: string, reason: string): Promise<'cancelled' | 'already_cancelled'> {
+  const token = await getAccessToken();
+  if (!token) throw new Error('unauthorized_shop_session');
+
+  const baseUrl = workerUrl();
+  if (!baseUrl) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
+
+  const response = await fetch(`${baseUrl}/shop/delivery/cancel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ subId, reason }),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    result?: 'cancelled' | 'already_cancelled';
+    error?: string;
+  };
+
+  if (!response.ok || !data.ok || !data.result) {
+    throw new Error(data.error ?? `Cancel delivery failed (${response.status})`);
+  }
+  return data.result;
+}
+
 export async function setShopOrderStatus(
   subId: string,
   nextStatus: 'preparing' | 'completed',
