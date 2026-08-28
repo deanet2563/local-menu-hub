@@ -2,14 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 // Legacy Web Rider compatibility view.
-// Delivery state changes are intentionally read-only here. Canonical Rider V3
-// operational actions live in Rider Native and authoritative Worker/DB flows.
+// Delivery state changes and customer delivery PII are intentionally unavailable
+// here. Canonical Rider V3 operations live in Rider Native + authoritative Worker/DB flows.
 
 type Job = {
   sub_id: string;
   shop_id: string;
   delivery_status: "rider_called" | "picked_up" | "delivered" | "failed" | string;
-  delivery_address: string | null;
   delivery_photo_url: string | null;
   amount: number;
   created_at: string;
@@ -21,14 +20,13 @@ type Job = {
     lng: number | null;
   } | null;
   order_items: { item_name_snapshot: string; qty: number }[];
-  hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
 };
 
 type Tab = "active" | "history";
 
 const POLL_MS = 15_000;
 
-function mapHref(input: { lat?: number | null; lng?: number | null; address?: string | null }) {
+function shopMapHref(input: { lat?: number | null; lng?: number | null; address?: string | null }) {
   if (input.lat != null && input.lng != null) {
     return `https://www.google.com/maps/search/?api=1&query=${input.lat},${input.lng}`;
   }
@@ -55,7 +53,7 @@ export function MyDeliveries() {
 
   const load = useCallback(async () => {
     const select =
-      "sub_id,shop_id,delivery_status,delivery_address,delivery_photo_url,amount,created_at,shops(name,phone,address,lat,lng),order_items(item_name_snapshot,qty),hub_orders(customers(name,phone))";
+      "sub_id,shop_id,delivery_status,delivery_photo_url,amount,created_at,shops(name,phone,address,lat,lng),order_items(item_name_snapshot,qty)";
 
     const [{ data: active, error: activeError }, { data: history, error: historyError }] = await Promise.all([
       supabase
@@ -97,7 +95,7 @@ export function MyDeliveries() {
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
         <p className="font-semibold">Rider Delivery V3 ใช้งานผ่าน Rider App</p>
         <p>
-          หน้านี้เก็บไว้สำหรับดูสถานะและประวัติเท่านั้น การรับงาน, Pickup และ Delivered + Proof ต้องทำผ่าน Rider Native เพื่อให้ backend/RLS ตรวจสิทธิ์และลำดับงานอย่างถูกต้อง
+          หน้านี้เก็บไว้สำหรับดูสถานะและประวัติแบบจำกัดข้อมูลเท่านั้น การรับงาน, Pickup, ข้อมูลจุดส่งลูกค้า และ Delivered + Proof ต้องทำผ่าน Rider Native
         </p>
       </div>
 
@@ -128,10 +126,7 @@ export function MyDeliveries() {
       )}
 
       {jobs.map((job) => {
-        const customer = job.hub_orders?.customers;
-        const shopMap = mapHref({ lat: job.shops?.lat, lng: job.shops?.lng, address: job.shops?.address });
-        const customerMap = mapHref({ address: job.delivery_address });
-        const pickedUp = job.delivery_status === "picked_up";
+        const shopMap = shopMapHref({ lat: job.shops?.lat, lng: job.shops?.lng, address: job.shops?.address });
 
         return (
           <div key={job.sub_id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -166,25 +161,11 @@ export function MyDeliveries() {
               </div>
             </div>
 
-            {pickedUp ? (
-              <div className="rounded-lg bg-blue-50/60 p-3 space-y-1.5">
-                <p className="text-xs font-medium text-blue-700">จุดส่ง</p>
-                <p className="text-sm text-gray-700">👤 {customer?.name || "ลูกค้า"}</p>
-                {job.delivery_address && <p className="text-sm text-gray-700">📍 {job.delivery_address}</p>}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {customer?.phone && (
-                    <a href={`tel:${customer.phone}`} className="rounded-lg bg-white border border-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">📞 โทรหาลูกค้า</a>
-                  )}
-                  {customerMap && (
-                    <a href={customerMap} target="_blank" rel="noreferrer" className="rounded-lg bg-white border border-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">🗺️ นำทางไปจุดส่ง</a>
-                  )}
-                </div>
+            {(job.delivery_status === "rider_called" || job.delivery_status === "picked_up") && (
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                ข้อมูลลูกค้าและจุดส่งไม่ถูกโหลดใน Web Rider กรุณาใช้ Rider App สำหรับงานปัจจุบัน
               </div>
-            ) : job.delivery_status === "rider_called" ? (
-              <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
-                ข้อมูลลูกค้าจะแสดงหลัง backend ยืนยัน Pickup เพื่อลดการเปิดเผยข้อมูลก่อนจำเป็น
-              </div>
-            ) : null}
+            )}
 
             <div>
               <p className="text-xs font-medium text-gray-500">สินค้า</p>
