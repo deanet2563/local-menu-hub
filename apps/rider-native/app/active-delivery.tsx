@@ -171,20 +171,31 @@ export default function ActiveDeliveryScreen() {
         </View>
 
         {job.delivery_status === 'rider_called' && (
-          <Pressable
-            accessibilityRole="button"
-            disabled={!pickupEnabled}
-            style={[styles.primaryButton, !pickupEnabled && styles.disabled]}
-            onPress={pickedUp}
-          >
-            <Text style={styles.primaryButtonText}>
-              {updating
-                ? 'กำลังยืนยันกับระบบ...'
-                : riderFeatures.deliveryV3Accept
-                  ? 'รับสินค้าแล้ว — เริ่มนำส่ง'
-                  : 'Pickup รอ Delivery V3 production gate'}
-            </Text>
-          </Pressable>
+          <>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!pickupEnabled}
+              style={[styles.primaryButton, !pickupEnabled && styles.disabled]}
+              onPress={pickedUp}
+            >
+              <Text style={styles.primaryButtonText}>
+                {updating
+                  ? 'กำลังยืนยันกับระบบ...'
+                  : riderFeatures.deliveryV3Accept
+                    ? 'รับสินค้าแล้ว — เริ่มนำส่ง'
+                    : 'Pickup รอ Delivery V3 production gate'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={!riderFeatures.deliveryV3Accept || updating}
+              style={[styles.cancelJobButton, (!riderFeatures.deliveryV3Accept || updating) && styles.disabled]}
+              onPress={() => router.push({ pathname: '/cancel-delivery', params: { subId: job.sub_id } })}
+            >
+              <Text style={styles.cancelJobButtonText}>ปล่อยงานนี้ก่อนรับสินค้า</Text>
+            </Pressable>
+          </>
         )}
 
         {pickedUpState && (
@@ -232,6 +243,8 @@ const styles = StyleSheet.create({
   navButtonText: { fontWeight: '800', color: '#FFFFFF' },
   primaryButton: { alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#F79009' },
   primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  cancelJobButton: { alignItems: 'center', paddingVertical: 13, borderRadius: 14, backgroundColor: '#FFF1F0', borderWidth: 1, borderColor: '#FDA29B' },
+  cancelJobButtonText: { fontSize: 14, fontWeight: '800', color: '#B42318' },
   disabled: { opacity: 0.5 },
   privacyCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#FFFAEB', borderWidth: 1, borderColor: '#FEDF89' },
   privacyTitle: { fontSize: 14, fontWeight: '800', color: '#93370D' },
