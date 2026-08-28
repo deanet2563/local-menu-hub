@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { loadShopOrderById } from '../../src/data/shopOrders';
-import { acceptShopOrder, setShopOrderStatus } from '../../src/data/shopOrderActions';
-import { loadInterestedRiders, requestNearbyRiders, selectInterestedRider, type RiderCandidate } from '../../src/data/riderDispatch';
+import { acceptShopOrder, cancelShopDeliveryV3, setShopOrderStatus } from '../../src/data/shopOrderActions';
 import type { ShopOrder } from '../../src/domain/orders';
+
+const DELIVERY_V3_ENABLED = process.env.EXPO_PUBLIC_ENABLE_RIDER_DELIVERY_V3 === 'true';
 
 function formatRequestedFor(value: string): string {
   return new Date(value).toLocaleString('th-TH', {
@@ -14,6 +15,20 @@ function formatRequestedFor(value: string): string {
   });
 }
 
+function cancellationErrorMessage(value: string): string {
+  if (value === 'unauthorized_shop_session' || value === 'shop_actor_not_authenticated') {
+    return 'Shop session หมดอายุหรือถูกออกจากระบบ กรุณาเข้าสู่ระบบใหม่';
+  }
+  if (value === 'shop_actor_not_authorized') return 'บัญชีนี้ไม่มีสิทธิ์ยกเลิกออเดอร์ของร้านนี้';
+  if (value === 'cancellation_reason_required') return 'กรุณาระบุเหตุผลการยกเลิก';
+  if (value === 'cancellation_reason_too_long') return 'เหตุผลการยกเลิกยาวเกินไป';
+  if (value === 'cancellation_not_allowed_after_pickup') return 'ยกเลิกไม่ได้หลัง Rider รับสินค้าแล้ว';
+  if (value === 'completed_order_cannot_be_cancelled') return 'ออเดอร์ที่เสร็จแล้วไม่สามารถยกเลิกได้';
+  if (value === 'cancellation_transition_conflict') return 'สถานะออเดอร์เปลี่ยนไปแล้ว กรุณาโหลดใหม่';
+  if (value === 'delivery_not_found') return 'ไม่พบงานจัดส่งนี้';
+  return value;
+}
+
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<ShopOrder | null>(null);
@@ -21,9 +36,7 @@ export default function OrderDetailScreen() {
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [riderCandidates, setRiderCandidates] = useState<RiderCandidate[]>([]);
-  const [riderBusy, setRiderBusy] = useState(false);
-  const [riderMessage, setRiderMessage] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -55,54 +68,29 @@ export default function OrderDetailScreen() {
     }
   }, [acting, load]);
 
-  const findRiders = useCallback(async () => {
-    if (!order || riderBusy) return;
-    setRiderBusy(true);
-    setError(null);
-    setRiderMessage(null);
-    try {
-      const result = await requestNearbyRiders(order.sub_id);
-      setRiderMessage(
-        result.candidates > 0
-          ? `ส่งงานให้ Rider ใกล้ร้าน ${result.candidates} คนแล้ว · รัศมี ${result.usedRadiusKm} กม.`
-          : `ยังไม่พบ Rider ที่พร้อมรับงานภายใน ${result.usedRadiusKm} กม.`,
-      );
-      setRiderCandidates(await loadInterestedRiders(order.sub_id));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'ค้นหา Rider ไม่สำเร็จ');
-    } finally {
-      setRiderBusy(false);
+  const cancelDelivery = useCallback(async () => {
+    if (!order || acting) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setError('กรุณาระบุเหตุผลการยกเลิก');
+      return;
     }
-  }, [order, riderBusy]);
 
-  const refreshCandidates = useCallback(async () => {
-    if (!order || riderBusy) return;
-    setRiderBusy(true);
+    setActing(true);
     setError(null);
+    setActionMessage(null);
     try {
-      setRiderCandidates(await loadInterestedRiders(order.sub_id));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'โหลด Rider ที่สนใจไม่สำเร็จ');
-    } finally {
-      setRiderBusy(false);
-    }
-  }, [order, riderBusy]);
-
-  const chooseRider = useCallback(async (candidate: RiderCandidate) => {
-    if (!order || riderBusy) return;
-    setRiderBusy(true);
-    setError(null);
-    try {
-      await selectInterestedRider(order.sub_id, candidate.riderId);
-      setRiderMessage(`เลือก ${candidate.name} เป็น Rider สำหรับงานนี้แล้ว`);
-      setRiderCandidates([]);
+      const result = await cancelShopDeliveryV3(order.sub_id, reason);
+      setCancelReason('');
+      setActionMessage(result === 'already_cancelled' ? 'ออเดอร์นี้ถูกยกเลิกแล้ว' : 'ยกเลิกออเดอร์และปิดงาน Rider แล้ว');
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'เลือก Rider ไม่สำเร็จ');
+      const text = cause instanceof Error ? cause.message : String(cause);
+      setError(cancellationErrorMessage(text));
     } finally {
-      setRiderBusy(false);
+      setActing(false);
     }
-  }, [load, order, riderBusy]);
+  }, [acting, cancelReason, load, order]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
   if (error && !order) return <View style={styles.centerPad}><Text style={styles.error}>{error}</Text></View>;
@@ -111,7 +99,16 @@ export default function OrderDetailScreen() {
   const canAccept = order.order_status === 'pending';
   const canPrepare = order.order_status === 'confirmed';
   const canComplete = order.order_status === 'preparing';
-  const needsRider = order.fulfillment_type === 'delivery' && order.delivery_status === 'needs_rider' && !order.assigned_rider_id;
+  const isDelivery = order.fulfillment_type === 'delivery';
+  const waitingForRider = isDelivery && order.delivery_status === 'needs_rider' && !order.assigned_rider_id;
+  const riderAssigned = isDelivery && order.delivery_status === 'rider_called' && !!order.assigned_rider_id;
+  const canCancelDelivery = DELIVERY_V3_ENABLED
+    && isDelivery
+    && order.order_status !== 'cancelled'
+    && order.order_status !== 'completed'
+    && order.picked_up_at == null
+    && order.delivered_at == null
+    && ['needs_rider', 'rider_called', 'failed'].includes(order.delivery_status);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -119,14 +116,14 @@ export default function OrderDetailScreen() {
         <Text style={styles.eyebrow}>ORDER #{order.sub_id.slice(0, 6).toUpperCase()}</Text>
         <Text style={styles.title}>{order.hub_orders?.customers?.name || 'ลูกค้า MyTree'}</Text>
         <Text style={styles.body}>{order.hub_orders?.customers?.phone || 'ไม่มีเบอร์โทร'}</Text>
-        <Text style={styles.body}>{order.fulfillment_type === 'delivery' ? 'จัดส่ง' : 'รับเอง'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
+        <Text style={styles.body}>{isDelivery ? 'จัดส่ง' : 'รับเอง'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
       </View>
 
       {order.requested_for ? (
         <View style={styles.preorderCard}>
           <Text style={styles.preorderLabel}>🗓️ สั่งล่วงหน้า</Text>
           <Text style={styles.preorderTime}>
-            {order.fulfillment_type === 'delivery' ? 'ส่งวันที่' : 'รับวันที่'} {formatRequestedFor(order.requested_for)}
+            {isDelivery ? 'ส่งวันที่' : 'รับวันที่'} {formatRequestedFor(order.requested_for)}
           </Text>
           <Text style={styles.preorderHint}>กรุณาเตรียมออเดอร์ให้พร้อมตามวันและเวลานี้</Text>
         </View>
@@ -166,50 +163,26 @@ export default function OrderDetailScreen() {
         <Text style={styles.body}>ออเดอร์: {order.order_status}</Text>
         <Text style={styles.body}>ชำระเงิน: {order.payment_status}</Text>
         <Text style={styles.body}>จัดส่ง: {order.delivery_status}</Text>
-        {order.assigned_rider_id ? <Text style={styles.success}>✓ เลือก Rider แล้ว</Text> : null}
+        {riderAssigned ? <Text style={styles.success}>✓ Rider ชนะ First Accept และระบบล็อกงานแล้ว</Text> : null}
+        {order.order_status === 'cancelled' && order.cancelled_reason ? (
+          <Text style={styles.cancelledText}>เหตุผลยกเลิก: {order.cancelled_reason}</Text>
+        ) : null}
       </View>
 
-      {needsRider ? (
+      {isDelivery ? (
         <View style={styles.riderCard}>
-          <Text style={styles.sectionTitle}>🛵 หา Rider ส่งอาหาร</Text>
-          <Text style={styles.actionHint}>ระบบส่งงานให้ Rider ใกล้ร้านก่อน Rider กดสนใจ แล้วร้านเป็นผู้เลือกคนสุดท้ายเอง</Text>
-          <Pressable
-            disabled={riderBusy}
-            onPress={() => void findRiders()}
-            style={({ pressed }) => [styles.primaryButton, riderBusy && styles.disabled, pressed && styles.pressed]}
-          >
-            {riderBusy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>ค้นหา Rider ใกล้ร้าน</Text>}
-          </Pressable>
-          <Pressable
-            disabled={riderBusy}
-            onPress={() => void refreshCandidates()}
-            style={({ pressed }) => [styles.secondaryButton, riderBusy && styles.disabled, pressed && styles.pressed]}
-          >
-            <Text style={styles.secondaryText}>รีเฟรชรายชื่อ Rider ที่สนใจ</Text>
-          </Pressable>
-          {riderMessage ? <Text style={styles.success}>{riderMessage}</Text> : null}
-
-          {riderCandidates.map((candidate) => (
-            <View key={candidate.riderId} style={styles.candidateCard}>
-              <View style={styles.row}>
-                <View style={styles.candidateInfo}>
-                  <Text style={styles.candidateName}>{candidate.name}</Text>
-                  <Text style={styles.candidateMeta}>
-                    {candidate.distanceKm == null ? 'ไม่ทราบระยะทาง' : `${candidate.distanceKm.toFixed(1)} กม.`}
-                    {candidate.vehicleType ? ` · ${candidate.vehicleType}` : ''}
-                  </Text>
-                </View>
-                <Pressable
-                  disabled={riderBusy}
-                  onPress={() => void chooseRider(candidate)}
-                  style={({ pressed }) => [styles.chooseButton, riderBusy && styles.disabled, pressed && styles.pressed]}
-                >
-                  <Text style={styles.chooseText}>เลือก</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
-          {!riderBusy && riderCandidates.length === 0 ? <Text style={styles.actionHint}>ยังไม่มี Rider กดสนใจงานนี้</Text> : null}
+          <Text style={styles.sectionTitle}>🛵 Rider Delivery V3</Text>
+          {DELIVERY_V3_ENABLED ? (
+            <Text style={styles.actionHint}>
+              {waitingForRider
+                ? 'งานเปิดให้ Rider ที่พร้อมและอยู่ในระยะกดรับ คนแรกที่ backend ยืนยันสำเร็จจะได้งานทันที ร้านไม่ต้องเลือกรายชื่อ Rider'
+                : riderAssigned
+                  ? 'ระบบล็อก Rider ผู้ชนะแล้ว ร้านจะเห็นสถานะเปลี่ยนตาม Pickup และ Delivery'
+                  : 'สถานะงาน Rider แสดงจาก backend โดยตรง'}
+            </Text>
+          ) : (
+            <Text style={styles.gateText}>Delivery V3 ยังไม่เปิดใน production build นี้</Text>
+          )}
         </View>
       ) : null}
 
@@ -248,6 +221,32 @@ export default function OrderDetailScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {canCancelDelivery ? (
+        <View style={styles.cancelCard}>
+          <Text style={styles.cancelTitle}>ยกเลิกงานก่อน Rider รับสินค้า</Text>
+          <Text style={styles.actionHint}>
+            ต้องระบุเหตุผล ระบบจะยกเลิกออเดอร์ ปิดงาน Rider และแจ้ง Rider ที่ถูก assign หากมี โดยไม่เปลี่ยนสถานะการชำระเงินอัตโนมัติ
+          </Text>
+          <TextInput
+            accessibilityLabel="เหตุผลการยกเลิก"
+            editable={!acting}
+            maxLength={500}
+            multiline
+            onChangeText={setCancelReason}
+            placeholder="ระบุเหตุผล เช่น สินค้าหมด / ร้านไม่สามารถจัดส่งได้"
+            style={styles.cancelInput}
+            value={cancelReason}
+          />
+          <Pressable
+            disabled={acting || !cancelReason.trim()}
+            onPress={() => void cancelDelivery()}
+            style={({ pressed }) => [styles.cancelButton, (acting || !cancelReason.trim()) && styles.disabled, pressed && styles.pressed]}
+          >
+            {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.cancelButtonText}>ยืนยันยกเลิกออเดอร์</Text>}
+          </Pressable>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -263,6 +262,7 @@ const styles = StyleSheet.create({
   preorderHint: { marginTop: 6, fontSize: 12, lineHeight: 18, color: '#91643A' },
   actionCard: { borderRadius: 20, backgroundColor: '#F0F7F2', padding: 18, borderWidth: 1, borderColor: '#D8E8DC' },
   riderCard: { borderRadius: 20, backgroundColor: '#F5F7FF', padding: 18, borderWidth: 1, borderColor: '#DDE4F7' },
+  cancelCard: { borderRadius: 20, backgroundColor: '#FFF4F2', padding: 18, borderWidth: 1, borderColor: '#F5C2BC' },
   eyebrow: { fontSize: 12, letterSpacing: 1.2, fontWeight: '800', color: '#52705B' },
   title: { marginTop: 8, fontSize: 24, fontWeight: '800', color: '#173C2C' },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: '#173C2C' },
@@ -271,18 +271,16 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#E4ECE6', marginVertical: 14 },
   total: { fontSize: 20, fontWeight: '800', color: '#173C2C' },
   actionHint: { marginTop: 8, color: '#647168', fontSize: 13, lineHeight: 18 },
+  gateText: { marginTop: 8, color: '#8A5A00', fontSize: 13, lineHeight: 18, fontWeight: '700' },
   primaryButton: { marginTop: 14, minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1F6B45', paddingHorizontal: 16 },
   primaryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  secondaryButton: { marginTop: 9, minHeight: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#C7D5CB', paddingHorizontal: 16 },
-  secondaryText: { color: '#315443', fontWeight: '700', fontSize: 14 },
-  candidateCard: { marginTop: 10, padding: 12, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E1E6F2' },
-  candidateInfo: { flex: 1 },
-  candidateName: { fontWeight: '800', fontSize: 15, color: '#173C2C' },
-  candidateMeta: { marginTop: 4, color: '#647168', fontSize: 12 },
-  chooseButton: { borderRadius: 12, backgroundColor: '#3157B8', paddingHorizontal: 16, paddingVertical: 10 },
-  chooseText: { color: '#FFFFFF', fontWeight: '800' },
   success: { marginTop: 10, color: '#1F6B45', fontWeight: '700' },
+  cancelledText: { marginTop: 10, color: '#A13A36', fontWeight: '700' },
   error: { marginTop: 10, color: '#A13A36' },
+  cancelTitle: { fontSize: 17, fontWeight: '800', color: '#8F2D28' },
+  cancelInput: { marginTop: 12, minHeight: 88, borderRadius: 14, borderWidth: 1, borderColor: '#E1A7A1', backgroundColor: '#FFFFFF', padding: 12, textAlignVertical: 'top', color: '#352321' },
+  cancelButton: { marginTop: 12, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#B42318', paddingHorizontal: 16 },
+  cancelButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.75 },
 });
