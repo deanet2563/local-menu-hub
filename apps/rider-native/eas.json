@@ -16,7 +16,9 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ecrxrwfrwuoenjoyhfzw.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_Qvsg8XpfUurNKewoDab9Ww_D9xvweP0",
-        "EXPO_PUBLIC_MYTREE_WORKER_URL": "https://mytree-worker.kompakorn-t.workers.dev"
+        "EXPO_PUBLIC_MYTREE_WORKER_URL": "https://mytree-worker.kompakorn-t.workers.dev",
+        "EXPO_PUBLIC_ENABLE_RIDER_DELIVERY_V3": "true",
+        "EXPO_PUBLIC_ENABLE_RIDER_PUSH_REGISTRY": "true"
       }
     },
     "production": {
