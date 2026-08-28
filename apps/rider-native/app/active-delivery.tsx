@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
@@ -41,18 +41,27 @@ export default function ActiveDeliveryScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      const saved = await loadRiderSession();
-      if (!saved || !isSessionFresh(saved)) {
-        setLoading(false);
-        setMessage('ต้องเข้าสู่ระบบ Rider ก่อนดูงานปัจจุบัน');
-        return;
-      }
-      setSession(saved);
-      await load(saved);
-    })();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        const saved = await loadRiderSession();
+        if (cancelled) return;
+        if (!saved || !isSessionFresh(saved)) {
+          setSession(null);
+          setJob(null);
+          setLoading(false);
+          setMessage('ต้องเข้าสู่ระบบ Rider ก่อนดูงานปัจจุบัน');
+          return;
+        }
+        setSession(saved);
+        await load(saved);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [load]),
+  );
 
   async function pickedUp() {
     if (!session || !job || updating || job.delivery_status !== 'rider_called' || !riderFeatures.deliveryV3Accept) return;
