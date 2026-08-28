@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { riderFeatures } from '@/config/features';
 import {
   getActiveAssignedDelivery,
   markDeliveryPickedUp,
@@ -54,14 +55,23 @@ export default function ActiveDeliveryScreen() {
   }, [load]);
 
   async function pickedUp() {
-    if (!session || !job || updating || job.delivery_status !== 'rider_called') return;
+    if (!session || !job || updating || job.delivery_status !== 'rider_called' || !riderFeatures.deliveryV3Accept) return;
     setUpdating(true);
     setMessage(null);
     try {
       await markDeliveryPickedUp(session, job.sub_id);
       await load(session);
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
+      const text = cause instanceof Error ? cause.message : String(cause);
+      if (text === 'unauthorized_rider_session') {
+        setMessage('Rider session หมดอายุหรือถูกออกจากระบบ กรุณาเข้าสู่ระบบใหม่');
+      } else if (text === 'delivery_not_assigned_to_rider') {
+        setMessage('งานนี้ไม่ได้ assign ให้ Rider session ปัจจุบัน กรุณาโหลดงานใหม่');
+      } else if (text === 'pickup_transition_not_allowed') {
+        setMessage('สถานะงานเปลี่ยนไปแล้ว กรุณาโหลดงานใหม่ก่อนดำเนินการต่อ');
+      } else {
+        setMessage(text);
+      }
     } finally {
       setUpdating(false);
     }
@@ -98,6 +108,7 @@ export default function ActiveDeliveryScreen() {
   const customerMap = mapsUrl({ address: job.delivery_address });
   const customer = job.hub_orders?.customers;
   const pickedUpState = job.delivery_status === 'picked_up';
+  const pickupEnabled = riderFeatures.deliveryV3Accept && !updating;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -162,11 +173,17 @@ export default function ActiveDeliveryScreen() {
         {job.delivery_status === 'rider_called' && (
           <Pressable
             accessibilityRole="button"
-            disabled={updating}
-            style={[styles.primaryButton, updating && styles.disabled]}
+            disabled={!pickupEnabled}
+            style={[styles.primaryButton, !pickupEnabled && styles.disabled]}
             onPress={pickedUp}
           >
-            <Text style={styles.primaryButtonText}>{updating ? 'กำลังอัปเดต...' : 'รับสินค้าแล้ว — เริ่มนำส่ง'}</Text>
+            <Text style={styles.primaryButtonText}>
+              {updating
+                ? 'กำลังยืนยันกับระบบ...'
+                : riderFeatures.deliveryV3Accept
+                  ? 'รับสินค้าแล้ว — เริ่มนำส่ง'
+                  : 'Pickup รอ Delivery V3 production gate'}
+            </Text>
           </Pressable>
         )}
 
