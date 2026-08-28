@@ -110,12 +110,14 @@ export default function OrderDetailScreen() {
   const waitingForRider = isDelivery && order.delivery_status === 'needs_rider' && !order.assigned_rider_id;
   const riderAssigned = isDelivery && order.delivery_status === 'rider_called' && !!order.assigned_rider_id;
   const beforePickup = order.picked_up_at == null && order.delivered_at == null;
-  const orderOpen = order.order_status !== 'cancelled' && order.order_status !== 'completed';
-  const canReoffer = DELIVERY_V3_ENABLED && riderAssigned && beforePickup && orderOpen;
+  const deliveryOrderActive = order.order_status !== 'cancelled';
+  const canRequestRider = DELIVERY_V3_ENABLED && waitingForRider && beforePickup && deliveryOrderActive;
+  const canReoffer = DELIVERY_V3_ENABLED && riderAssigned && beforePickup && deliveryOrderActive;
   const canCancelDelivery = DELIVERY_V3_ENABLED
     && isDelivery
     && beforePickup
-    && orderOpen
+    && order.order_status !== 'cancelled'
+    && order.order_status !== 'completed'
     && ['needs_rider', 'rider_called', 'failed'].includes(order.delivery_status);
 
   return (
@@ -164,7 +166,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>🛵 Rider Delivery V3</Text>
           {!DELIVERY_V3_ENABLED ? (
             <Text style={styles.gateText}>Delivery V3 ยังไม่เปิดใน production build นี้</Text>
-          ) : waitingForRider ? (
+          ) : canRequestRider ? (
             <>
               <Text style={styles.actionHint}>กดส่งคำขอเพื่อแจ้ง Rider ใกล้ร้าน Rider คนแรกที่ backend ยืนยัน First Accept สำเร็จจะได้งาน ร้านไม่ต้องเลือกรายชื่อ Rider</Text>
               <Pressable
