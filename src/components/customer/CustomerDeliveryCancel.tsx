@@ -13,6 +13,14 @@ type CancelRow = {
   sub_id?: string;
 };
 
+function errorMessage(cause: unknown): string {
+  if (cause instanceof Error) return cause.message;
+  if (cause && typeof cause === "object" && "message" in cause && typeof cause.message === "string") {
+    return cause.message;
+  }
+  return "ยกเลิกออเดอร์ไม่สำเร็จ";
+}
+
 export function CustomerDeliveryCancel({ subId, onCancelled }: Props) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +55,7 @@ export function CustomerDeliveryCancel({ subId, onCancelled }: Props) {
       setMessage(row.result === "already_cancelled" ? "ออเดอร์นี้ถูกยกเลิกแล้ว" : "ยกเลิกออเดอร์แล้ว");
       await onCancelled();
     } catch (cause) {
-      const text = cause instanceof Error ? cause.message : "ยกเลิกออเดอร์ไม่สำเร็จ";
+      const text = errorMessage(cause);
       if (text.includes("cancellation_not_allowed_after_pickup")) {
         setError("ยกเลิกไม่ได้ เพราะ Rider รับสินค้าไปแล้ว");
       } else if (text.includes("cancellation_reason_required")) {
