@@ -21,6 +21,9 @@ export type ShopOrder = {
   delivery_address: string | null;
   amount: number;
   assigned_rider_id: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+  cancelled_reason: string | null;
   created_at: string;
   requested_for: string | null;
   delivery_fee: number;
