@@ -26,6 +26,21 @@ export type RiderV3PickupResult = {
   assignedRiderId?: string | null;
 };
 
+export type RiderCancelReasonCode =
+  | 'vehicle_problem'
+  | 'accepted_by_mistake'
+  | 'cannot_reach_shop'
+  | 'emergency'
+  | 'job_location_issue'
+  | 'other';
+
+export type RiderV3CancelResult = {
+  ok: boolean;
+  result: 'released';
+  subId: string;
+  shopId: string;
+};
+
 const SELECT = [
   'sub_id',
   'shop_id',
@@ -98,4 +113,28 @@ export async function markDeliveryPickedUp(
   }
 
   return payload as RiderV3PickupResult;
+}
+
+export async function cancelAssignedDeliveryV3(
+  session: RiderSession,
+  subId: string,
+  reasonCode: RiderCancelReasonCode,
+  note?: string,
+): Promise<RiderV3CancelResult> {
+  const response = await fetch(`${workerUrl()}/rider/delivery/cancel`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ subId, reasonCode, note: note?.trim() || undefined }),
+  });
+
+  const payload = await response.json().catch(() => null) as RiderV3CancelResult | { error?: string } | null;
+  if (!response.ok) {
+    const error = payload && 'error' in payload ? payload.error : undefined;
+    throw new Error(error || `Rider V3 cancellation failed: ${response.status}`);
+  }
+
+  return payload as RiderV3CancelResult;
 }
