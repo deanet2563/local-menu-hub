@@ -19,6 +19,13 @@ export type AssignedDelivery = {
   hub_orders: { customers: { name: string | null; phone: string | null } | null } | null;
 };
 
+export type RiderV3PickupResult = {
+  ok: boolean;
+  result: 'picked_up' | 'already_picked_up';
+  subId: string;
+  assignedRiderId?: string | null;
+};
+
 const SELECT = [
   'sub_id',
   'shop_id',
@@ -37,6 +44,12 @@ function config() {
   const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) throw new Error('Missing Supabase public configuration');
   return { url: url.replace(/\/$/, ''), anonKey };
+}
+
+function workerUrl() {
+  const url = process.env.EXPO_PUBLIC_MYTREE_WORKER_URL;
+  if (!url) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
+  return url.replace(/\/$/, '');
 }
 
 function headers(session: RiderSession) {
@@ -65,12 +78,24 @@ export async function getActiveAssignedDelivery(session: RiderSession): Promise<
   return rows[0] ?? null;
 }
 
-export async function markDeliveryPickedUp(session: RiderSession, subId: string) {
-  const { url } = config();
-  const response = await fetch(`${url}/rest/v1/sub_orders?sub_id=eq.${encodeURIComponent(subId)}`, {
-    method: 'PATCH',
-    headers: { ...headers(session), Prefer: 'return=minimal' },
-    body: JSON.stringify({ delivery_status: 'picked_up' }),
+export async function markDeliveryPickedUp(
+  session: RiderSession,
+  subId: string,
+): Promise<RiderV3PickupResult> {
+  const response = await fetch(`${workerUrl()}/rider/delivery/pickup`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ subId }),
   });
-  if (!response.ok) throw new Error(`pickup transition failed: ${response.status}`);
+
+  const payload = await response.json().catch(() => null) as RiderV3PickupResult | { error?: string } | null;
+  if (!response.ok) {
+    const error = payload && 'error' in payload ? payload.error : undefined;
+    throw new Error(error || `Rider V3 pickup failed: ${response.status}`);
+  }
+
+  return payload as RiderV3PickupResult;
 }
