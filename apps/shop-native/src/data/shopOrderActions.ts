@@ -1,30 +1,76 @@
 import { getAccessToken } from '../lib/tokenStore';
 import { supabase } from '../lib/supabase';
 
+export type ShopCancelReasonCode = 'customer_requested' | 'order_cancelled' | 'shop_operational_issue' | 'other';
+export type RiderReofferReasonCode = 'rider_not_arriving' | 'rider_too_slow' | 'cannot_contact_rider' | 'shop_operational_issue' | 'other';
+
 function workerUrl() {
   return (process.env.EXPO_PUBLIC_MYTREE_WORKER_URL ?? '').replace(/\/$/, '');
 }
 
-export async function acceptShopOrder(subId: string): Promise<void> {
+async function shopAccessToken() {
   const token = await getAccessToken();
-  if (!token) throw new Error('Shop session expired. Please sign in again.');
+  if (!token) throw new Error('unauthorized_shop_session');
+  return token;
+}
 
+async function postWorker<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const token = await shopAccessToken();
   const baseUrl = workerUrl();
   if (!baseUrl) throw new Error('Missing EXPO_PUBLIC_MYTREE_WORKER_URL');
 
-  const response = await fetch(`${baseUrl}/shop/order/accept`, {
+  const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ subId }),
+    body: JSON.stringify(body),
   });
-
-  const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  const data = (await response.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `Accept order failed (${response.status})`);
+    throw new Error(data.error ?? `MyTree Worker request failed (${response.status})`);
   }
+  return data;
+}
+
+export async function acceptShopOrder(subId: string): Promise<void> {
+  await postWorker<{ ok: boolean }>('/shop/order/accept', { subId });
+}
+
+export async function requestShopDeliveryV3(subId: string): Promise<{
+  result: 'offer_requested' | 'recently_requested';
+  candidates?: number;
+  usedRadiusKm?: number;
+  pushed?: boolean;
+}> {
+  return postWorker('/shop/delivery/request', { subId });
+}
+
+export async function reofferShopDeliveryV3(
+  subId: string,
+  reasonCode: RiderReofferReasonCode,
+  note?: string,
+): Promise<{
+  result: 'released' | 'already_released';
+  offerResult?: 'offer_requested' | 'recently_requested';
+  candidates?: number;
+  usedRadiusKm?: number;
+  pushed?: boolean;
+}> {
+  return postWorker('/shop/delivery/reoffer', { subId, reasonCode, note: note?.trim() || undefined });
+}
+
+export async function cancelShopDeliveryV3(
+  subId: string,
+  reasonCode: ShopCancelReasonCode,
+  note?: string,
+): Promise<'cancelled' | 'already_cancelled'> {
+  const data = await postWorker<{
+    ok: boolean;
+    result: 'cancelled' | 'already_cancelled';
+  }>('/shop/delivery/cancel', { subId, reasonCode, note: note?.trim() || undefined });
+  return data.result;
 }
 
 export async function setShopOrderStatus(
