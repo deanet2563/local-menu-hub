@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
+import { CustomerDeliveryCancel, CUSTOMER_RIDER_V3_ENABLED } from "@/components/customer/CustomerDeliveryCancel";
 
 type StoredItem = {
   item_name?: string;
@@ -182,6 +183,12 @@ export function OrderHistory() {
           o.payment_method === "qr_transfer" &&
           o.payment_status !== "paid" &&
           Boolean(o.shops?.qr_code_url);
+        const canCancelDelivery =
+          CUSTOMER_RIDER_V3_ENABLED &&
+          o.fulfillment_type === "delivery" &&
+          o.order_status !== "cancelled" &&
+          o.order_status !== "completed" &&
+          (o.delivery_status === "needs_rider" || o.delivery_status === "rider_called");
 
         return (
           <div key={o.sub_id} className="rounded-xl border border-gray-200 p-3 space-y-2">
@@ -261,6 +268,10 @@ export function OrderHistory() {
                   </div>
                 )}
               </div>
+            )}
+
+            {canCancelDelivery && (
+              <CustomerDeliveryCancel subId={o.sub_id} onCancelled={load} />
             )}
 
             {o.payment_method === "qr_transfer" ? (
