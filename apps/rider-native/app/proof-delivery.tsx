@@ -3,7 +3,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { refreshRiderSession } from '@/auth/broker';
+import {
+  isRefreshSessionFresh,
+  isSessionFresh,
+  loadRiderSession,
+  type RiderSession,
+} from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { completeDeliveryV3, uploadPrivateDeliveryProof } from '@/data/deliveryProofRepository';
 
@@ -22,6 +28,16 @@ function friendlyError(value: string): string {
   return value;
 }
 
+async function ensureFreshRiderSession(current?: RiderSession | null): Promise<RiderSession> {
+  const saved = current ?? await loadRiderSession();
+  if (!saved) throw new Error('unauthorized_rider_session');
+  if (isSessionFresh(saved)) return saved;
+  if (saved.refreshToken && isRefreshSessionFresh(saved)) {
+    return refreshRiderSession(saved.refreshToken);
+  }
+  throw new Error('unauthorized_rider_session');
+}
+
 export default function ProofDeliveryScreen() {
   const router = useRouter();
   const { subId } = useLocalSearchParams<{ subId: string }>();
@@ -33,17 +49,20 @@ export default function ProofDeliveryScreen() {
 
   useEffect(() => {
     void (async () => {
-      const saved = await loadRiderSession();
-      if (!saved || !isSessionFresh(saved)) {
-        setMessage('ต้องเข้าสู่ระบบ Rider ก่อนส่ง Proof of Delivery');
+      if (!riderFeatures.deliveryV3Accept) {
+        setMessage('Delivery V3 ยังไม่เปิดใช้งานใน production build นี้');
         return;
       }
-      setSession(saved);
+      try {
+        setSession(await ensureFreshRiderSession());
+      } catch {
+        setMessage('ต้องเข้าสู่ระบบ Rider ก่อนส่ง Proof of Delivery');
+      }
     })();
   }, []);
 
   async function captureProof() {
-    if (submitting) return;
+    if (submitting || !riderFeatures.deliveryV3Accept) return;
     setMessage(null);
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -65,21 +84,24 @@ export default function ProofDeliveryScreen() {
   }
 
   async function submitProof() {
-    if (!session || !subId || !photo || submitting || !riderFeatures.deliveryV3Accept) return;
+    if (!subId || !photo || submitting || !riderFeatures.deliveryV3Accept) return;
     setSubmitting(true);
     setMessage(null);
     try {
-      const proofPath = uploadedProofPath ?? await uploadPrivateDeliveryProof(session, {
+      const activeSession = await ensureFreshRiderSession(session);
+      if (activeSession !== session) setSession(activeSession);
+
+      const proofPath = uploadedProofPath ?? await uploadPrivateDeliveryProof(activeSession, {
         subId,
         uri: photo.uri,
         mimeType: photo.mimeType,
       });
       setUploadedProofPath(proofPath);
-      const result = await completeDeliveryV3(session, subId, proofPath);
+      const result = await completeDeliveryV3(activeSession, subId, proofPath);
       if (result.result !== 'delivered' && result.result !== 'already_delivered') {
         throw new Error('unexpected_delivery_completion_result');
       }
-      router.replace('/active-delivery');
+      router.back();
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
       setMessage(friendlyError(text));
@@ -88,7 +110,8 @@ export default function ProofDeliveryScreen() {
     }
   }
 
-  const enabled = Boolean(session && subId && photo && riderFeatures.deliveryV3Accept && !submitting);
+  const routeEnabled = riderFeatures.deliveryV3Accept;
+  const enabled = Boolean(routeEnabled && session && subId && photo && !submitting);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -110,7 +133,7 @@ export default function ProofDeliveryScreen() {
           )}
         </View>
 
-        <Pressable accessibilityRole="button" disabled={submitting} style={[styles.cameraButton, submitting && styles.disabled]} onPress={() => void captureProof()}>
+        <Pressable accessibilityRole="button" disabled={submitting || !routeEnabled} style={[styles.cameraButton, (submitting || !routeEnabled) && styles.disabled]} onPress={() => void captureProof()}>
           <Text style={styles.cameraButtonText}>{photo ? 'ถ่ายใหม่' : 'เปิดกล้องถ่ายรูป'}</Text>
         </Pressable>
 
@@ -129,7 +152,7 @@ export default function ProofDeliveryScreen() {
         >
           {submitting ? <ActivityIndicator color="#FFFFFF" /> : (
             <Text style={styles.completeButtonText}>
-              {riderFeatures.deliveryV3Accept ? 'ส่งรูป + ยืนยันส่งสำเร็จ' : 'Proof รอ Delivery V3 production gate'}
+              {routeEnabled ? 'ส่งรูป + ยืนยันส่งสำเร็จ' : 'Proof รอ Delivery V3 production gate'}
             </Text>
           )}
         </Pressable>
