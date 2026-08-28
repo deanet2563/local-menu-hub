@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { exchangeLineIdToken, refreshRiderSession, revokeRiderSession } from '@/auth/broker';
 import { nativeLineLogin } from '@/auth/lineNative';
@@ -12,7 +12,8 @@ import {
   type RiderSession,
 } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
-import { getRiderProfile, setRiderOnline, type RiderProfile } from '@/data/riderRepository';
+import { registerPushDevice } from '@/data/pushDeviceRepository';
+import { getRiderProfile, setRiderOnline, updateRiderLocation, type RiderProfile } from '@/data/riderRepository';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
 
@@ -69,6 +70,64 @@ export default function RiderHomeScreen() {
     }
   }
 
+  async function syncOnlineDeviceState(activeSession: RiderSession, profile: RiderProfile) {
+    if (!profile.is_online) return;
+
+    setPushState('checking');
+    setLocationState('checking');
+    setPushText('กำลังซิงก์ Push อัตโนมัติ...');
+    setLocationText('กำลังอัปเดตตำแหน่งอัตโนมัติ...');
+
+    const [pushResult, locationResult] = await Promise.allSettled([
+      ensurePushReadiness(),
+      ensureForegroundLocation(),
+    ]);
+
+    if (pushResult.status === 'fulfilled' && pushResult.value.ready && pushResult.value.token) {
+      if (riderFeatures.pushDeviceRegistry) {
+        try {
+          await registerPushDevice(activeSession, profile.id, pushResult.value.token);
+          setPushState('ready');
+          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
+        } catch (cause) {
+          setPushState('blocked');
+          setPushText('Push พร้อม แต่ลงทะเบียนอุปกรณ์ไม่สำเร็จ');
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      } else {
+        setPushState('ready');
+        setPushText('พร้อมรับ Native Push');
+      }
+    } else if (pushResult.status === 'fulfilled') {
+      setPushState('blocked');
+      setPushText(pushResult.value.reason ?? 'Push ยังไม่พร้อม');
+    } else {
+      setPushState('blocked');
+      setPushText('ตรวจสอบ Push ไม่สำเร็จ');
+    }
+
+    if (locationResult.status === 'fulfilled' && locationResult.value.ready && locationResult.value.location) {
+      const freshLocation = locationResult.value.location;
+      setLocation(freshLocation);
+      try {
+        await updateRiderLocation(activeSession, profile.id, freshLocation);
+        setLocationState('ready');
+        setLocationText('อัปเดตตำแหน่งกับระบบแล้ว');
+      } catch (cause) {
+        setLocationState('blocked');
+        setLocationText('ได้ตำแหน่งแล้ว แต่ซิงก์กับระบบไม่สำเร็จ');
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    } else if (locationResult.status === 'fulfilled') {
+      setLocationState('blocked');
+      setLocation(null);
+      setLocationText(locationResult.value.reason ?? 'ตำแหน่งยังไม่พร้อม');
+    } else {
+      setLocationState('blocked');
+      setLocationText('ตรวจสอบตำแหน่งไม่สำเร็จ');
+    }
+  }
+
   async function restoreAccount() {
     setAccountState('checking');
     setAccountText('กำลังตรวจ MyTree session...');
@@ -112,6 +171,7 @@ export default function RiderHomeScreen() {
       const profile = await getRiderProfile(activeSession);
       setSession(activeSession);
       applyProfile(profile);
+      if (profile?.is_online) await syncOnlineDeviceState(activeSession, profile);
     } catch (cause) {
       setAccountState('blocked');
       setAccountText('อ่านบัญชี Rider ไม่สำเร็จ');
@@ -120,6 +180,14 @@ export default function RiderHomeScreen() {
   }
 
   useEffect(() => { void restoreAccount(); }, []);
+
+  useEffect(() => {
+    if (!session || !rider?.is_online) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') void syncOnlineDeviceState(session, rider);
+    });
+    return () => subscription.remove();
+  }, [session, rider?.id, rider?.is_online]);
 
   async function signInWithLine() {
     if (signingIn) return;
@@ -134,6 +202,7 @@ export default function RiderHomeScreen() {
       const profile = await getRiderProfile(newSession);
       setSession(newSession);
       applyProfile(profile);
+      if (profile?.is_online) await syncOnlineDeviceState(newSession, profile);
     } catch (cause) {
       setSession(null);
       setRider(null);
@@ -231,7 +300,7 @@ export default function RiderHomeScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
           <Text style={styles.title}>พร้อมรับงาน</Text>
-          <Text style={styles.subtitle}>Rider ต้องมีบัญชีที่อนุมัติแล้ว พร้อม Native Push และตำแหน่งล่าสุดก่อนเปิด Online</Text>
+          <Text style={styles.subtitle}>เมื่อ Rider Online แอปจะซิงก์ Native Push และตำแหน่งล่าสุดอัตโนมัติเมื่อเปิดหรือกลับเข้าแอป</Text>
         </View>
 
         <View style={styles.card}>
