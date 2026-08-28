@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
+import { refreshRiderSession } from '@/auth/broker';
+import {
+  isRefreshSessionFresh,
+  isSessionFresh,
+  loadRiderSession,
+  type RiderSession,
+} from '@/auth/session';
+import { riderFeatures } from '@/config/features';
 import {
   cancelAssignedDeliveryV3,
   type RiderCancelReasonCode,
@@ -39,16 +46,41 @@ export default function CancelDeliveryScreen() {
 
   useEffect(() => {
     void (async () => {
+      if (!riderFeatures.deliveryV3Accept) {
+        setMessage('Delivery V3 ยังไม่เปิดใช้งานใน production build นี้');
+        return;
+      }
+
       const saved = await loadRiderSession();
-      if (!saved || !isSessionFresh(saved)) {
+      if (!saved) {
         setMessage('ต้องเข้าสู่ระบบ Rider ก่อนยกเลิกงาน');
         return;
       }
-      setSession(saved);
+
+      let activeSession = saved;
+      if (!isSessionFresh(activeSession)) {
+        if (activeSession.refreshToken && isRefreshSessionFresh(activeSession)) {
+          try {
+            activeSession = await refreshRiderSession(activeSession.refreshToken);
+          } catch {
+            setMessage('Rider session ต่ออายุไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
+            return;
+          }
+        } else {
+          setMessage('Rider session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+          return;
+        }
+      }
+
+      setSession(activeSession);
     })();
   }, []);
 
   async function submit() {
+    if (!riderFeatures.deliveryV3Accept) {
+      setMessage('Delivery V3 ยังไม่เปิดใช้งานใน production build นี้');
+      return;
+    }
     if (!session || !subId || busy) return;
     if (reasonCode === 'other' && !note.trim()) {
       setMessage('กรุณาระบุรายละเอียดเมื่อเลือก “อื่น ๆ”');
@@ -59,7 +91,7 @@ export default function CancelDeliveryScreen() {
     setMessage(null);
     try {
       await cancelAssignedDeliveryV3(session, subId, reasonCode, note);
-      router.replace('/active-delivery');
+      router.back();
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
       setMessage(friendlyError(text));
@@ -67,6 +99,8 @@ export default function CancelDeliveryScreen() {
       setBusy(false);
     }
   }
+
+  const routeEnabled = riderFeatures.deliveryV3Accept;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -90,16 +124,16 @@ export default function CancelDeliveryScreen() {
             {REASONS.map((reason) => (
               <Pressable
                 key={reason.code}
-                disabled={busy}
+                disabled={busy || !routeEnabled}
                 onPress={() => setReasonCode(reason.code)}
-                style={[styles.reasonChip, reasonCode === reason.code && styles.reasonChipSelected, busy && styles.disabled]}
+                style={[styles.reasonChip, reasonCode === reason.code && styles.reasonChipSelected, (busy || !routeEnabled) && styles.disabled]}
               >
                 <Text style={[styles.reasonText, reasonCode === reason.code && styles.reasonTextSelected]}>{reason.label}</Text>
               </Pressable>
             ))}
           </View>
           <TextInput
-            editable={!busy}
+            editable={!busy && routeEnabled}
             maxLength={500}
             multiline
             onChangeText={setNote}
@@ -111,9 +145,9 @@ export default function CancelDeliveryScreen() {
 
         <Pressable
           accessibilityRole="button"
-          disabled={!session || busy || (reasonCode === 'other' && !note.trim())}
+          disabled={!routeEnabled || !session || busy || (reasonCode === 'other' && !note.trim())}
           onPress={() => void submit()}
-          style={[styles.cancelButton, (!session || busy || (reasonCode === 'other' && !note.trim())) && styles.disabled]}
+          style={[styles.cancelButton, (!routeEnabled || !session || busy || (reasonCode === 'other' && !note.trim())) && styles.disabled]}
         >
           {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.cancelButtonText}>ยืนยันปล่อยงานนี้</Text>}
         </Pressable>
