@@ -124,13 +124,14 @@ export default function OrderDetailScreen() {
     && ['needs_rider', 'rider_called', 'failed'].includes(order.delivery_status);
 
   async function requestRider() {
-    if (acting) return;
+    if (acting || !order) return;
+    const subId = order.sub_id;
     setActing(true);
     setError(null);
     setActionMessage(null);
     setRiderRequestMessage(null);
     try {
-      const result = await requestShopDeliveryV3(order.sub_id);
+      const result = await requestShopDeliveryV3(subId);
       if (result.result === 'recently_requested') {
         setRiderRequestMessage('เพิ่งส่งคำขอไปแล้ว · ระบบป้องกันการแจ้งซ้ำชั่วคราว');
       } else {
