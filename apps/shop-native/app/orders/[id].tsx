@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadShopOrderById } from '../../src/data/shopOrders';
 import {
   acceptShopOrder,
@@ -54,11 +55,13 @@ function friendlyError(value: string): string {
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [riderRequestMessage, setRiderRequestMessage] = useState<string | null>(null);
   const [reofferReason, setReofferReason] = useState<RiderReofferReasonCode>('rider_not_arriving');
   const [reofferNote, setReofferNote] = useState('');
   const [cancelReason, setCancelReason] = useState<ShopCancelReasonCode>('customer_requested');
@@ -120,8 +123,39 @@ export default function OrderDetailScreen() {
     && order.order_status !== 'completed'
     && ['needs_rider', 'rider_called', 'failed'].includes(order.delivery_status);
 
+  async function requestRider() {
+    if (acting) return;
+    setActing(true);
+    setError(null);
+    setActionMessage(null);
+    setRiderRequestMessage(null);
+    try {
+      const result = await requestShopDeliveryV3(order.sub_id);
+      if (result.result === 'recently_requested') {
+        setRiderRequestMessage('เพิ่งส่งคำขอไปแล้ว · ระบบป้องกันการแจ้งซ้ำชั่วคราว');
+      } else {
+        const radius = result.usedRadiusKm ? ` · รัศมี ${result.usedRadiusKm} กม.` : '';
+        const push = result.pushed === true
+          ? ' · Push: ส่งแล้ว'
+          : result.pushed === false
+            ? ' · Push: ยังไม่ส่ง'
+            : ' · Push: ไม่ทราบสถานะ';
+        setRiderRequestMessage(`ส่งคำขอแล้ว · พบ Rider พร้อมรับ ${result.candidates ?? 0} คน${radius}${push}`);
+      }
+      await load(true);
+    } catch (cause) {
+      const text = cause instanceof Error ? cause.message : String(cause);
+      const friendly = friendlyError(text);
+      setRiderRequestMessage(`ส่งคำขอหา Rider ไม่สำเร็จ · ${friendly}`);
+      setError(friendly);
+      await load(true);
+    } finally {
+      setActing(false);
+    }
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 32 }]}>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>ORDER #{order.sub_id.slice(0, 6).toUpperCase()}</Text>
         <Text style={styles.title}>{order.hub_orders?.customers?.name || 'ลูกค้า MyTree'}</Text>
@@ -171,21 +205,20 @@ export default function OrderDetailScreen() {
               <Text style={styles.actionHint}>กดส่งคำขอเพื่อแจ้ง Rider ใกล้ร้าน Rider คนแรกที่ backend ยืนยัน First Accept สำเร็จจะได้งาน ร้านไม่ต้องเลือกรายชื่อ Rider</Text>
               <Pressable
                 disabled={acting}
-                onPress={() => void runAction(async () => {
-                  const result = await requestShopDeliveryV3(order.sub_id);
-                  setActionMessage(result.result === 'recently_requested'
-                    ? 'เพิ่งส่งคำขอไปแล้ว ระบบป้องกันการแจ้งซ้ำชั่วคราว'
-                    : `ส่งคำขอแล้ว · พบ Rider พร้อมรับ ${result.candidates ?? 0} คน${result.usedRadiusKm ? ` · รัศมี ${result.usedRadiusKm} กม.` : ''}`);
-                }, 'ส่งคำขอหา Rider แล้ว')}
+                onPress={() => void requestRider()}
                 style={({ pressed }) => [styles.primaryButton, acting && styles.disabled, pressed && styles.pressed]}
               >
                 {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>ส่งคำขอหา Rider ใกล้ร้าน</Text>}
               </Pressable>
+              {riderRequestMessage ? <Text style={styles.riderResultBanner}>{riderRequestMessage}</Text> : null}
             </>
           ) : riderAssigned ? (
             <Text style={styles.actionHint}>ระบบล็อก Rider ผู้ชนะแล้ว ร้านจะเห็น Pickup/Delivery จาก backend อัตโนมัติ หากต้องเปลี่ยน Rider ก่อนรับสินค้าให้ใช้ “ปล่อย Rider และหาใหม่” ด้านล่าง</Text>
           ) : (
-            <Text style={styles.actionHint}>สถานะ Rider แสดงจาก backend โดยตรง</Text>
+            <>
+              <Text style={styles.actionHint}>สถานะ Rider แสดงจาก backend โดยตรง</Text>
+              {riderRequestMessage ? <Text style={styles.riderResultBanner}>{riderRequestMessage}</Text> : null}
+            </>
           )}
         </View>
       ) : null}
@@ -332,6 +365,7 @@ const styles = StyleSheet.create({
   cancelButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   success: { marginTop: 10, color: '#1F6B45', fontWeight: '700' },
   successBanner: { borderRadius: 12, padding: 12, backgroundColor: '#ECFDF3', color: '#16794C', fontWeight: '700' },
+  riderResultBanner: { marginTop: 12, borderRadius: 12, padding: 12, backgroundColor: '#EAF2FF', color: '#163E72', fontWeight: '700', lineHeight: 20 },
   cancelledText: { marginTop: 8, color: '#A13A36', fontSize: 13, lineHeight: 19 },
   error: { marginTop: 10, color: '#A13A36' },
   reasonWrap: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
