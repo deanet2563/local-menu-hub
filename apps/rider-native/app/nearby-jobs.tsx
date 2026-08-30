@@ -9,6 +9,16 @@ import { getRiderProfile } from '@/data/riderRepository';
 
 const RADII = [1, 2, 3, 5] as const;
 
+function requestTime(job: NearbyDeliveryJob) {
+  const raw = job.offer_requested_at ?? job.confirmed_at;
+  return raw ? new Date(raw).getTime() : 0;
+}
+
+function feeText(job: NearbyDeliveryJob) {
+  if (job.delivery_fee == null) return 'รอพิกัดปลายทาง';
+  return `฿${Number(job.delivery_fee).toFixed(2)}`;
+}
+
 export default function NearbyJobsScreen() {
   const router = useRouter();
   const [session, setSession] = useState<RiderSession | null>(null);
@@ -24,7 +34,7 @@ export default function NearbyJobsScreen() {
     setMessage(null);
     try {
       const rows = await listNearbyDeliveryJobs(activeSession, requestedRadius);
-      setJobs(rows);
+      setJobs([...rows].sort((a, b) => requestTime(b) - requestTime(a)));
       if (!rows.length) setMessage(`ยังไม่มีงานในระยะ ${requestedRadius} กม.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
@@ -74,7 +84,7 @@ export default function NearbyJobsScreen() {
           <Text style={styles.eyebrow}>DELIVERY V3 · FIRST ACCEPT</Text>
           <Text style={styles.title}>งานใกล้ฉัน</Text>
           <Text style={styles.subtitle}>
-            เลือกดูงานที่เปิดรับ Rider แล้วกดรับจากหน้ารายละเอียด คนแรกที่ backend ยืนยันสำเร็จจะได้งานทันที
+            งานที่ร้านเรียกล่าสุดจะแสดงก่อน ดูระยะทางถึงร้าน ปลายทาง และค่าขนส่งก่อนตัดสินใจรับงาน
           </Text>
         </View>
 
@@ -97,9 +107,33 @@ export default function NearbyJobsScreen() {
 
         {jobs.map((job) => (
           <View key={job.sub_id} style={styles.jobCard}>
-            <Text style={styles.shopName}>{job.shop_name}</Text>
-            <Text style={styles.shopAddress}>{job.shop_address ?? 'ร้านยังไม่ได้ระบุที่อยู่'}</Text>
-            <Text style={styles.distance}>ห่างจากคุณประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
+            <View style={styles.cardTopRow}>
+              <View style={styles.cardTitleWrap}>
+                <Text style={styles.shopName}>{job.shop_name}</Text>
+                <Text style={styles.shopAddress}>{job.shop_address ?? 'ร้านยังไม่ได้ระบุที่อยู่'}</Text>
+              </View>
+              <View style={styles.feeBadge}>
+                <Text style={styles.feeLabel}>ค่าขนส่ง</Text>
+                <Text style={styles.feeValue}>{feeText(job)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.metricRow}>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>คุณ → ร้าน</Text>
+                <Text style={styles.metricValue}>{Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>ร้าน → ลูกค้า</Text>
+                <Text style={styles.metricValue}>
+                  {job.shop_to_customer_km == null ? 'ยังไม่มีพิกัด' : `${Number(job.shop_to_customer_km).toFixed(2)} กม.`}
+                </Text>
+              </View>
+            </View>
+
+            {job.delivery_address && (
+              <Text style={styles.destination} numberOfLines={2}>ปลายทาง: {job.delivery_address}</Text>
+            )}
 
             <Pressable
               accessibilityRole="button"
@@ -117,7 +151,7 @@ export default function NearbyJobsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { padding: 20, gap: 14 },
+  container: { padding: 20, paddingBottom: 42, gap: 14 },
   header: { gap: 6, marginBottom: 4 },
   eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1.1, color: '#246B50' },
   title: { fontSize: 28, fontWeight: '800', color: '#112235' },
@@ -127,10 +161,19 @@ const styles = StyleSheet.create({
   secondaryButton: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#EEF4FF' },
   secondaryButtonText: { color: '#163E72', fontWeight: '700' },
   message: { fontSize: 13, lineHeight: 19, color: '#667085' },
-  jobCard: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
+  jobCard: { gap: 12, padding: 16, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
+  cardTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  cardTitleWrap: { flex: 1, gap: 5 },
   shopName: { fontSize: 18, fontWeight: '800', color: '#1D2939' },
   shopAddress: { fontSize: 13, lineHeight: 19, color: '#667085' },
-  distance: { fontSize: 14, fontWeight: '700', color: '#067647' },
+  feeBadge: { minWidth: 92, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, backgroundColor: '#ECFDF3', alignItems: 'flex-end' },
+  feeLabel: { fontSize: 10, fontWeight: '700', color: '#027A48' },
+  feeValue: { marginTop: 2, fontSize: 17, fontWeight: '900', color: '#027A48' },
+  metricRow: { flexDirection: 'row', gap: 10 },
+  metricBox: { flex: 1, padding: 11, borderRadius: 12, backgroundColor: '#F8FAFC' },
+  metricLabel: { fontSize: 11, color: '#667085' },
+  metricValue: { marginTop: 3, fontSize: 14, fontWeight: '800', color: '#344054' },
+  destination: { fontSize: 13, lineHeight: 19, color: '#475467' },
   detailButton: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F2F4F7' },
-  detailButtonText: { fontWeight: '700', color: '#344054' },
+  detailButtonText: { fontWeight: '800', color: '#344054' },
 });
