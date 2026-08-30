@@ -12,6 +12,10 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'MyTree Rider' }} />
+        <Stack.Screen name="active-delivery" options={{ title: 'งานปัจจุบัน' }} />
+        <Stack.Screen name="nearby-jobs" options={{ title: 'งานใกล้ฉัน' }} />
+        <Stack.Screen name="cancel-delivery" options={{ title: 'ปล่อยงาน' }} />
+        <Stack.Screen name="proof-delivery" options={{ title: 'ยืนยันการส่ง' }} />
       </Stack>
     </>
   );
