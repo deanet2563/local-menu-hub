@@ -50,7 +50,7 @@ export default function ActiveDeliveryScreen() {
     try {
       const active = await getActiveAssignedDelivery(saved);
       setJob(active);
-      setMessage(active ? null : 'ยังไม่มีงาน Delivery V3 ที่ backend assign ให้คุณ');
+      setMessage(active ? null : 'ยังไม่มีงานปัจจุบัน');
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -140,10 +140,7 @@ export default function ActiveDeliveryScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingBottom: Math.max(insets.bottom + 28, 44) },
-        ]}
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom + 28, 44) }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
@@ -155,7 +152,6 @@ export default function ActiveDeliveryScreen() {
           </View>
           <Text style={styles.title}>{status.label}</Text>
           <Text style={styles.subtitle}>{status.caption}</Text>
-
           <View style={styles.progressRow}>
             {STEPS.map((label, index) => {
               const active = index <= status.step;
@@ -206,9 +202,7 @@ export default function ActiveDeliveryScreen() {
         ) : (
           <View style={styles.privacyCard}>
             <Text style={styles.privacyTitle}>ข้อมูลลูกค้าจะแสดงหลังรับสินค้า</Text>
-            <Text style={styles.privacyText}>
-              เพื่อความเป็นส่วนตัว ระบบจะแสดงจุดส่งและข้อมูลติดต่อของลูกค้าเมื่อคุณยืนยันรับสินค้าแล้ว
-            </Text>
+            <Text style={styles.privacyText}>เพื่อความเป็นส่วนตัว ระบบจะแสดงจุดส่งและข้อมูลติดต่อของลูกค้าเมื่อคุณยืนยันรับสินค้าแล้ว</Text>
           </View>
         )}
 
@@ -236,14 +230,9 @@ export default function ActiveDeliveryScreen() {
               onPress={pickedUp}
             >
               <Text style={styles.primaryButtonText}>
-                {updating
-                  ? 'กำลังยืนยันกับระบบ...'
-                  : riderFeatures.deliveryV3Accept
-                    ? 'รับสินค้าแล้ว · เริ่มนำส่ง'
-                    : 'Pickup รอ Delivery V3 production gate'}
+                {updating ? 'กำลังยืนยันกับระบบ...' : riderFeatures.deliveryV3Accept ? 'รับสินค้าแล้ว · เริ่มนำส่ง' : 'Pickup รอ Delivery V3 production gate'}
               </Text>
             </Pressable>
-
             <Pressable
               accessibilityRole="button"
               disabled={!riderFeatures.deliveryV3Accept || updating}
@@ -269,9 +258,7 @@ export default function ActiveDeliveryScreen() {
               style={[styles.proofButton, !riderFeatures.deliveryV3Accept && styles.disabled]}
               onPress={() => router.push({ pathname: '/proof-delivery', params: { subId: job.sub_id } })}
             >
-              <Text style={styles.proofButtonText}>
-                {riderFeatures.deliveryV3Accept ? 'ถ่ายรูปยืนยันการส่ง' : 'Proof รอ Delivery V3 production gate'}
-              </Text>
+              <Text style={styles.proofButtonText}>{riderFeatures.deliveryV3Accept ? 'ถ่ายรูปยืนยันการส่ง' : 'Proof รอ Delivery V3 production gate'}</Text>
             </Pressable>
           </View>
         )}
@@ -312,7 +299,7 @@ const styles = StyleSheet.create({
   card: { gap: 8, padding: 17, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
   deliveryCard: { gap: 8, padding: 17, borderRadius: 18, backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#B2DDFF' },
   sectionLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, color: '#667085' },
-  primaryText: { fontSize: 19, fontWeight: '850', color: '#1D2939' },
+  primaryText: { fontSize: 19, fontWeight: '800', color: '#1D2939' },
   secondaryText: { fontSize: 14, lineHeight: 20, color: '#475467' },
   amountRow: { marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   amountLabel: { fontSize: 14, fontWeight: '700', color: '#667085' },
