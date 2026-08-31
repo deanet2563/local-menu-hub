@@ -1,6 +1,7 @@
 import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
+import type { DeliveryLocationSource } from "@/lib/deliveryLocation";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
@@ -32,6 +33,9 @@ export type OrderPayload = {
   address: string | null;
   destinationLat: number | null;
   destinationLng: number | null;
+  locationSource?: DeliveryLocationSource | null;
+  locationAccuracyM?: number | null;
+  submittedMapUrl?: string | null;
   note: string | null;
   requestedFor?: string | null;
 };
@@ -56,7 +60,7 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
   const hasLat = typeof order.destinationLat === "number" && Number.isFinite(order.destinationLat);
   const hasLng = typeof order.destinationLng === "number" && Number.isFinite(order.destinationLng);
   if (!hasLat || !hasLng) {
-    return "กรุณากดใช้ตำแหน่งจุดส่งก่อนยืนยันออเดอร์ เพื่อให้ระบบบันทึกพิกัดสำหรับ Rider";
+    return "กรุณายืนยันจุดส่งก่อนสั่ง โดยวาง Google Maps link / latitude, longitude หรือใช้ตำแหน่งปัจจุบัน";
   }
   if (order.destinationLat! < -90 || order.destinationLat! > 90) return "ตำแหน่งละติจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
   if (order.destinationLng! < -180 || order.destinationLng! > 180) return "ตำแหน่งลองจิจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
