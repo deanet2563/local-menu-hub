@@ -1,3 +1,6 @@
+import liff from "@line/liff";
+import { initLiff, isOrderingPreview } from "@/lib/supabase";
+
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
 const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;
@@ -19,6 +22,7 @@ export type DeliveryRouteQuote = {
   feeRatePerKm: number;
   deliveryFee: number;
   provider: string;
+  quoteToken: string;
 };
 
 type ResolveResponse = {
@@ -35,7 +39,8 @@ type ResolveResponse = {
 
 type QuoteResponse = {
   ok?: boolean;
-  quote?: DeliveryRouteQuote;
+  quote?: Omit<DeliveryRouteQuote, "quoteToken">;
+  quoteToken?: string;
   error?: string;
 };
 
@@ -61,16 +66,28 @@ export async function resolveDeliveryLocation(value: string): Promise<ConfirmedD
 }
 
 export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): Promise<DeliveryRouteQuote> {
+  await initLiff();
+  if (!liff.isLoggedIn()) {
+    if (isOrderingPreview()) {
+      throw new Error("โหมดทดสอบต้องเปิดผ่าน LIFF staging ก่อนคำนวณค่าส่งจริง");
+    }
+    liff.login();
+    throw new Error("กำลังเข้าสู่ระบบ LINE...");
+  }
+
+  const idToken = liff.getIDToken();
+  if (!idToken) throw new Error("ไม่พบ LINE idToken สำหรับคำนวณค่าส่ง");
+
   const response = await fetch(DELIVERY_QUOTE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ shopId, destinationLat: point.lat, destinationLng: point.lng }),
+    body: JSON.stringify({ idToken, shopId, destinationLat: point.lat, destinationLng: point.lng }),
   });
   const payload = await response.json().catch(() => null) as QuoteResponse | null;
-  if (!response.ok || !payload?.ok || !payload.quote) {
+  if (!response.ok || !payload?.ok || !payload.quote || !payload.quoteToken) {
     throw new Error(quoteErrorText(payload?.error));
   }
-  return payload.quote;
+  return { ...payload.quote, quoteToken: payload.quoteToken };
 }
 
 export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): string {
@@ -89,6 +106,9 @@ function resolveErrorText(code?: string): string {
 
 function quoteErrorText(code?: string): string {
   switch (code) {
+    case "authentication_required": return "กรุณาเข้าสู่ระบบ LINE ก่อนคำนวณค่าส่ง";
+    case "invalid_line_id_token": return "LINE session หมดอายุ กรุณาเปิด MyTree ผ่าน LINE ใหม่";
+    case "quote_rate_limited": return "มีการคำนวณค่าส่งถี่เกินไป กรุณารอสักครู่แล้วลองใหม่";
     case "shop_location_not_configured": return "ร้านยังไม่ได้บันทึกพิกัด จึงคำนวณค่าส่งไม่ได้";
     case "google_routes_not_configured": return "ระบบเส้นทางยังไม่ได้ตั้งค่า Google Routes API";
     case "google_routes_no_route": return "ไม่พบเส้นทางมอเตอร์ไซค์ระหว่างร้านและจุดส่ง";
