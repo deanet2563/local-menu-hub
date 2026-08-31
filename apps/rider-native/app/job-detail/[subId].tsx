@@ -1,13 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { acceptDeliveryV3, listNearbyDeliveryJobs, type NearbyDeliveryJob } from '@/data/nearbyJobsRepository';
 
+function mapUrl(lat: number | null, lng: number | null, fallback?: string | null) {
+  if (lat != null && lng != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  if (fallback?.trim()) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallback.trim())}`;
+  }
+  return null;
+}
+
 export default function NearbyJobDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { subId } = useLocalSearchParams<{ subId: string }>();
   const [session, setSession] = useState<RiderSession | null>(null);
   const [job, setJob] = useState<NearbyDeliveryJob | null>(null);
@@ -52,10 +64,12 @@ export default function NearbyJobDetailScreen() {
     })();
   }, [subId]);
 
-  function openShopMap() {
-    if (!job) return;
-    const query = `${job.shop_lat},${job.shop_lng}`;
-    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
+  async function openUrl(url: string | null, fallbackMessage: string) {
+    if (!url) {
+      setMessage(fallbackMessage);
+      return;
+    }
+    await Linking.openURL(url);
   }
 
   async function acceptJob() {
@@ -69,7 +83,6 @@ export default function NearbyJobDetailScreen() {
         setMessage('งานนี้มี Rider คนอื่นรับไปแล้ว กรุณาเลือกงานอื่น');
         return;
       }
-
       router.replace('/active-delivery');
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
@@ -87,36 +100,71 @@ export default function NearbyJobDetailScreen() {
     }
   }
 
+  const shopMap = job ? mapUrl(job.shop_lat, job.shop_lng, job.shop_address) : null;
+  const destinationMap = job
+    ? mapUrl(job.delivery_destination_lat, job.delivery_destination_lng, job.delivery_address)
+    : null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom + 28, 44) }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>DELIVERY V3 · FIRST ACCEPT</Text>
           <Text style={styles.title}>{job?.shop_name ?? 'รายละเอียดงาน'}</Text>
-          <Text style={styles.subtitle}>
-            Rider คนแรกที่ backend ยืนยันสำเร็จจะได้งานทันที ระบบล็อก assignment แบบ atomic และร้านจะได้รับแจ้งหลังการล็อกสำเร็จ
-          </Text>
+          <Text style={styles.subtitle}>ตรวจต้นทาง ปลายทาง ระยะทาง และค่าขนส่งก่อนตัดสินใจรับงาน</Text>
         </View>
 
         {loading && <Text style={styles.message}>กำลังโหลดรายละเอียด...</Text>}
 
         {job && (
           <>
+            <View style={styles.priceCard}>
+              <View>
+                <Text style={styles.priceLabel}>ค่าขนส่งโดยประมาณ</Text>
+                <Text style={styles.priceHint}>อัตราปัจจุบัน 10 บาท/กม. · ร้าน → ลูกค้า</Text>
+              </View>
+              <Text style={styles.priceValue}>
+                {job.delivery_fee == null ? '—' : `฿${Number(job.delivery_fee).toFixed(2)}`}
+              </Text>
+            </View>
+
+            <View style={styles.metricsRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>คุณ → ร้าน</Text>
+                <Text style={styles.metricValue}>{Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>ร้าน → ลูกค้า</Text>
+                <Text style={styles.metricValue}>
+                  {job.shop_to_customer_km == null ? '—' : `${Number(job.shop_to_customer_km).toFixed(2)} กม.`}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.card}>
-              <Text style={styles.label}>ร้าน</Text>
+              <Text style={styles.label}>จุดรับสินค้า</Text>
               <Text style={styles.value}>{job.shop_name}</Text>
               <Text style={styles.address}>{job.shop_address ?? 'ยังไม่ได้ระบุที่อยู่ร้าน'}</Text>
-              <Text style={styles.distance}>ระยะถึงร้านประมาณ {Number(job.distance_to_shop_km).toFixed(2)} กม.</Text>
-              <Pressable accessibilityRole="button" style={styles.mapButton} onPress={openShopMap}>
+              <Pressable accessibilityRole="button" style={styles.mapButton} onPress={() => openUrl(shopMap, 'ยังไม่มีพิกัดร้าน')}>
                 <Text style={styles.mapButtonText}>ดูตำแหน่งร้าน</Text>
               </Pressable>
             </View>
 
-            <View style={styles.privacyCard}>
-              <Text style={styles.privacyTitle}>ข้อมูลลูกค้ายังถูกซ่อน</Text>
-              <Text style={styles.privacyText}>
-                ที่อยู่ เบอร์โทร และข้อมูลจุดส่งของลูกค้าจะเปิดให้เฉพาะ Rider ที่ชนะ Atomic First Accept และถูก assignment จาก backend แล้วเท่านั้น
-              </Text>
+            <View style={styles.destinationCard}>
+              <Text style={styles.label}>ปลายทางลูกค้า</Text>
+              <Text style={styles.value}>จุดส่งสินค้า</Text>
+              <Text style={styles.address}>{job.delivery_address ?? 'ยังไม่ได้ระบุที่อยู่ปลายทาง'}</Text>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.destinationButton}
+                onPress={() => openUrl(destinationMap, 'ยังไม่มีพิกัด/ที่อยู่ปลายทาง')}
+              >
+                <Text style={styles.destinationButtonText}>ดูปลายทางบนแผนที่</Text>
+              </Pressable>
+              <Text style={styles.privacyNote}>แสดงเฉพาะข้อมูลปลายทางที่จำเป็นต่อการตัดสินใจรับงาน ชื่อและเบอร์โทรลูกค้ายังซ่อนจนกว่าจะรับงานสำเร็จ</Text>
             </View>
 
             <Pressable
@@ -135,29 +183,37 @@ export default function NearbyJobDetailScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>กลับ</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { flex: 1, padding: 20, gap: 16 },
+  container: { padding: 20, gap: 14 },
   header: { gap: 6 },
   eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1.1, color: '#246B50' },
   title: { fontSize: 28, fontWeight: '800', color: '#112235' },
   subtitle: { fontSize: 14, lineHeight: 20, color: '#667085' },
+  priceCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 16, borderRadius: 18, backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6' },
+  priceLabel: { fontSize: 13, fontWeight: '800', color: '#027A48' },
+  priceHint: { marginTop: 3, fontSize: 11, color: '#039855' },
+  priceValue: { fontSize: 26, fontWeight: '900', color: '#027A48' },
+  metricsRow: { flexDirection: 'row', gap: 10 },
+  metricCard: { flex: 1, padding: 13, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
+  metricLabel: { fontSize: 11, color: '#667085' },
+  metricValue: { marginTop: 4, fontSize: 16, fontWeight: '800', color: '#344054' },
   card: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC' },
+  destinationCard: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#D0D5DD' },
   label: { fontSize: 12, fontWeight: '800', color: '#667085' },
   value: { fontSize: 19, fontWeight: '800', color: '#1D2939' },
   address: { fontSize: 14, lineHeight: 20, color: '#475467' },
-  distance: { fontSize: 14, fontWeight: '800', color: '#067647' },
   mapButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#EEF4FF' },
   mapButtonText: { fontWeight: '700', color: '#163E72' },
-  privacyCard: { gap: 6, padding: 14, borderRadius: 14, backgroundColor: '#FFFAEB', borderWidth: 1, borderColor: '#FEDF89' },
-  privacyTitle: { fontSize: 14, fontWeight: '800', color: '#93370D' },
-  privacyText: { fontSize: 13, lineHeight: 19, color: '#854A0E' },
-  acceptButton: { alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: '#067647' },
+  destinationButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#EAF7EF' },
+  destinationButtonText: { fontWeight: '700', color: '#067647' },
+  privacyNote: { fontSize: 11, lineHeight: 16, color: '#667085' },
+  acceptButton: { alignItems: 'center', paddingVertical: 15, borderRadius: 14, backgroundColor: '#067647' },
   acceptButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   disabledButton: { opacity: 0.6 },
   message: { fontSize: 13, lineHeight: 19, color: '#667085' },

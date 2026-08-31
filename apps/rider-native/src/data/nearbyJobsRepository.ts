@@ -8,6 +8,12 @@ export type NearbyDeliveryJob = {
   shop_lat: number;
   shop_lng: number;
   distance_to_shop_km: number;
+  delivery_address: string | null;
+  delivery_destination_lat: number | null;
+  delivery_destination_lng: number | null;
+  shop_to_customer_km: number | null;
+  delivery_fee: number | null;
+  offer_requested_at: string | null;
   confirmed_at: string | null;
 };
 
@@ -47,7 +53,7 @@ export async function listNearbyDeliveryJobs(
   radiusKm = 1,
 ): Promise<NearbyDeliveryJob[]> {
   const { url } = config();
-  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_nearby_delivery_jobs`, {
+  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_nearby_delivery_jobs_v2`, {
     method: 'POST',
     headers: headers(session),
     body: JSON.stringify({ p_radius_km: radiusKm }),
