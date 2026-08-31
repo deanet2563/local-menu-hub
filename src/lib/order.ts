@@ -36,6 +36,7 @@ export type OrderPayload = {
   locationSource?: DeliveryLocationSource | null;
   locationAccuracyM?: number | null;
   submittedMapUrl?: string | null;
+  deliveryQuoteToken?: string | null;
   note: string | null;
   requestedFor?: string | null;
 };
@@ -64,6 +65,7 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
   }
   if (order.destinationLat! < -90 || order.destinationLat! > 90) return "ตำแหน่งละติจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
   if (order.destinationLng! < -180 || order.destinationLng! > 180) return "ตำแหน่งลองจิจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
+  if (!order.deliveryQuoteToken) return "กรุณาคำนวณระยะทางและค่าส่งใหม่ก่อนยืนยันออเดอร์";
   return null;
 }
 
