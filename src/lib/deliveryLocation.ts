@@ -1,6 +1,8 @@
-const LOCATION_RESOLVE_URL = "https://mytree-worker.kompakorn-t.workers.dev/location/resolve";
+const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
+const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
+const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;
 
-export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng";
+export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng" | "map_pin";
 
 export type ConfirmedDeliveryPoint = {
   lat: number;
@@ -9,6 +11,14 @@ export type ConfirmedDeliveryPoint = {
   source: DeliveryLocationSource;
   submittedValue?: string | null;
   resolvedUrl?: string | null;
+};
+
+export type DeliveryRouteQuote = {
+  distanceMeters: number;
+  durationSeconds: number;
+  feeRatePerKm: number;
+  deliveryFee: number;
+  provider: string;
 };
 
 type ResolveResponse = {
@@ -20,6 +30,12 @@ type ResolveResponse = {
     submittedValue?: string;
     resolvedUrl?: string;
   };
+  error?: string;
+};
+
+type QuoteResponse = {
+  ok?: boolean;
+  quote?: DeliveryRouteQuote;
   error?: string;
 };
 
@@ -44,6 +60,19 @@ export async function resolveDeliveryLocation(value: string): Promise<ConfirmedD
   };
 }
 
+export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): Promise<DeliveryRouteQuote> {
+  const response = await fetch(DELIVERY_QUOTE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shopId, destinationLat: point.lat, destinationLng: point.lng }),
+  });
+  const payload = await response.json().catch(() => null) as QuoteResponse | null;
+  if (!response.ok || !payload?.ok || !payload.quote) {
+    throw new Error(quoteErrorText(payload?.error));
+  }
+  return payload.quote;
+}
+
 export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
 }
@@ -55,5 +84,15 @@ function resolveErrorText(code?: string): string {
     case "google_maps_coordinates_not_found": return "ยังอ่านพิกัดจาก Google Maps link นี้ไม่ได้ กรุณาใช้ลิงก์ Share Location หรือวาง latitude, longitude";
     case "unsupported_location_format": return "รูปแบบจุดส่งไม่ถูกต้อง กรุณาวาง Google Maps link หรือ latitude, longitude";
     default: return "ตรวจจุดส่งไม่สำเร็จ กรุณาลองใหม่";
+  }
+}
+
+function quoteErrorText(code?: string): string {
+  switch (code) {
+    case "shop_location_not_configured": return "ร้านยังไม่ได้บันทึกพิกัด จึงคำนวณค่าส่งไม่ได้";
+    case "google_routes_not_configured": return "ระบบเส้นทางยังไม่ได้ตั้งค่า Google Routes API";
+    case "google_routes_no_route": return "ไม่พบเส้นทางมอเตอร์ไซค์ระหว่างร้านและจุดส่ง";
+    case "google_routes_failed": return "Google Routes คำนวณเส้นทางไม่สำเร็จ กรุณาลองใหม่";
+    default: return "คำนวณระยะทางและค่าส่งไม่สำเร็จ กรุณาลองใหม่";
   }
 }
