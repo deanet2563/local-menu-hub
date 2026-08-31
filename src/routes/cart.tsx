@@ -4,6 +4,13 @@ import { cart, useCart, cartLineTotal, cartTotal } from "@/lib/cart";
 import { publicSupabase, supabase, getCurrentCustomerId } from "@/lib/supabase";
 import { submitOrder } from "@/lib/order";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
+import {
+  googleMapsPreviewUrl,
+  quoteDeliveryRoute,
+  resolveDeliveryLocation,
+  type ConfirmedDeliveryPoint,
+  type DeliveryRouteQuote,
+} from "@/lib/deliveryLocation";
 
 export const Route = createFileRoute("/cart")({ component: CartCheckout });
 
@@ -20,7 +27,6 @@ type ShopCheckout = {
 };
 
 type OrderTiming = "now" | "preorder";
-type DeliveryPoint = { lat: number; lng: number; accuracy: number | null };
 
 function toBangkokInput(iso: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -45,8 +51,12 @@ function CartCheckout() {
   const [timing, setTiming] = useState<OrderTiming>("now");
   const [requestedForLocal, setRequestedForLocal] = useState("");
   const [address, setAddress] = useState("");
-  const [deliveryPoint, setDeliveryPoint] = useState<DeliveryPoint | null>(null);
+  const [deliveryPoint, setDeliveryPoint] = useState<ConfirmedDeliveryPoint | null>(null);
+  const [locationInput, setLocationInput] = useState("");
   const [locating, setLocating] = useState(false);
+  const [resolvingLocation, setResolvingLocation] = useState(false);
+  const [routeQuote, setRouteQuote] = useState<DeliveryRouteQuote | null>(null);
+  const [quotingRoute, setQuotingRoute] = useState(false);
   const [note, setNote] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -138,6 +148,36 @@ function CartCheckout() {
     })();
   }, []);
 
+  async function applyDeliveryPoint(point: ConfirmedDeliveryPoint) {
+    setDeliveryPoint(point);
+    setRouteQuote(null);
+    if (!c.shopId) return;
+    setQuotingRoute(true);
+    setError(null);
+    try {
+      const quote = await quoteDeliveryRoute(c.shopId, point);
+      setRouteQuote(quote);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "คำนวณเส้นทางไม่สำเร็จ");
+    } finally {
+      setQuotingRoute(false);
+    }
+  }
+
+  async function resolveLocationInput() {
+    if (!locationInput.trim()) return setError("วาง Google Maps link หรือ latitude, longitude ก่อน");
+    setResolvingLocation(true);
+    setError(null);
+    try {
+      const point = await resolveDeliveryLocation(locationInput.trim());
+      await applyDeliveryPoint(point);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ตรวจจุดส่งไม่สำเร็จ");
+    } finally {
+      setResolvingLocation(false);
+    }
+  }
+
   function captureDeliveryPoint() {
     if (!("geolocation" in navigator)) {
       setError("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
@@ -148,17 +188,20 @@ function CartCheckout() {
     setError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setDeliveryPoint({
+        const point: ConfirmedDeliveryPoint = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-        });
+          source: "device_gps",
+        };
         setLocating(false);
+        void applyDeliveryPoint(point);
       },
       (geoError) => {
         setLocating(false);
         setDeliveryPoint(null);
-        setError(geoError.code === 1 ? "ไม่ได้อนุญาตตำแหน่ง — ยังสั่งส่งได้โดยกรอกที่อยู่ผู้รับ" : "อ่านตำแหน่งจุดรับสินค้าไม่สำเร็จ — ยังสั่งส่งได้โดยกรอกที่อยู่ผู้รับ");
+        setRouteQuote(null);
+        setError(geoError.code === 1 ? "ไม่ได้อนุญาตตำแหน่ง — ใช้ Google Maps link หรือ latitude, longitude แทนได้" : "อ่านตำแหน่งปัจจุบันไม่สำเร็จ — ใช้ Google Maps link หรือ latitude, longitude แทนได้");
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 },
     );
@@ -168,6 +211,8 @@ function CartCheckout() {
     if (!c.shopId) return;
     if (!customerName.trim() || !customerPhone.trim()) return setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
     if (fulfillment === "delivery" && !address.trim()) return setError("กรอกที่อยู่จัดส่ง");
+    if (fulfillment === "delivery" && !deliveryPoint) return setError("กรุณายืนยันจุดส่งก่อนสั่ง");
+    if (fulfillment === "delivery" && !routeQuote) return setError("กรุณารอให้ระบบคำนวณระยะทางและค่าส่งสำเร็จก่อนสั่ง");
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
     if (fulfillment === "pickup" && shop?.pickup_enabled === false) return setError("ร้านนี้ไม่เปิดบริการรับเอง");
     if (payment === "cash" && shop && !shop.payment_cash_enabled) return setError("ร้านนี้ไม่รับเงินสด");
@@ -203,6 +248,9 @@ function CartCheckout() {
       address: fulfillment === "delivery" ? address.trim() : null,
       destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
       destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
+      locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
+      locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
+      submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
       note: note.trim() || null,
       requestedFor,
     });
@@ -346,40 +394,79 @@ function CartCheckout() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+      <div className="rounded-2xl border border-gray-200 p-3 space-y-3">
         <p className="text-sm font-medium text-gray-700">รับสินค้า</p>
         <div className="flex gap-2">
           {shop?.delivery_enabled !== false && <button onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "delivery" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>ส่งถึงบ้าน</button>}
           {shop?.pickup_enabled !== false && <button onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "pickup" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>รับเอง</button>}
         </div>
         {fulfillment === "delivery" && (
-          <div className="space-y-2">
-            <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ที่อยู่ผู้รับสินค้า (บ้านเลขที่ / ซอย / จุดสังเกต)" value={address} onChange={(e) => setAddress(e.target.value)} />
-            <p className="text-xs text-gray-500">
-              ถ้าสั่งให้คนอื่นหรือส่งไปอีกบ้าน ให้กรอกที่อยู่ผู้รับด้านบนได้เลย ไม่จำเป็นต้องใช้ตำแหน่งปัจจุบันของคุณ
-            </p>
-            <button
-              type="button"
-              onClick={captureDeliveryPoint}
-              disabled={locating}
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium ${deliveryPoint ? "border-green-300 bg-green-50 text-green-700" : "border-blue-200 bg-blue-50 text-blue-700"} disabled:opacity-50`}
-            >
-              {locating ? "กำลังหาตำแหน่ง..." : deliveryPoint ? "📍 จุดรับสินค้าพร้อมแล้ว · กดเพื่ออัปเดตตำแหน่ง" : "📍 ใช้ตำแหน่งปัจจุบันเป็นจุดรับสินค้า"}
-            </button>
-            {!deliveryPoint && (
-              <p className="text-[11px] text-gray-400">
-                ไม่บังคับ · ใช้เมื่อตำแหน่งปัจจุบันของคุณคือบ้าน/จุดที่ต้องการให้ Rider นำสินค้าไปส่ง เพื่อช่วยคำนวณระยะทางได้แม่นขึ้น
-              </p>
-            )}
+          <div className="space-y-3">
+            <input className="w-full rounded-lg border border-gray-200 p-2.5 text-sm" placeholder="ที่อยู่ผู้รับสินค้า (บ้านเลขที่ / ซอย / จุดสังเกต)" value={address} onChange={(e) => setAddress(e.target.value)} />
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">📍 ยืนยันจุดส่งให้ Rider</p>
+                <p className="text-xs text-gray-500 mt-1">วาง Google Maps Share Link หรือ latitude, longitude ของจุดส่งจริง ไม่จำเป็นต้องเป็นตำแหน่งโทรศัพท์ของผู้สั่ง</p>
+              </div>
+              <textarea
+                rows={2}
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                placeholder="https://maps.app.goo.gl/... หรือ 13.77314, 100.67611"
+                className="w-full rounded-lg border border-blue-100 bg-white p-2.5 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => void resolveLocationInput()}
+                disabled={resolvingLocation || !locationInput.trim()}
+                className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {resolvingLocation ? "กำลังตรวจ Google Maps..." : "ตรวจและยืนยันจุดส่ง"}
+              </button>
+              <div className="flex items-center gap-2 text-[11px] text-gray-400"><span className="h-px flex-1 bg-gray-200" /><span>หรือ</span><span className="h-px flex-1 bg-gray-200" /></div>
+              <button
+                type="button"
+                onClick={captureDeliveryPoint}
+                disabled={locating}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+              >
+                {locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบันของโทรศัพท์"}
+              </button>
+            </div>
+
             {deliveryPoint && (
-              <div className="space-y-1">
-                <p className="text-xs text-green-700">
-                  ระบบจะใช้จุดรับสินค้านี้ช่วยคำนวณระยะทางร้าน → ผู้รับและค่าส่งให้ Rider
-                  {deliveryPoint.accuracy != null ? ` · ความแม่นยำประมาณ ${Math.round(deliveryPoint.accuracy)} ม.` : ""}
-                </p>
-                <button type="button" onClick={() => setDeliveryPoint(null)} className="text-xs text-gray-500 underline">
-                  ไม่ใช้ตำแหน่งนี้
-                </button>
+              <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">จุดส่งที่ยืนยันแล้ว ✅</p>
+                    <p className="mt-1 font-mono text-xs text-green-800">{deliveryPoint.lat.toFixed(6)}, {deliveryPoint.lng.toFixed(6)}</p>
+                    <p className="mt-1 text-[11px] text-green-700">แหล่งที่มา: {deliveryPoint.source === "google_maps_url" ? "Google Maps" : deliveryPoint.source === "latlng" ? "Latitude / Longitude" : "GPS โทรศัพท์"}</p>
+                  </div>
+                  <a href={googleMapsPreviewUrl(deliveryPoint)} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-medium text-blue-700 underline">เปิดแผนที่</a>
+                </div>
+
+                {deliveryPoint.source === "device_gps" && deliveryPoint.accuracy != null && deliveryPoint.accuracy > 30 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    GPS เครื่องนี้คลาดเคลื่อนประมาณ {Math.round(deliveryPoint.accuracy)} ม. แนะนำให้วาง Google Maps Share Link หรือ latitude/longitude ของหมุดจริงเพื่อความแม่นยำสูงกว่า
+                  </div>
+                )}
+
+                {quotingRoute && <p className="text-xs text-gray-500">กำลังคำนวณเส้นทางมอเตอร์ไซค์ร้าน → จุดส่ง...</p>}
+                {routeQuote && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-white p-2.5">
+                      <p className="text-[11px] text-gray-500">ระยะทางตามถนน</p>
+                      <p className="text-base font-bold text-gray-800">{(routeQuote.distanceMeters / 1000).toFixed(2)} กม.</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2.5">
+                      <p className="text-[11px] text-gray-500">ค่าขนส่ง · 10 บาท/กม.</p>
+                      <p className="text-base font-bold text-green-700">฿{routeQuote.deliveryFee.toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+                <p className="text-[10px] leading-4 text-gray-400">เส้นทางมอเตอร์ไซค์เป็นข้อมูลประมาณการจากผู้ให้บริการแผนที่ เส้นทางจริงอาจแตกต่างตามสภาพถนนและข้อจำกัดในพื้นที่</p>
+                <button type="button" onClick={() => { setDeliveryPoint(null); setRouteQuote(null); }} className="text-xs text-gray-500 underline">เปลี่ยนจุดส่ง</button>
               </div>
             )}
           </div>
@@ -400,9 +487,9 @@ function CartCheckout() {
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="fixed left-4 right-4 bottom-4">
-        <button onClick={confirm} disabled={submitting || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium disabled:opacity-50">
+        <button onClick={confirm} disabled={submitting || quotingRoute || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium disabled:opacity-50">
           <span>{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
-          <span>฿{cartTotal(c)}</span>
+          <span>{routeQuote && fulfillment === "delivery" ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${routeQuote.deliveryFee.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
         </button>
       </div>
     </div>
