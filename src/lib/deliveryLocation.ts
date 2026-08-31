@@ -1,0 +1,59 @@
+const LOCATION_RESOLVE_URL = "https://mytree-worker.kompakorn-t.workers.dev/location/resolve";
+
+export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng";
+
+export type ConfirmedDeliveryPoint = {
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  source: DeliveryLocationSource;
+  submittedValue?: string | null;
+  resolvedUrl?: string | null;
+};
+
+type ResolveResponse = {
+  ok?: boolean;
+  location?: {
+    lat?: number;
+    lng?: number;
+    source?: "google_maps_url" | "latlng";
+    submittedValue?: string;
+    resolvedUrl?: string;
+  };
+  error?: string;
+};
+
+export async function resolveDeliveryLocation(value: string): Promise<ConfirmedDeliveryPoint> {
+  const response = await fetch(LOCATION_RESOLVE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+  const payload = await response.json().catch(() => null) as ResolveResponse | null;
+  const location = payload?.location;
+  if (!response.ok || !payload?.ok || !location || typeof location.lat !== "number" || typeof location.lng !== "number") {
+    throw new Error(resolveErrorText(payload?.error));
+  }
+  return {
+    lat: location.lat,
+    lng: location.lng,
+    accuracy: null,
+    source: location.source === "latlng" ? "latlng" : "google_maps_url",
+    submittedValue: location.submittedValue ?? value,
+    resolvedUrl: location.resolvedUrl ?? null,
+  };
+}
+
+export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
+}
+
+function resolveErrorText(code?: string): string {
+  switch (code) {
+    case "google_maps_url_required": return "รองรับเฉพาะ Google Maps link หรือ latitude, longitude";
+    case "google_maps_link_unreachable": return "เปิด Google Maps link นี้ไม่ได้ กรุณาตรวจลิงก์แล้วลองใหม่";
+    case "google_maps_coordinates_not_found": return "ยังอ่านพิกัดจาก Google Maps link นี้ไม่ได้ กรุณาใช้ลิงก์ Share Location หรือวาง latitude, longitude";
+    case "unsupported_location_format": return "รูปแบบจุดส่งไม่ถูกต้อง กรุณาวาง Google Maps link หรือ latitude, longitude";
+    default: return "ตรวจจุดส่งไม่สำเร็จ กรุณาลองใหม่";
+  }
+}
