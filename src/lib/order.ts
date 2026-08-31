@@ -1,7 +1,7 @@
 import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
-import type { DeliveryLocationSource } from "@/lib/deliveryLocation";
+import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
@@ -36,6 +36,7 @@ export type OrderPayload = {
   locationSource?: DeliveryLocationSource | null;
   locationAccuracyM?: number | null;
   submittedMapUrl?: string | null;
+  deliveryQuoteToken?: string | null;
   note: string | null;
   requestedFor?: string | null;
 };
@@ -55,6 +56,14 @@ function withSetMetadata(order: OrderPayload): OrderPayload {
   };
 }
 
+function withDeliveryQuoteToken(order: OrderPayload): OrderPayload {
+  if (order.fulfillment !== "delivery" || order.deliveryQuoteToken) return order;
+  return {
+    ...order,
+    deliveryQuoteToken: getDeliveryQuoteToken(order.shopId, order.destinationLat, order.destinationLng),
+  };
+}
+
 function validateDeliveryDestination(order: OrderPayload): string | null {
   if (order.fulfillment !== "delivery") return null;
   const hasLat = typeof order.destinationLat === "number" && Number.isFinite(order.destinationLat);
@@ -64,13 +73,15 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
   }
   if (order.destinationLat! < -90 || order.destinationLat! > 90) return "ตำแหน่งละติจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
   if (order.destinationLng! < -180 || order.destinationLng! > 180) return "ตำแหน่งลองจิจูดไม่ถูกต้อง กรุณาอัปเดตตำแหน่งใหม่";
+  if (!order.deliveryQuoteToken) return "กรุณาคำนวณระยะทางและค่าส่งใหม่ก่อนยืนยันออเดอร์";
   return null;
 }
 
 export async function submitOrder(
   order: OrderPayload
 ): Promise<{ ok: boolean; order_id?: string; error?: string }> {
-  const deliveryDestinationError = validateDeliveryDestination(order);
+  const quotedOrder = withDeliveryQuoteToken(order);
+  const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
   if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
 
   await initLiff();
@@ -90,7 +101,7 @@ export async function submitOrder(
   if (!idToken) return { ok: false, error: "ไม่พบ LINE idToken" };
 
   try {
-    const enrichedOrder = withSetMetadata(order);
+    const enrichedOrder = withSetMetadata(quotedOrder);
     const res = await fetch(ORDER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
