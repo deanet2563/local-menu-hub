@@ -44,6 +44,15 @@ type QuoteResponse = {
   error?: string;
 };
 
+type QuoteBinding = {
+  shopId: string;
+  lat: number;
+  lng: number;
+  token: string;
+};
+
+let latestQuoteBinding: QuoteBinding | null = null;
+
 export async function resolveDeliveryLocation(value: string): Promise<ConfirmedDeliveryPoint> {
   const response = await fetch(LOCATION_RESOLVE_URL, {
     method: "POST",
@@ -85,9 +94,25 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
   });
   const payload = await response.json().catch(() => null) as QuoteResponse | null;
   if (!response.ok || !payload?.ok || !payload.quote || !payload.quoteToken) {
+    latestQuoteBinding = null;
     throw new Error(quoteErrorText(payload?.error));
   }
+
+  latestQuoteBinding = {
+    shopId,
+    lat: point.lat,
+    lng: point.lng,
+    token: payload.quoteToken,
+  };
   return { ...payload.quote, quoteToken: payload.quoteToken };
+}
+
+export function getDeliveryQuoteToken(shopId: string, lat: number | null, lng: number | null): string | null {
+  const binding = latestQuoteBinding;
+  if (!binding || typeof lat !== "number" || typeof lng !== "number") return null;
+  if (binding.shopId !== shopId) return null;
+  if (Math.abs(binding.lat - lat) > 0.000001 || Math.abs(binding.lng - lng) > 0.000001) return null;
+  return binding.token;
 }
 
 export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): string {
