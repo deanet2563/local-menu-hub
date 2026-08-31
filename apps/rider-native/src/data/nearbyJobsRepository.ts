@@ -53,7 +53,7 @@ export async function listNearbyDeliveryJobs(
   radiusKm = 1,
 ): Promise<NearbyDeliveryJob[]> {
   const { url } = config();
-  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_nearby_delivery_jobs_v2`, {
+  const response = await fetch(`${url}/rest/v1/rpc/fn_rider_nearby_delivery_jobs_v3`, {
     method: 'POST',
     headers: headers(session),
     body: JSON.stringify({ p_radius_km: radiusKm }),
