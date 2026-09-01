@@ -169,7 +169,7 @@ function CartCheckout() {
     setResolvingLocation(true);
     setError(null);
     try {
-      const point = await resolveDeliveryLocation(locationInput.trim());
+      const point = await resolveDeliveryLocation(locationInput.trim(), c.shopId);
       await applyDeliveryPoint(point);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "ตรวจจุดส่งไม่สำเร็จ");
@@ -438,13 +438,34 @@ function CartCheckout() {
             {deliveryPoint && (
               <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-green-800">จุดส่งที่ยืนยันแล้ว ✅</p>
-                    <p className="mt-1 font-mono text-xs text-green-800">{deliveryPoint.lat.toFixed(6)}, {deliveryPoint.lng.toFixed(6)}</p>
-                    <p className="mt-1 text-[11px] text-green-700">แหล่งที่มา: {deliveryPoint.source === "google_maps_url" ? "Google Maps" : deliveryPoint.source === "latlng" ? "Latitude / Longitude" : "GPS โทรศัพท์"}</p>
+                    {deliveryPoint.displayName && (
+                      <p className="mt-1 text-base font-bold leading-5 text-green-950">{deliveryPoint.displayName}</p>
+                    )}
+                    {deliveryPoint.formattedAddress && (
+                      <p className="mt-1 text-xs leading-5 text-green-800">{deliveryPoint.formattedAddress}</p>
+                    )}
+                    <p className="mt-1 font-mono text-[11px] text-green-700">📍 {deliveryPoint.lat.toFixed(6)}, {deliveryPoint.lng.toFixed(6)}</p>
+                    <p className="mt-1 text-[11px] text-green-700">
+                      แหล่งที่มา: {deliveryPoint.resolutionMethod === "places_text_search" ? "Google Places (ยืนยันชื่อสถานที่)" : deliveryPoint.source === "google_maps_url" ? "Google Maps" : deliveryPoint.source === "latlng" ? "Latitude / Longitude" : "GPS โทรศัพท์"}
+                    </p>
                   </div>
                   <a href={googleMapsPreviewUrl(deliveryPoint)} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-medium text-blue-700 underline">เปิดแผนที่</a>
                 </div>
+
+                {deliveryPoint.placeId && (
+                  <div className="rounded-lg border border-green-200 bg-white/80 p-2 text-xs leading-5 text-green-900">
+                    <p className="font-semibold">ตรวจสอบก่อนสั่ง</p>
+                    <p>ชื่อสถานที่และหมุดนี้อ้างอิง Google Place เดียวกัน กรุณากด “เปิดแผนที่” เพื่อตรวจว่าจุดนี้คือทางเข้าหรือจุดรับสินค้าที่ต้องการให้ Rider ไปจริง</p>
+                  </div>
+                )}
+
+                {!deliveryPoint.displayName && deliveryPoint.source !== "device_gps" && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs leading-5 text-amber-800">
+                    จุดนี้ไม่มีชื่อสถานที่จาก Google กรุณาตรวจหมุดบนแผนที่และที่อยู่ผู้รับให้ตรงก่อนยืนยันคำสั่งซื้อ
+                  </div>
+                )}
 
                 {deliveryPoint.source === "device_gps" && deliveryPoint.accuracy != null && deliveryPoint.accuracy > 30 && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
