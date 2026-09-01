@@ -237,6 +237,25 @@ Additional service keys may be introduced when Geocoding, Address Validation and
 
 ---
 
+## 8.1 Customer Delivery Address Book
+
+MyTree customer checkout should support reusable delivery destinations without collapsing the human-readable address and Rider navigation pin into the same concept.
+
+Canonical rules:
+
+- Recent Addresses are automatically remembered delivery destinations from successful delivery orders.
+- Saved Addresses are explicitly saved by the authenticated Customer with a user-defined label such as `บ้าน`, `ที่ทำงาน`, `บ้านคุณแม่` or `โรงเรียน`.
+- Human-readable address and Rider navigation pin are stored together for reuse, but they remain separate concepts: address is readable delivery context; pin is the Rider navigation destination.
+- Saved address reuse must retain confirmed destination coordinates.
+- Named Google Places should retain place identity where available, including Place ID, display name and formatted address.
+- Address reuse must not trigger repeated Google Routes billing merely because checkout re-rendered, refreshed, or loaded the address list.
+- Selecting a previous address must fill checkout data and show the confirmed destination, but must not automatically submit the order.
+- The Customer must still confirm the selected destination before final order submission.
+
+Durable multi-device Saved/Recent Addresses require an additive forward-only schema owned by the canonical MyTree Worker migration repository with RLS scoped to `customer_id`. The historical `local-menu-hub/supabase/migrations` lineage remains frozen and must not be used for new production address-book migrations.
+
+---
+
 ## 9. Delivery Sequence
 
 ### P0 — Now
