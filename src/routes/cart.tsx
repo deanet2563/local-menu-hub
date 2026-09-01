@@ -5,6 +5,11 @@ import { publicSupabase, supabase, getCurrentCustomerId } from "@/lib/supabase";
 import { submitOrder } from "@/lib/order";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 import {
+  DeliveryAddressFields,
+  formatDeliveryAddress,
+  type DeliveryAddressFieldsValue,
+} from "@/components/DeliveryAddressFields";
+import {
   googleMapsPreviewUrl,
   quoteDeliveryRoute,
   resolveDeliveryLocation,
@@ -50,7 +55,11 @@ function CartCheckout() {
   const [payment, setPayment] = useState<"cash" | "qr_transfer">("cash");
   const [timing, setTiming] = useState<OrderTiming>("now");
   const [requestedForLocal, setRequestedForLocal] = useState("");
-  const [address, setAddress] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddressFieldsValue>({
+    premises: "",
+    locality: "",
+    instructions: "",
+  });
   const [deliveryPoint, setDeliveryPoint] = useState<ConfirmedDeliveryPoint | null>(null);
   const [locationInput, setLocationInput] = useState("");
   const [locating, setLocating] = useState(false);
@@ -210,7 +219,9 @@ function CartCheckout() {
   async function confirm() {
     if (!c.shopId) return;
     if (!customerName.trim() || !customerPhone.trim()) return setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
-    if (fulfillment === "delivery" && !address.trim()) return setError("กรอกที่อยู่จัดส่ง");
+    const formattedAddress = formatDeliveryAddress(deliveryAddress);
+    if (fulfillment === "delivery" && !deliveryAddress.premises.trim()) return setError("กรอกบ้านเลขที่ / หมู่บ้าน / อาคาร");
+    if (fulfillment === "delivery" && !deliveryAddress.locality.trim()) return setError("กรอกซอย / ถนน / แขวง-ตำบล / เขต-อำเภอ / จังหวัด");
     if (fulfillment === "delivery" && !deliveryPoint) return setError("กรุณายืนยันจุดส่งก่อนสั่ง");
     if (fulfillment === "delivery" && !routeQuote) return setError("กรุณารอให้ระบบคำนวณระยะทางและค่าส่งสำเร็จก่อนสั่ง");
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
@@ -245,7 +256,7 @@ function CartCheckout() {
       })),
       fulfillment,
       payment,
-      address: fulfillment === "delivery" ? address.trim() : null,
+      address: fulfillment === "delivery" ? formattedAddress : null,
       destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
       destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
       locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
@@ -402,11 +413,11 @@ function CartCheckout() {
         </div>
         {fulfillment === "delivery" && (
           <div className="space-y-3">
-            <input className="w-full rounded-lg border border-gray-200 p-2.5 text-sm" placeholder="ที่อยู่ผู้รับสินค้า (บ้านเลขที่ / ซอย / จุดสังเกต)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <DeliveryAddressFields value={deliveryAddress} onChange={setDeliveryAddress} />
 
             <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
               <div>
-                <p className="text-sm font-semibold text-gray-800">📍 ยืนยันจุดส่งให้ Rider</p>
+                <p className="text-sm font-semibold text-gray-800">📍 จุดส่งจริงสำหรับ Rider</p>
                 <p className="text-xs text-gray-500 mt-1">วาง Google Maps Share Link หรือ latitude, longitude ของจุดส่งจริง ไม่จำเป็นต้องเป็นตำแหน่งโทรศัพท์ของผู้สั่ง</p>
               </div>
               <textarea
