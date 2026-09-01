@@ -6,6 +6,7 @@ const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
 const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;
 
 export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng" | "map_pin";
+export type DeliveryResolutionMethod = "url_coordinates" | "google_document" | "places_text_search";
 
 export type ConfirmedDeliveryPoint = {
   lat: number;
@@ -14,6 +15,10 @@ export type ConfirmedDeliveryPoint = {
   source: DeliveryLocationSource;
   submittedValue?: string | null;
   resolvedUrl?: string | null;
+  placeId?: string | null;
+  displayName?: string | null;
+  formattedAddress?: string | null;
+  resolutionMethod?: DeliveryResolutionMethod | null;
 };
 
 export type DeliveryRouteQuote = {
@@ -33,6 +38,10 @@ type ResolveResponse = {
     source?: "google_maps_url" | "latlng";
     submittedValue?: string;
     resolvedUrl?: string;
+    placeId?: string;
+    displayName?: string;
+    formattedAddress?: string;
+    resolutionMethod?: DeliveryResolutionMethod;
   };
   error?: string;
 };
@@ -53,11 +62,11 @@ type QuoteBinding = {
 
 let latestQuoteBinding: QuoteBinding | null = null;
 
-export async function resolveDeliveryLocation(value: string): Promise<ConfirmedDeliveryPoint> {
+export async function resolveDeliveryLocation(value: string, shopId?: string | null): Promise<ConfirmedDeliveryPoint> {
   const response = await fetch(LOCATION_RESOLVE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value, shopId: shopId ?? undefined }),
   });
   const payload = await response.json().catch(() => null) as ResolveResponse | null;
   const location = payload?.location;
@@ -71,6 +80,10 @@ export async function resolveDeliveryLocation(value: string): Promise<ConfirmedD
     source: location.source === "latlng" ? "latlng" : "google_maps_url",
     submittedValue: location.submittedValue ?? value,
     resolvedUrl: location.resolvedUrl ?? null,
+    placeId: location.placeId ?? null,
+    displayName: location.displayName ?? null,
+    formattedAddress: location.formattedAddress ?? null,
+    resolutionMethod: location.resolutionMethod ?? null,
   };
 }
 
@@ -115,7 +128,10 @@ export function getDeliveryQuoteToken(shopId: string, lat: number | null, lng: n
   return binding.token;
 }
 
-export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): string {
+export function googleMapsPreviewUrl(point: Pick<ConfirmedDeliveryPoint, "lat" | "lng" | "placeId">): string {
+  if (point.placeId) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}&query_place_id=${encodeURIComponent(point.placeId)}`;
+  }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
 }
 
@@ -124,6 +140,8 @@ function resolveErrorText(code?: string): string {
     case "google_maps_url_required": return "รองรับเฉพาะ Google Maps link หรือ latitude, longitude";
     case "google_maps_link_unreachable": return "เปิด Google Maps link นี้ไม่ได้ กรุณาตรวจลิงก์แล้วลองใหม่";
     case "google_maps_coordinates_not_found": return "ยังอ่านพิกัดจาก Google Maps link นี้ไม่ได้ กรุณาใช้ลิงก์ Share Location หรือวาง latitude, longitude";
+    case "google_places_not_configured": return "ระบบ Google Places ยังไม่พร้อม กรุณาลองใหม่ภายหลัง";
+    case "google_places_failed": return "Google Places ตรวจสอบชื่อและพิกัดสถานที่ไม่สำเร็จ กรุณาลองใหม่";
     case "unsupported_location_format": return "รูปแบบจุดส่งไม่ถูกต้อง กรุณาวาง Google Maps link หรือ latitude, longitude";
     default: return "ตรวจจุดส่งไม่สำเร็จ กรุณาลองใหม่";
   }
