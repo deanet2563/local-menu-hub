@@ -3,7 +3,9 @@ import { initLiff, isOrderingPreview } from "@/lib/supabase";
 
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
+const LOCATION_SEARCH_URL = `${WORKER_URL}/location/search`;
 const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;
+export const DELIVERY_PLACE_SEARCH_MIN_LENGTH = 3;
 
 export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng" | "map_pin";
 export type DeliveryResolutionMethod = "url_coordinates" | "google_document" | "places_text_search";
@@ -30,6 +32,14 @@ export type DeliveryRouteQuote = {
   quoteToken: string;
 };
 
+export type DeliveryPlaceSearchResult = {
+  placeId: string;
+  displayName: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+};
+
 type ResolveResponse = {
   ok?: boolean;
   location?: {
@@ -43,6 +53,12 @@ type ResolveResponse = {
     formattedAddress?: string;
     resolutionMethod?: DeliveryResolutionMethod;
   };
+  error?: string;
+};
+
+export type DeliveryPlaceSearchResponse = {
+  ok?: boolean;
+  results?: Array<Partial<DeliveryPlaceSearchResult>>;
   error?: string;
 };
 
@@ -85,6 +101,34 @@ export async function resolveDeliveryLocation(value: string, shopId?: string | n
     formattedAddress: location.formattedAddress ?? null,
     resolutionMethod: location.resolutionMethod ?? null,
   };
+}
+
+export async function searchDeliveryPlaces(query: string, shopId?: string | null, signal?: AbortSignal): Promise<DeliveryPlaceSearchResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < DELIVERY_PLACE_SEARCH_MIN_LENGTH) return [];
+  const response = await fetch(LOCATION_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: trimmed, shopId: shopId ?? undefined, limit: 5 }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as DeliveryPlaceSearchResponse | null;
+  if (!response.ok || !payload?.ok) throw new Error(resolveErrorText(payload?.error));
+  return normalizeDeliveryPlaceSearchResults(payload);
+}
+
+export function normalizeDeliveryPlaceSearchResults(payload: DeliveryPlaceSearchResponse): DeliveryPlaceSearchResult[] {
+  return (payload.results ?? [])
+    .filter((result): result is DeliveryPlaceSearchResult => (
+      typeof result.placeId === "string"
+      && typeof result.displayName === "string"
+      && typeof result.formattedAddress === "string"
+      && typeof result.lat === "number"
+      && Number.isFinite(result.lat)
+      && typeof result.lng === "number"
+      && Number.isFinite(result.lng)
+    ))
+    .slice(0, 5);
 }
 
 export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): Promise<DeliveryRouteQuote> {

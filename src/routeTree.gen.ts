@@ -9,36 +9,31 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as OrdersRouteImport } from './routes/orders'
-import { Route as CartRouteImport } from './routes/cart'
-import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SweetIndexRouteImport } from './routes/sweet/index'
-import { Route as ShopIndexRouteImport } from './routes/shop/index'
-import { Route as RiderIndexRouteImport } from './routes/rider/index'
+import { Route as AccountRouteImport } from './routes/account'
+import { Route as CartRouteImport } from './routes/cart'
+import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
-import { Route as SweetSignupRouteImport } from './routes/sweet/signup'
-import { Route as SweetShopRouteImport } from './routes/sweet/shop'
-import { Route as SweetRidersRouteImport } from './routes/sweet/riders'
-import { Route as SweetPosRouteImport } from './routes/sweet/pos'
-import { Route as SweetOrdersRouteImport } from './routes/sweet/orders'
-import { Route as SweetMenuRouteImport } from './routes/sweet/menu'
-import { Route as SweetAdminRouteImport } from './routes/sweet/admin'
-import { Route as ShopShopIdRouteImport } from './routes/shop/$shopId'
-import { Route as RiderSignupRouteImport } from './routes/rider/signup'
+import { Route as RiderIndexRouteImport } from './routes/rider/index'
 import { Route as RiderProfileRouteImport } from './routes/rider/profile'
+import { Route as RiderSignupRouteImport } from './routes/rider/signup'
+import { Route as ShopIndexRouteImport } from './routes/shop/index'
+import { Route as ShopShopIdRouteImport } from './routes/shop/$shopId'
+import { Route as SweetIndexRouteImport } from './routes/sweet/index'
+import { Route as SweetAdminRouteImport } from './routes/sweet/admin'
+import { Route as SweetMenuRouteImport } from './routes/sweet/menu'
+import { Route as SweetOrdersRouteImport } from './routes/sweet/orders'
+import { Route as SweetPosRouteImport } from './routes/sweet/pos'
+import { Route as SweetRidersRouteImport } from './routes/sweet/riders'
+import { Route as SweetShopRouteImport } from './routes/sweet/shop'
+import { Route as SweetSignupRouteImport } from './routes/sweet/signup'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
-import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
+import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
 
-const OrdersRoute = OrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CartRoute = CartRouteImport.update({
-  id: '/cart',
-  path: '/cart',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountRoute = AccountRouteImport.update({
@@ -46,24 +41,14 @@ const AccountRoute = AccountRouteImport.update({
   path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SweetIndexRoute = SweetIndexRouteImport.update({
-  id: '/sweet/',
-  path: '/sweet/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShopIndexRoute = ShopIndexRouteImport.update({
-  id: '/shop/',
-  path: '/shop/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RiderIndexRoute = RiderIndexRouteImport.update({
-  id: '/rider/',
-  path: '/rider/',
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HubIndexRoute = HubIndexRouteImport.update({
@@ -71,49 +56,9 @@ const HubIndexRoute = HubIndexRouteImport.update({
   path: '/hub/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SweetSignupRoute = SweetSignupRouteImport.update({
-  id: '/sweet/signup',
-  path: '/sweet/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetShopRoute = SweetShopRouteImport.update({
-  id: '/sweet/shop',
-  path: '/sweet/shop',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetRidersRoute = SweetRidersRouteImport.update({
-  id: '/sweet/riders',
-  path: '/sweet/riders',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetPosRoute = SweetPosRouteImport.update({
-  id: '/sweet/pos',
-  path: '/sweet/pos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetOrdersRoute = SweetOrdersRouteImport.update({
-  id: '/sweet/orders',
-  path: '/sweet/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetMenuRoute = SweetMenuRouteImport.update({
-  id: '/sweet/menu',
-  path: '/sweet/menu',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SweetAdminRoute = SweetAdminRouteImport.update({
-  id: '/sweet/admin',
-  path: '/sweet/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShopShopIdRoute = ShopShopIdRouteImport.update({
-  id: '/shop/$shopId',
-  path: '/shop/$shopId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RiderSignupRoute = RiderSignupRouteImport.update({
-  id: '/rider/signup',
-  path: '/rider/signup',
+const RiderIndexRoute = RiderIndexRouteImport.update({
+  id: '/rider/',
+  path: '/rider/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RiderProfileRoute = RiderProfileRouteImport.update({
@@ -121,19 +66,74 @@ const RiderProfileRoute = RiderProfileRouteImport.update({
   path: '/rider/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RiderSignupRoute = RiderSignupRouteImport.update({
+  id: '/rider/signup',
+  path: '/rider/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopIndexRoute = ShopIndexRouteImport.update({
+  id: '/shop/',
+  path: '/shop/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopShopIdRoute = ShopShopIdRouteImport.update({
+  id: '/shop/$shopId',
+  path: '/shop/$shopId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetIndexRoute = SweetIndexRouteImport.update({
+  id: '/sweet/',
+  path: '/sweet/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetAdminRoute = SweetAdminRouteImport.update({
+  id: '/sweet/admin',
+  path: '/sweet/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetMenuRoute = SweetMenuRouteImport.update({
+  id: '/sweet/menu',
+  path: '/sweet/menu',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetOrdersRoute = SweetOrdersRouteImport.update({
+  id: '/sweet/orders',
+  path: '/sweet/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetPosRoute = SweetPosRouteImport.update({
+  id: '/sweet/pos',
+  path: '/sweet/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetRidersRoute = SweetRidersRouteImport.update({
+  id: '/sweet/riders',
+  path: '/sweet/riders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetShopRoute = SweetShopRouteImport.update({
+  id: '/sweet/shop',
+  path: '/sweet/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetSignupRoute = SweetSignupRouteImport.update({
+  id: '/sweet/signup',
+  path: '/sweet/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
   id: '/shop/orders/',
   path: '/shop/orders/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SweetPrintSubIdRoute = SweetPrintSubIdRouteImport.update({
-  id: '/sweet/print/$subId',
-  path: '/sweet/print/$subId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ShopOrdersSubIdRoute = ShopOrdersSubIdRouteImport.update({
   id: '/shop/orders/$subId',
   path: '/shop/orders/$subId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetPrintSubIdRoute = SweetPrintSubIdRouteImport.update({
+  id: '/sweet/print/$subId',
+  path: '/sweet/print/$subId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -305,18 +305,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/orders': {
-      id: '/orders'
-      path: '/orders'
-      fullPath: '/orders'
-      preLoaderRoute: typeof OrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cart': {
-      id: '/cart'
-      path: '/cart'
-      fullPath: '/cart'
-      preLoaderRoute: typeof CartRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account': {
@@ -326,32 +319,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sweet/': {
-      id: '/sweet/'
-      path: '/sweet'
-      fullPath: '/sweet/'
-      preLoaderRoute: typeof SweetIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shop/': {
-      id: '/shop/'
-      path: '/shop'
-      fullPath: '/shop/'
-      preLoaderRoute: typeof ShopIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rider/': {
-      id: '/rider/'
-      path: '/rider'
-      fullPath: '/rider/'
-      preLoaderRoute: typeof RiderIndexRouteImport
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hub/': {
@@ -361,67 +340,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sweet/signup': {
-      id: '/sweet/signup'
-      path: '/sweet/signup'
-      fullPath: '/sweet/signup'
-      preLoaderRoute: typeof SweetSignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/shop': {
-      id: '/sweet/shop'
-      path: '/sweet/shop'
-      fullPath: '/sweet/shop'
-      preLoaderRoute: typeof SweetShopRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/riders': {
-      id: '/sweet/riders'
-      path: '/sweet/riders'
-      fullPath: '/sweet/riders'
-      preLoaderRoute: typeof SweetRidersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/pos': {
-      id: '/sweet/pos'
-      path: '/sweet/pos'
-      fullPath: '/sweet/pos'
-      preLoaderRoute: typeof SweetPosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/orders': {
-      id: '/sweet/orders'
-      path: '/sweet/orders'
-      fullPath: '/sweet/orders'
-      preLoaderRoute: typeof SweetOrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/menu': {
-      id: '/sweet/menu'
-      path: '/sweet/menu'
-      fullPath: '/sweet/menu'
-      preLoaderRoute: typeof SweetMenuRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sweet/admin': {
-      id: '/sweet/admin'
-      path: '/sweet/admin'
-      fullPath: '/sweet/admin'
-      preLoaderRoute: typeof SweetAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shop/$shopId': {
-      id: '/shop/$shopId'
-      path: '/shop/$shopId'
-      fullPath: '/shop/$shopId'
-      preLoaderRoute: typeof ShopShopIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rider/signup': {
-      id: '/rider/signup'
-      path: '/rider/signup'
-      fullPath: '/rider/signup'
-      preLoaderRoute: typeof RiderSignupRouteImport
+    '/rider/': {
+      id: '/rider/'
+      path: '/rider'
+      fullPath: '/rider/'
+      preLoaderRoute: typeof RiderIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rider/profile': {
@@ -431,6 +354,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RiderProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rider/signup': {
+      id: '/rider/signup'
+      path: '/rider/signup'
+      fullPath: '/rider/signup'
+      preLoaderRoute: typeof RiderSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/': {
+      id: '/shop/'
+      path: '/shop'
+      fullPath: '/shop/'
+      preLoaderRoute: typeof ShopIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop/$shopId': {
+      id: '/shop/$shopId'
+      path: '/shop/$shopId'
+      fullPath: '/shop/$shopId'
+      preLoaderRoute: typeof ShopShopIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/': {
+      id: '/sweet/'
+      path: '/sweet'
+      fullPath: '/sweet/'
+      preLoaderRoute: typeof SweetIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/admin': {
+      id: '/sweet/admin'
+      path: '/sweet/admin'
+      fullPath: '/sweet/admin'
+      preLoaderRoute: typeof SweetAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/menu': {
+      id: '/sweet/menu'
+      path: '/sweet/menu'
+      fullPath: '/sweet/menu'
+      preLoaderRoute: typeof SweetMenuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/orders': {
+      id: '/sweet/orders'
+      path: '/sweet/orders'
+      fullPath: '/sweet/orders'
+      preLoaderRoute: typeof SweetOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/pos': {
+      id: '/sweet/pos'
+      path: '/sweet/pos'
+      fullPath: '/sweet/pos'
+      preLoaderRoute: typeof SweetPosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/riders': {
+      id: '/sweet/riders'
+      path: '/sweet/riders'
+      fullPath: '/sweet/riders'
+      preLoaderRoute: typeof SweetRidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/shop': {
+      id: '/sweet/shop'
+      path: '/sweet/shop'
+      fullPath: '/sweet/shop'
+      preLoaderRoute: typeof SweetShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/signup': {
+      id: '/sweet/signup'
+      path: '/sweet/signup'
+      fullPath: '/sweet/signup'
+      preLoaderRoute: typeof SweetSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop/orders/': {
       id: '/shop/orders/'
       path: '/shop/orders'
@@ -438,18 +438,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopOrdersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sweet/print/$subId': {
-      id: '/sweet/print/$subId'
-      path: '/sweet/print/$subId'
-      fullPath: '/sweet/print/$subId'
-      preLoaderRoute: typeof SweetPrintSubIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/shop/orders/$subId': {
       id: '/shop/orders/$subId'
       path: '/shop/orders/$subId'
       fullPath: '/shop/orders/$subId'
       preLoaderRoute: typeof ShopOrdersSubIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/print/$subId': {
+      id: '/sweet/print/$subId'
+      path: '/sweet/print/$subId'
+      fullPath: '/sweet/print/$subId'
+      preLoaderRoute: typeof SweetPrintSubIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

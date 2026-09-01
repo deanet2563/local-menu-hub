@@ -21,9 +21,9 @@ export function DeliveryAddressFields({ value, onChange, errors = {}, onFieldCha
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
       <div>
-        <p className="text-sm font-semibold text-gray-800">ที่อยู่ผู้รับ</p>
+        <p className="text-sm font-semibold text-gray-800">รายละเอียดที่อยู่</p>
         <p className="mt-1 text-[11px] leading-4 text-gray-500">
-          ช่องที่มีเครื่องหมาย <span className="font-semibold text-red-600">*</span> เป็นข้อมูลจำเป็น กรุณากรอกให้ครบเพื่อให้ร้านและ Rider จัดส่งได้ถูกต้อง
+          หมุดใช้สำหรับนำทาง Rider ส่วนรายละเอียดด้านล่างช่วยให้ Rider หาบ้าน/ประตู/ห้องได้ถูกต้อง ช่องที่มีเครื่องหมาย <span className="font-semibold text-red-600">*</span> เป็นข้อมูลจำเป็น
         </p>
       </div>
 

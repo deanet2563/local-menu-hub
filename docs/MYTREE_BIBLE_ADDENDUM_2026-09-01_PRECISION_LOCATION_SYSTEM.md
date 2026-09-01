@@ -256,6 +256,27 @@ Durable multi-device Saved/Recent Addresses require an additive forward-only sch
 
 ---
 
+## 8.2 MyTree Customer Location UX
+
+Customer checkout must ask where the Rider should go before asking who receives the order or how to find the exact door.
+
+Approved delivery-destination method priority:
+
+1. In-app Search + Pin is the preferred customer method.
+2. Device GPS is secondary and should be used when the Customer is physically at the destination.
+3. Google Maps Share Link or direct latitude/longitude is a fallback for advanced or recovery cases.
+
+Operational rules:
+
+- Destination is chosen and explicitly confirmed before recipient/address detail entry.
+- Checkout draft restore prevents data loss when a Customer temporarily leaves LINE LIFF or the browser.
+- Route calculation occurs only after destination confirmation, not while searching, panning, dragging, tapping, or rendering the map.
+- Google Place identity and the final Rider destination pin are separate concepts. The Place can identify the building/business/property, while the confirmed pin is the authoritative Rider destination.
+- If the Customer adjusts the pin away from the Google Place location, retain Place context where useful, but route pricing and Rider navigation use the confirmed pin.
+- The Google Maps browser key is frontend-visible by design and is limited to Maps JavaScript API use. Worker-only Places and Routes keys must not be reused in the browser.
+
+---
+
 ## 9. Delivery Sequence
 
 ### P0 — Now
