@@ -16,6 +16,13 @@ import {
   type ConfirmedDeliveryPoint,
   type DeliveryRouteQuote,
 } from "@/lib/deliveryLocation";
+import {
+  formatDeliveryAddressSummary,
+  loadCustomerDeliveryAddresses,
+  saveCustomerDeliveryAddresses,
+  upsertUsedDeliveryAddress,
+  type CustomerDeliveryAddress,
+} from "@/lib/deliveryAddressBook";
 
 export const Route = createFileRoute("/cart")({ component: CartCheckout });
 
@@ -32,6 +39,7 @@ type ShopCheckout = {
 };
 
 type OrderTiming = "now" | "preorder";
+type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premises" | "locality" | "deliveryPoint", string>>;
 
 function toBangkokInput(iso: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -69,8 +77,15 @@ function CartCheckout() {
   const [note, setNote] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [deliveryAddresses, setDeliveryAddresses] = useState<CustomerDeliveryAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [saveAddress, setSaveAddress] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("บ้าน");
+  const [makeDefaultAddress, setMakeDefaultAddress] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [done, setDone] = useState(false);
 
   const availability = useMemo(
@@ -147,6 +162,8 @@ function CartCheckout() {
       try {
         const cid = await getCurrentCustomerId();
         if (!cid) return;
+        setCustomerId(cid);
+        setDeliveryAddresses(loadCustomerDeliveryAddresses(cid));
         const { data } = await supabase.from("customers").select("name,phone").eq("id", cid).maybeSingle();
         const row = data as { name: string | null; phone: string | null } | null;
         if (row?.name) setCustomerName(row.name);
@@ -157,8 +174,14 @@ function CartCheckout() {
     })();
   }, []);
 
+  function isSameDeliveryPoint(a: ConfirmedDeliveryPoint | null, b: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): boolean {
+    return Boolean(a && Math.abs(a.lat - b.lat) <= 0.000001 && Math.abs(a.lng - b.lng) <= 0.000001);
+  }
+
   async function applyDeliveryPoint(point: ConfirmedDeliveryPoint) {
     setDeliveryPoint(point);
+    setFieldErrors((current) => ({ ...current, deliveryPoint: undefined }));
+    if (isSameDeliveryPoint(deliveryPoint, point) && routeQuote) return;
     setRouteQuote(null);
     if (!c.shopId) return;
     setQuotingRoute(true);
@@ -173,12 +196,52 @@ function CartCheckout() {
     }
   }
 
+  async function selectDeliveryAddress(address: CustomerDeliveryAddress) {
+    setSelectedAddressId(address.id);
+    setSaveAddress(false);
+    setMakeDefaultAddress(address.isDefault);
+    setSaveAddressLabel(address.label ?? "บ้าน");
+    setCustomerName(address.recipientName);
+    setCustomerPhone(address.recipientPhone);
+    setDeliveryAddress({
+      premises: address.premises,
+      locality: address.locality,
+      instructions: address.riderNote,
+    });
+    setLocationInput(address.submittedMapUrl ?? "");
+    setFieldErrors({});
+    await applyDeliveryPoint({
+      lat: address.deliveryPinLat,
+      lng: address.deliveryPinLng,
+      accuracy: address.locationAccuracyM,
+      source: address.locationSource,
+      submittedValue: address.submittedMapUrl,
+      resolvedUrl: null,
+      placeId: address.placeId,
+      displayName: address.placeDisplayName,
+      formattedAddress: address.formattedAddress,
+      resolutionMethod: address.placeId ? "places_text_search" : null,
+    });
+  }
+
+  function addNewDeliveryAddress() {
+    setSelectedAddressId(null);
+    setDeliveryAddress({ premises: "", locality: "", instructions: "" });
+    setDeliveryPoint(null);
+    setRouteQuote(null);
+    setLocationInput("");
+    setSaveAddress(true);
+    setMakeDefaultAddress(deliveryAddresses.length === 0);
+    setFieldErrors({});
+  }
+
   async function resolveLocationInput() {
     if (!locationInput.trim()) return setError("วาง Google Maps link หรือ latitude, longitude ก่อน");
     setResolvingLocation(true);
     setError(null);
     try {
       const point = await resolveDeliveryLocation(locationInput.trim(), c.shopId);
+      setSelectedAddressId(null);
       await applyDeliveryPoint(point);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "ตรวจจุดส่งไม่สำเร็จ");
@@ -204,6 +267,7 @@ function CartCheckout() {
           source: "device_gps",
         };
         setLocating(false);
+        setSelectedAddressId(null);
         void applyDeliveryPoint(point);
       },
       (geoError) => {
@@ -218,11 +282,18 @@ function CartCheckout() {
 
   async function confirm() {
     if (!c.shopId) return;
-    if (!customerName.trim() || !customerPhone.trim()) return setError("กรอกชื่อและเบอร์โทรก่อนสั่ง");
     const formattedAddress = formatDeliveryAddress(deliveryAddress);
-    if (fulfillment === "delivery" && !deliveryAddress.premises.trim()) return setError("กรอกบ้านเลขที่ / หมู่บ้าน / อาคาร");
-    if (fulfillment === "delivery" && !deliveryAddress.locality.trim()) return setError("กรอกซอย / ถนน / แขวง-ตำบล / เขต-อำเภอ / จังหวัด");
-    if (fulfillment === "delivery" && !deliveryPoint) return setError("กรุณายืนยันจุดส่งก่อนสั่ง");
+    const nextFieldErrors: CheckoutErrors = {};
+    if (!customerName.trim()) nextFieldErrors.customerName = "กรุณากรอกชื่อผู้รับ";
+    if (!customerPhone.trim()) nextFieldErrors.customerPhone = "กรุณากรอกเบอร์โทรผู้รับ";
+    if (fulfillment === "delivery" && !deliveryAddress.premises.trim()) nextFieldErrors.premises = "กรุณากรอกบ้านเลขที่ / หมู่บ้าน / อาคาร";
+    if (fulfillment === "delivery" && !deliveryAddress.locality.trim()) nextFieldErrors.locality = "กรุณากรอกซอย / ถนน / แขวง-ตำบล / เขต-อำเภอ / จังหวัด";
+    if (fulfillment === "delivery" && !deliveryPoint) nextFieldErrors.deliveryPoint = "กรุณายืนยันจุดส่งจริงสำหรับ Rider";
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setError("กรุณากรอกข้อมูลจำเป็นให้ครบ");
+      return;
+    }
     if (fulfillment === "delivery" && !routeQuote) return setError("กรุณารอให้ระบบคำนวณระยะทางและค่าส่งสำเร็จก่อนสั่ง");
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
     if (fulfillment === "pickup" && shop?.pickup_enabled === false) return setError("ร้านนี้ไม่เปิดบริการรับเอง");
@@ -268,6 +339,30 @@ function CartCheckout() {
 
     setSubmitting(false);
     if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
+    if (customerId && fulfillment === "delivery" && deliveryPoint) {
+      const nextAddresses = upsertUsedDeliveryAddress(deliveryAddresses, {
+        recipientName: customerName.trim(),
+        recipientPhone: customerPhone.trim(),
+        premises: deliveryAddress.premises.trim(),
+        locality: deliveryAddress.locality.trim(),
+        riderNote: deliveryAddress.instructions.trim(),
+        placeId: deliveryPoint.placeId ?? null,
+        placeDisplayName: deliveryPoint.displayName ?? null,
+        formattedAddress: deliveryPoint.formattedAddress ?? null,
+        deliveryPinLat: deliveryPoint.lat,
+        deliveryPinLng: deliveryPoint.lng,
+        locationSource: deliveryPoint.source,
+        submittedMapUrl: deliveryPoint.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
+        locationAccuracyM: deliveryPoint.accuracy ?? null,
+      }, {
+        selectedAddressId,
+        saveRequested: saveAddress,
+        saveLabel: saveAddressLabel,
+        makeDefault: makeDefaultAddress,
+      });
+      saveCustomerDeliveryAddresses(customerId, nextAddresses);
+      setDeliveryAddresses(nextAddresses);
+    }
     cart.clear();
     setDone(true);
   }
@@ -384,8 +479,42 @@ function CartCheckout() {
 
       <div className="rounded-lg border border-gray-200 p-3 space-y-2">
         <p className="text-sm font-medium text-gray-700">ข้อมูลติดต่อ</p>
-        <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ชื่อผู้สั่ง" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-        <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="เบอร์โทร" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" type="tel" maxLength={10} />
+        <p className="text-[11px] leading-4 text-gray-500">
+          ช่องที่มีเครื่องหมาย <span className="font-semibold text-red-600">*</span> เป็นข้อมูลจำเป็น กรุณากรอกให้ครบเพื่อให้ร้านและ Rider จัดส่งได้ถูกต้อง
+        </p>
+        <div className="space-y-1">
+          <label htmlFor="recipient-name" className="text-xs font-medium text-gray-600">ชื่อผู้รับ <span className="text-red-600" aria-hidden="true">*</span></label>
+          <input
+            id="recipient-name"
+            className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+            value={customerName}
+            onChange={(e) => {
+              setCustomerName(e.target.value);
+              setFieldErrors((current) => ({ ...current, customerName: undefined }));
+            }}
+            aria-invalid={Boolean(fieldErrors.customerName)}
+            aria-describedby={fieldErrors.customerName ? "recipient-name-error" : undefined}
+          />
+          {fieldErrors.customerName && <p id="recipient-name-error" className="text-xs text-red-600">{fieldErrors.customerName}</p>}
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="recipient-phone" className="text-xs font-medium text-gray-600">เบอร์โทรผู้รับ <span className="text-red-600" aria-hidden="true">*</span></label>
+          <input
+            id="recipient-phone"
+            className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+            value={customerPhone}
+            onChange={(e) => {
+              setCustomerPhone(e.target.value.replace(/[^0-9]/g, ""));
+              setFieldErrors((current) => ({ ...current, customerPhone: undefined }));
+            }}
+            inputMode="numeric"
+            type="tel"
+            maxLength={10}
+            aria-invalid={Boolean(fieldErrors.customerPhone)}
+            aria-describedby={fieldErrors.customerPhone ? "recipient-phone-error" : undefined}
+          />
+          {fieldErrors.customerPhone && <p id="recipient-phone-error" className="text-xs text-red-600">{fieldErrors.customerPhone}</p>}
+        </div>
       </div>
 
       {shop?.accepts_preorders && availability?.state !== "manual_closed" && (
@@ -413,20 +542,113 @@ function CartCheckout() {
         </div>
         {fulfillment === "delivery" && (
           <div className="space-y-3">
-            <DeliveryAddressFields value={deliveryAddress} onChange={setDeliveryAddress} />
+            {deliveryAddresses.length > 0 && (
+              <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-gray-800">ที่อยู่ที่เคยใช้</p>
+                  <button type="button" onClick={addNewDeliveryAddress} className="text-xs font-medium text-orange-600">+ เพิ่มที่อยู่ใหม่</button>
+                </div>
+                <div className="space-y-2">
+                  {deliveryAddresses.map((address) => (
+                    <div
+                      key={address.id}
+                      className={`rounded-lg border p-2.5 text-sm ${selectedAddressId === address.id ? "border-orange-300 bg-orange-50" : "border-gray-100 bg-gray-50"}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800">{address.label || (address.kind === "saved" ? "ที่อยู่ที่บันทึกไว้" : "ที่อยู่ล่าสุด")}</p>
+                          <p className="mt-1 text-xs leading-5 text-gray-600">{formatDeliveryAddressSummary(address)}</p>
+                          <p className="mt-1 text-[11px] text-green-700">📍 จุดส่งเดิมที่ยืนยันแล้ว</p>
+                          {address.lastUsedAt && (
+                            <p className="mt-0.5 text-[11px] text-gray-400">
+                              ใช้ล่าสุด {new Date(address.lastUsedAt).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" })}
+                            </p>
+                          )}
+                        </div>
+                        {address.isDefault && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">หลัก</span>}
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void selectDeliveryAddress(address)}
+                          className="flex-1 rounded-lg bg-orange-500 px-3 py-2 text-xs font-medium text-white"
+                        >
+                          ใช้ที่อยู่นี้
+                        </button>
+                        <a
+                          href={googleMapsPreviewUrl({ lat: address.deliveryPinLat, lng: address.deliveryPinLng, placeId: address.placeId })}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-blue-700"
+                        >
+                          เปิดแผนที่
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <DeliveryAddressFields
+              value={deliveryAddress}
+              onChange={setDeliveryAddress}
+              errors={{ premises: fieldErrors.premises, locality: fieldErrors.locality }}
+              onFieldChange={(field) => {
+                setSelectedAddressId(null);
+                setFieldErrors((current) => ({ ...current, [field]: undefined }));
+              }}
+            />
+
+            <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+              <label className="flex items-start gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={saveAddress}
+                  onChange={(event) => setSaveAddress(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>บันทึกที่อยู่นี้ไว้ใช้ครั้งต่อไป</span>
+              </label>
+              {saveAddress && (
+                <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                  <div className="space-y-1">
+                    <label htmlFor="delivery-address-label" className="text-xs font-medium text-gray-600">ตั้งชื่อ เช่น บ้าน / ที่ทำงาน</label>
+                    <input
+                      id="delivery-address-label"
+                      value={saveAddressLabel}
+                      onChange={(event) => setSaveAddressLabel(event.target.value)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    />
+                  </div>
+                  <label className="flex items-center gap-1 pb-2 text-[11px] text-gray-600">
+                    <input type="checkbox" checked={makeDefaultAddress} onChange={(event) => setMakeDefaultAddress(event.target.checked)} />
+                    หลัก
+                  </label>
+                </div>
+              )}
+            </div>
 
             <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
               <div>
-                <p className="text-sm font-semibold text-gray-800">📍 จุดส่งจริงสำหรับ Rider</p>
+                <p className="text-sm font-semibold text-gray-800">📍 จุดส่งจริงสำหรับ Rider <span className="text-red-600" aria-hidden="true">*</span></p>
                 <p className="text-xs text-gray-500 mt-1">วาง Google Maps Share Link หรือ latitude, longitude ของจุดส่งจริง ไม่จำเป็นต้องเป็นตำแหน่งโทรศัพท์ของผู้สั่ง</p>
               </div>
+              <label htmlFor="delivery-pin-input" className="sr-only">จุดส่งจริงสำหรับ Rider</label>
               <textarea
+                id="delivery-pin-input"
                 rows={2}
                 value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
+                onChange={(e) => {
+                  setLocationInput(e.target.value);
+                  setFieldErrors((current) => ({ ...current, deliveryPoint: undefined }));
+                }}
                 placeholder="https://maps.app.goo.gl/... หรือ 13.77314, 100.67611"
                 className="w-full rounded-lg border border-blue-100 bg-white p-2.5 text-sm"
+                aria-invalid={Boolean(fieldErrors.deliveryPoint)}
+                aria-describedby={fieldErrors.deliveryPoint ? "delivery-pin-error" : undefined}
               />
+              {fieldErrors.deliveryPoint && <p id="delivery-pin-error" className="text-xs text-red-600">{fieldErrors.deliveryPoint}</p>}
               <button
                 type="button"
                 onClick={() => void resolveLocationInput()}
