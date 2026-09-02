@@ -2,8 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DeliveryAddressFields, formatDeliveryAddress, type DeliveryAddressFieldsValue } from "@/components/DeliveryAddressFields";
 import { DeliveryLocationPicker } from "@/components/DeliveryLocationPicker";
+import { LineSessionRecoveryPanel } from "@/components/LineSessionRecoveryPanel";
 import { cart, useCart, cartLineTotal, cartTotal } from "@/lib/cart";
-import { clearCheckoutDraft, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "@/lib/checkoutDraft";
+import { clearCheckoutDraft, clearCheckoutRecoveryDraft, loadCheckoutDraft, loadCheckoutRecoveryDraft, saveCheckoutDraft, saveCheckoutRecoveryDraft, type CheckoutDraft } from "@/lib/checkoutDraft";
 import {
   formatDeliveryAddressSummary,
   loadCustomerDeliveryAddresses,
@@ -20,7 +21,8 @@ import {
 } from "@/lib/deliveryLocation";
 import { submitOrder } from "@/lib/order";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
-import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
+import { currentLineReturnPath, hasValidCheckoutSession } from "@/lib/lineSessionRecovery";
+import { getCurrentCustomerId, isLineSessionAuthError, publicSupabase, startLineSessionRecovery, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/cart")({ component: CartCheckout });
 
@@ -38,6 +40,7 @@ type ShopCheckout = {
 
 type OrderTiming = "now" | "preorder";
 type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premises" | "locality" | "deliveryPoint", string>>;
+type CheckoutAuthState = "checking" | "valid" | "required" | "recovering" | "failed";
 
 function toBangkokInput(iso: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -111,11 +114,56 @@ function CartCheckout() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
+  const [authState, setAuthState] = useState<CheckoutAuthState>("checking");
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const restoredDraftRef = useRef(false);
   const latestQuoteKeyRef = useRef<string | null>(null);
 
   const availability = useMemo(() => shop ? getShopAvailability(shop.is_open, shop.business_hours) : null, [shop]);
+
+  const checkLineSession = useCallback(async () => {
+    setAuthState("checking");
+    setAuthMessage(null);
+    try {
+      const cid = await getCurrentCustomerId({ interactive: false, refresh: true });
+      if (!cid) {
+        setCustomerId(null);
+        setAuthState("required");
+        setAuthMessage("กรุณาเข้าสู่ระบบ LINE เพื่อเช็คเอาท์ต่อ");
+        return null;
+      }
+      setCustomerId(cid);
+      setAuthState("valid");
+      return cid;
+    } catch (cause) {
+      setCustomerId(null);
+      if (isLineSessionAuthError(cause)) {
+        setAuthState("required");
+        setAuthMessage("LINE session หมดอายุ กรุณาเข้าสู่ระบบใหม่เพื่อสั่งซื้อ");
+      } else {
+        setAuthState("failed");
+        setAuthMessage("ตรวจสอบ session ไม่สำเร็จ อาจเป็นปัญหาเครือข่าย กรุณาลองใหม่");
+      }
+      return null;
+    }
+  }, []);
+
+  async function beginLineRecovery(force = false) {
+    setAuthState("recovering");
+    setAuthMessage(null);
+    try {
+      const result = await startLineSessionRecovery({ returnPath: currentLineReturnPath(), force });
+      if (result === "started") return;
+      setAuthState("failed");
+      setAuthMessage(result === "recent_attempt_blocked"
+        ? "เพิ่งเริ่ม LINE Login ไปแล้ว กรุณารอสักครู่ แล้วลองตรวจสอบ session อีกครั้ง"
+        : "ไม่สามารถเปิด LINE Login จากหน้านี้ได้ กรุณาเปิด MyTree ผ่าน LINE");
+    } catch {
+      setAuthState("failed");
+      setAuthMessage("เปิด LINE Login ไม่สำเร็จ ตะกร้ายังอยู่ กรุณาลองใหม่");
+    }
+  }
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ key: string; name: string; isSet: boolean; items: typeof c.items; count: number; total: number }> = [];
@@ -183,23 +231,31 @@ function CartCheckout() {
     } catch (cause) {
       latestQuoteKeyRef.current = null;
       setShowDestinationChooser(true);
-      setError(cause instanceof Error ? cause.message : "คำนวณเส้นทางไม่สำเร็จ");
+      if (isLineSessionAuthError(cause)) {
+        setAuthState("required");
+        setAuthMessage("LINE session หมดอายุ กรุณาเข้าสู่ระบบใหม่ก่อนคำนวณค่าส่ง ตะกร้ายังอยู่");
+      } else {
+        setError(cause instanceof Error ? cause.message : "คำนวณเส้นทางไม่สำเร็จ");
+      }
     } finally {
       setQuotingRoute(false);
     }
   }, [checkoutShopId, deliveryPoint, routeQuote]);
 
   useEffect(() => {
+    let disposed = false;
     (async () => {
       try {
-        const cid = await getCurrentCustomerId();
+        const cid = await checkLineSession();
+        if (disposed) return;
         if (!cid) return;
-        setCustomerId(cid);
         setDeliveryAddresses(loadCustomerDeliveryAddresses(cid));
         const { data } = await supabase.from("customers").select("name,phone").eq("id", cid).maybeSingle();
+        if (disposed) return;
         const row = data as { name: string | null; phone: string | null } | null;
-        const draft = loadCheckoutDraft(cid, checkoutShopId);
+        const draft = loadCheckoutDraft(cid, checkoutShopId) ?? loadCheckoutRecoveryDraft(checkoutShopId);
         if (draft) {
+          clearCheckoutRecoveryDraft(checkoutShopId);
           restoredDraftRef.current = true;
           setCustomerName(draft.customerName);
           setCustomerPhone(draft.customerPhone);
@@ -225,15 +281,21 @@ function CartCheckout() {
         if (row?.name) setCustomerName(row.name);
         if (row?.phone) setCustomerPhone(row.phone);
       } catch {
-        // Preview/external browser: leave editable contact fields blank.
+        if (!disposed) {
+          setAuthState("failed");
+          setAuthMessage("โหลดข้อมูลลูกค้าไม่สำเร็จ ตะกร้ายังอยู่ กรุณาลองใหม่");
+        }
       }
     })();
-  }, [checkoutShopId]);
+    return () => {
+      disposed = true;
+    };
+  }, [checkoutShopId, checkLineSession]);
 
   useEffect(() => {
-    if (!customerId || !checkoutShopId || done) return;
+    if ((!customerId && authState !== "required" && authState !== "failed") || !checkoutShopId || done) return;
     const timer = window.setTimeout(() => {
-      saveCheckoutDraft(customerId, checkoutShopId, {
+      const draft: CheckoutDraft = {
         savedAt: new Date().toISOString(),
         customerName,
         customerPhone,
@@ -259,10 +321,12 @@ function CartCheckout() {
           formattedAddress: deliveryPoint.formattedAddress ?? null,
           submittedMapUrl: deliveryPoint.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
         } : null,
-      });
+      };
+      if (customerId) saveCheckoutDraft(customerId, checkoutShopId, draft);
+      else saveCheckoutRecoveryDraft(checkoutShopId, draft);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [customerId, checkoutShopId, done, customerName, customerPhone, fulfillment, payment, timing, requestedForLocal, deliveryAddress, note, selectedAddressId, saveAddress, saveAddressLabel, makeDefaultAddress, deliveryPoint]);
+  }, [customerId, checkoutShopId, authState, done, customerName, customerPhone, fulfillment, payment, timing, requestedForLocal, deliveryAddress, note, selectedAddressId, saveAddress, saveAddressLabel, makeDefaultAddress, deliveryPoint]);
 
   const handleCandidateChange = useCallback((point: ConfirmedDeliveryPoint) => {
     setCandidatePoint(point);
@@ -384,6 +448,11 @@ function CartCheckout() {
     setFieldErrors(nextFieldErrors);
     if (Object.keys(nextFieldErrors).length > 0) return setError("กรุณากรอกข้อมูลจำเป็นให้ครบ");
     if (fulfillment === "delivery" && !routeQuote) return setError("กรุณารอให้ระบบคำนวณระยะทางและค่าส่งสำเร็จก่อนสั่ง");
+    if (!hasValidCheckoutSession(authState, customerId)) {
+      setAuthState("required");
+      setAuthMessage("กรุณาเข้าสู่ระบบ LINE ใหม่ก่อนยืนยันคำสั่งซื้อ ตะกร้ายังอยู่");
+      return;
+    }
     if (fulfillment === "delivery" && shop?.delivery_enabled === false) return setError("ร้านนี้ไม่เปิดบริการจัดส่ง");
     if (fulfillment === "pickup" && shop?.pickup_enabled === false) return setError("ร้านนี้ไม่เปิดบริการรับเอง");
     if (payment === "cash" && shop && !shop.payment_cash_enabled) return setError("ร้านนี้ไม่รับเงินสด");
@@ -396,34 +465,50 @@ function CartCheckout() {
 
     setSubmitting(true);
     setError(null);
-    const cid = await getCurrentCustomerId();
-    if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
+    try {
+      const currentCustomerId = await checkLineSession();
+      if (!currentCustomerId || currentCustomerId !== customerId) {
+        setSubmitting(false);
+        setAuthState("required");
+        setAuthMessage("กรุณาเข้าสู่ระบบ LINE ใหม่ก่อนยืนยันคำสั่งซื้อ ตะกร้ายังอยู่");
+        return;
+      }
+      await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", currentCustomerId);
 
-    const res = await submitOrder({
-      shopId: checkoutShopId,
-      items: c.items.map((i) => ({
-        lineId: i.lineId,
-        kind: i.kind,
-        itemId: i.itemId,
-        qty: i.qty,
-        options: i.options,
-        note: i.note,
-        bundleSelections: i.bundleSelections,
-      })),
-      fulfillment,
-      payment,
-      address: fulfillment === "delivery" ? formattedAddress : null,
-      destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
-      destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
-      locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
-      locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
-      submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
-      note: note.trim() || null,
-      requestedFor,
-    });
+      const res = await submitOrder({
+        shopId: checkoutShopId,
+        items: c.items.map((i) => ({
+          lineId: i.lineId,
+          kind: i.kind,
+          itemId: i.itemId,
+          qty: i.qty,
+          options: i.options,
+          note: i.note,
+          bundleSelections: i.bundleSelections,
+        })),
+        fulfillment,
+        payment,
+        address: fulfillment === "delivery" ? formattedAddress : null,
+        destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
+        destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
+        locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
+        locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
+        submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
+        note: note.trim() || null,
+        requestedFor,
+      });
 
-    setSubmitting(false);
-    if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
+      setSubmitting(false);
+      if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
+    } catch (cause) {
+      setSubmitting(false);
+      if (isLineSessionAuthError(cause)) {
+        setAuthState("required");
+        setAuthMessage("LINE session หมดอายุ กรุณาเข้าสู่ระบบใหม่ก่อนยืนยันคำสั่งซื้อ ตะกร้ายังอยู่");
+        return;
+      }
+      return setError(cause instanceof Error ? cause.message : "สั่งไม่สำเร็จ");
+    }
     if (customerId && fulfillment === "delivery" && deliveryPoint) {
       const nextAddresses = upsertUsedDeliveryAddress(deliveryAddresses, {
         recipientName: customerName.trim(),
@@ -444,6 +529,7 @@ function CartCheckout() {
       setDeliveryAddresses(nextAddresses);
     }
     clearCheckoutDraft(customerId, checkoutShopId);
+    clearCheckoutRecoveryDraft(checkoutShopId);
     cart.clear();
     setDone(true);
   }
@@ -480,6 +566,15 @@ function CartCheckout() {
         <h1 className="text-lg font-bold">ตรวจสอบคำสั่งซื้อ</h1>
         {shop?.name && <p className="text-sm text-gray-500 mt-1">ร้าน {shop.name}</p>}
       </div>
+
+      {(authState === "required" || authState === "recovering" || authState === "failed") && (
+        <LineSessionRecoveryPanel
+          state={authState === "recovering" ? "recovering" : authState === "failed" ? "failed" : "required"}
+          message={authMessage}
+          onLogin={() => void beginLineRecovery()}
+          onRetry={() => void checkLineSession()}
+        />
+      )}
 
       {availability?.state === "manual_closed" && <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-sm text-red-600">ร้านปิดรับออเดอร์ชั่วคราว</div>}
       {availability?.state === "schedule_closed" && (
@@ -687,7 +782,7 @@ function CartCheckout() {
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="fixed left-4 right-4 bottom-4 z-20">
-        <button onClick={confirm} disabled={submitting || quotingRoute || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
+        <button onClick={confirm} disabled={submitting || quotingRoute || authState !== "valid" || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
           <span className="min-w-0">{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
           <span className="shrink-0">{routeQuote && fulfillment === "delivery" ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${routeQuote.deliveryFee.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
         </button>

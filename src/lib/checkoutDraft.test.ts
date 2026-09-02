@@ -1,5 +1,8 @@
 import {
   buildCheckoutDraftKey,
+  clearCheckoutRecoveryDraft,
+  loadCheckoutRecoveryDraft,
+  saveCheckoutRecoveryDraft,
   sanitizeCheckoutDraftForStorage,
   shouldRestoreCheckoutDraft,
   type CheckoutDraft,
@@ -39,4 +42,9 @@ export const checkoutDraftCompileChecks = {
   restored: shouldRestoreCheckoutDraft(draft, new Date("2026-09-01T12:00:00.000Z")),
   expired: shouldRestoreCheckoutDraft(draft, new Date("2026-09-02T02:00:01.000Z")),
   sanitized: sanitizeCheckoutDraftForStorage(draft).routeQuoteToken,
+  recoveryReaders: {
+    load: typeof loadCheckoutRecoveryDraft,
+    save: typeof saveCheckoutRecoveryDraft,
+    clear: typeof clearCheckoutRecoveryDraft,
+  },
 };

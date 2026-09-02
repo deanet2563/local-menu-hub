@@ -14,6 +14,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
+import { Route as DebugLineSessionRecoveryRouteImport } from './routes/debug/line-session-recovery'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as RiderIndexRouteImport } from './routes/rider/index'
 import { Route as RiderProfileRouteImport } from './routes/rider/profile'
@@ -57,6 +58,12 @@ const DebugCheckoutMapRoute = DebugCheckoutMapRouteImport.update({
   path: '/debug/checkout-map',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DebugLineSessionRecoveryRoute =
+  DebugLineSessionRecoveryRouteImport.update({
+    id: '/debug/line-session-recovery',
+    path: '/debug/line-session-recovery',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const HubIndexRoute = HubIndexRouteImport.update({
   id: '/hub/',
   path: '/hub/',
@@ -149,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/debug/line-session-recovery': typeof DebugLineSessionRecoveryRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -173,6 +181,7 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/debug/line-session-recovery': typeof DebugLineSessionRecoveryRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -198,6 +207,7 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/debug/line-session-recovery': typeof DebugLineSessionRecoveryRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -224,6 +234,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/orders'
     | '/debug/checkout-map'
+    | '/debug/line-session-recovery'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/orders'
     | '/debug/checkout-map'
+    | '/debug/line-session-recovery'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
@@ -272,6 +284,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/orders'
     | '/debug/checkout-map'
+    | '/debug/line-session-recovery'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
@@ -297,6 +310,7 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   OrdersRoute: typeof OrdersRoute
   DebugCheckoutMapRoute: typeof DebugCheckoutMapRoute
+  DebugLineSessionRecoveryRoute: typeof DebugLineSessionRecoveryRoute
   RiderProfileRoute: typeof RiderProfileRoute
   RiderSignupRoute: typeof RiderSignupRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
@@ -351,6 +365,13 @@ declare module '@tanstack/react-router' {
       path: '/debug/checkout-map'
       fullPath: '/debug/checkout-map'
       preLoaderRoute: typeof DebugCheckoutMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/debug/line-session-recovery': {
+      id: '/debug/line-session-recovery'
+      path: '/debug/line-session-recovery'
+      fullPath: '/debug/line-session-recovery'
+      preLoaderRoute: typeof DebugLineSessionRecoveryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hub/': {
@@ -481,6 +502,7 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   OrdersRoute: OrdersRoute,
   DebugCheckoutMapRoute: DebugCheckoutMapRoute,
+  DebugLineSessionRecoveryRoute: DebugLineSessionRecoveryRoute,
   RiderProfileRoute: RiderProfileRoute,
   RiderSignupRoute: RiderSignupRoute,
   ShopShopIdRoute: ShopShopIdRoute,

@@ -1,5 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
+import {
+  clearLineSessionRecoveryAttempt,
+  consumeLineReturnPath,
+  currentLineReturnPath,
+  LineSessionAuthError,
+  markLineSessionRecoveryAttempt,
+  readLineSessionRecoveryAttempt,
+  readLineReturnPath,
+  storeLineReturnPath,
+} from "@/lib/lineSessionRecovery";
+export { LineSessionAuthError, isLineSessionAuthError } from "@/lib/lineSessionRecovery";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -21,6 +32,14 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
+
+type AuthOptions = {
+  interactive?: boolean;
+  returnPath?: string | null;
+  refresh?: boolean;
+};
+
+export type LineSessionRecoveryStartResult = "started" | "recent_attempt_blocked" | "preview_blocked" | "unavailable";
 
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
 export function isOrderingPreview(): boolean {
@@ -48,33 +67,73 @@ export function initLiff(): Promise<void> {
   return liffReady;
 }
 
-/** Get a valid MyTree access token, logging in via LINE if needed. */
-export async function getAccessToken(): Promise<string> {
-  if (isPreviewCheckoutMapAuthBypassActive()) return "";
-  const now = Math.floor(Date.now() / 1000);
-  if (cached && cached.exp - 60 > now) return cached.token;
+function lineLoginRedirectUri(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.location.origin;
+}
 
+export async function startLineSessionRecovery(options: AuthOptions & { force?: boolean } = {}): Promise<LineSessionRecoveryStartResult> {
+  if (isPreviewCheckoutMapAuthBypassActive() || isOrderingPreview()) return "preview_blocked";
+  if (typeof window === "undefined") return "unavailable";
+
+  storeLineReturnPath(options.returnPath ?? currentLineReturnPath());
+  const now = Date.now();
+  if (!options.force && readLineSessionRecoveryAttempt(now) !== null) return "recent_attempt_blocked";
+  markLineSessionRecoveryAttempt(now);
+  await initLiff();
+  liff.login({ redirectUri: lineLoginRedirectUri() });
+  return "started";
+}
+
+export async function completeLineSessionReturnIfReady(): Promise<string | null> {
+  if (isPreviewCheckoutMapAuthBypassActive() || typeof window === "undefined") return null;
+  const pendingPath = readLineReturnPath();
+  if (!pendingPath) return null;
+  await initLiff();
+  if (!liff.isLoggedIn()) return null;
+  consumeLineReturnPath();
+  clearLineSessionRecoveryAttempt();
+  if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== pendingPath) {
+    window.location.replace(pendingPath);
+  }
+  return pendingPath;
+}
+
+export async function getLineIdToken(options: AuthOptions = {}): Promise<string> {
+  if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  const interactive = options.interactive ?? true;
   await initLiff();
   if (!liff.isLoggedIn()) {
-    // Raw preview browsing intentionally works outside LINE. Authenticated
-    // actions are allowed only after the same preview is launched through its
-    // configured staging LIFF URL.
-    if (isOrderingPreview()) return "";
-    liff.login();
-    return "";
+    if (interactive) {
+      await startLineSessionRecovery({ returnPath: options.returnPath });
+      return "";
+    }
+    throw new LineSessionAuthError("missing_login");
   }
 
   const idToken = liff.getIDToken();
   if (!idToken) {
-    if (isOrderingPreview()) return "";
-    throw new Error("no LINE idToken");
+    throw new LineSessionAuthError("missing_id_token");
   }
+  return idToken;
+}
+
+/** Get a valid MyTree access token, logging in via LINE if needed. */
+export async function getAccessToken(options: AuthOptions = {}): Promise<string> {
+  if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  const now = Math.floor(Date.now() / 1000);
+  if (!options.refresh && cached && cached.exp - 60 > now) return cached.token;
+
+  if (isOrderingPreview()) return "";
+  const idToken = await getLineIdToken(options);
+  if (!idToken) return "";
 
   const res = await fetch(AUTH_BROKER, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
   });
+  if (res.status === 401 || res.status === 403) throw new LineSessionAuthError("expired_or_invalid");
   if (!res.ok) throw new Error(`auth broker error: ${res.status}`);
   const data = (await res.json()) as { access_token: string; expires_in: number };
 
@@ -83,8 +142,8 @@ export async function getAccessToken(): Promise<string> {
 }
 
 /** The current MyTree customer_id (from the LINE-issued token), or null. */
-export async function getCurrentCustomerId(): Promise<string | null> {
-  const token = await getAccessToken();
+export async function getCurrentCustomerId(options: AuthOptions = {}): Promise<string | null> {
+  const token = await getAccessToken(options);
   if (!token) return null;
   try {
     const part = token.split(".")[1];

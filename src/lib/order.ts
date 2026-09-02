@@ -1,5 +1,4 @@
-import liff from "@line/liff";
-import { initLiff, isOrderingPreview } from "@/lib/supabase";
+import { getLineIdToken, isOrderingPreview, LineSessionAuthError } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
 
@@ -84,23 +83,14 @@ export async function submitOrder(
   const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
   if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
 
-  await initLiff();
-
-  if (!liff.isLoggedIn()) {
+  try {
     if (isOrderingPreview()) {
       return {
         ok: false,
         error: "โหมดทดสอบหน้าเว็บยังไม่ได้เปิดผ่าน LIFF staging จึงยังไม่ส่งคำสั่งซื้อจริง",
       };
     }
-    liff.login();
-    return { ok: false, error: "กำลังเข้าสู่ระบบ LINE..." };
-  }
-
-  const idToken = liff.getIDToken();
-  if (!idToken) return { ok: false, error: "ไม่พบ LINE idToken" };
-
-  try {
+    const idToken = await getLineIdToken({ interactive: false });
     const enrichedOrder = withSetMetadata(quotedOrder);
     const res = await fetch(ORDER_URL, {
       method: "POST",
@@ -108,9 +98,13 @@ export async function submitOrder(
       body: JSON.stringify({ idToken, order: enrichedOrder }),
     });
     const data = (await res.json()) as { ok?: boolean; order_id?: string; error?: string };
+    if (res.status === 401 || res.status === 403 || data.error === "authentication_required" || data.error === "invalid_line_id_token") {
+      throw new LineSessionAuthError("expired_or_invalid");
+    }
     if (!res.ok) return { ok: false, error: data.error ?? `error ${res.status}` };
     return { ok: true, order_id: data.order_id };
   } catch (e) {
+    if (e instanceof LineSessionAuthError) throw e;
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
 }

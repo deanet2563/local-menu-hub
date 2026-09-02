@@ -1,5 +1,4 @@
-import liff from "@line/liff";
-import { initLiff, isOrderingPreview } from "@/lib/supabase";
+import { getLineIdToken, isOrderingPreview, LineSessionAuthError } from "@/lib/supabase";
 
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
@@ -132,17 +131,8 @@ export function normalizeDeliveryPlaceSearchResults(payload: DeliveryPlaceSearch
 }
 
 export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDeliveryPoint, "lat" | "lng">): Promise<DeliveryRouteQuote> {
-  await initLiff();
-  if (!liff.isLoggedIn()) {
-    if (isOrderingPreview()) {
-      throw new Error("โหมดทดสอบต้องเปิดผ่าน LIFF staging ก่อนคำนวณค่าส่งจริง");
-    }
-    liff.login();
-    throw new Error("กำลังเข้าสู่ระบบ LINE...");
-  }
-
-  const idToken = liff.getIDToken();
-  if (!idToken) throw new Error("ไม่พบ LINE idToken สำหรับคำนวณค่าส่ง");
+  if (isOrderingPreview()) throw new LineSessionAuthError("missing_login", "โหมดทดสอบต้องเปิดผ่าน LIFF staging ก่อนคำนวณค่าส่งจริง");
+  const idToken = await getLineIdToken({ interactive: false });
 
   const response = await fetch(DELIVERY_QUOTE_URL, {
     method: "POST",
@@ -152,6 +142,9 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
   const payload = await response.json().catch(() => null) as QuoteResponse | null;
   if (!response.ok || !payload?.ok || !payload.quote || !payload.quoteToken) {
     latestQuoteBinding = null;
+    if (response.status === 401 || response.status === 403 || payload?.error === "authentication_required" || payload?.error === "invalid_line_id_token") {
+      throw new LineSessionAuthError("expired_or_invalid");
+    }
     throw new Error(quoteErrorText(payload?.error));
   }
 

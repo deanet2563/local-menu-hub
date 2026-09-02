@@ -32,6 +32,7 @@ export type CheckoutDraft = {
 };
 
 const STORAGE_PREFIX = "mytree.checkoutDraft.v1";
+const RECOVERY_STORAGE_PREFIX = "mytree.checkoutRecoveryDraft.v1";
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function buildCheckoutDraftKey(input: { customerId: string | null; shopId: string | null }): string | null {
@@ -79,6 +80,42 @@ export function saveCheckoutDraft(customerId: string | null, shopId: string | nu
 export function clearCheckoutDraft(customerId: string | null, shopId: string | null): void {
   if (typeof window === "undefined") return;
   const key = buildCheckoutDraftKey({ customerId, shopId });
+  if (key) window.localStorage.removeItem(key);
+}
+
+function buildCheckoutRecoveryDraftKey(shopId: string | null): string | null {
+  if (!shopId) return null;
+  return `${RECOVERY_STORAGE_PREFIX}.${encodeURIComponent(shopId)}`;
+}
+
+export function loadCheckoutRecoveryDraft(shopId: string | null): CheckoutDraft | null {
+  if (typeof window === "undefined") return null;
+  const key = buildCheckoutRecoveryDraftKey(shopId);
+  if (!key) return null;
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as CheckoutDraft;
+    if (!isCheckoutDraft(parsed) || !shouldRestoreCheckoutDraft(parsed)) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(key);
+    return null;
+  }
+}
+
+export function saveCheckoutRecoveryDraft(shopId: string | null, draft: CheckoutDraft): void {
+  if (typeof window === "undefined") return;
+  const key = buildCheckoutRecoveryDraftKey(shopId);
+  if (key) window.localStorage.setItem(key, JSON.stringify(sanitizeCheckoutDraftForStorage(draft)));
+}
+
+export function clearCheckoutRecoveryDraft(shopId: string | null): void {
+  if (typeof window === "undefined") return;
+  const key = buildCheckoutRecoveryDraftKey(shopId);
   if (key) window.localStorage.removeItem(key);
 }
 
