@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DeliveryLocationPicker } from "@/components/DeliveryLocationPicker";
 import type { ConfirmedDeliveryPoint } from "@/lib/deliveryLocation";
-import { isCheckoutMapDebugRouteAllowedHost } from "@/lib/merchantMapMarkers";
+import { isCheckoutMapDebugRouteAllowedHost, isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 
 type Search = {
   shopId?: string;
@@ -36,6 +36,16 @@ export const Route = createFileRoute("/debug/checkout-map")({
 function CheckoutMapDebugRoute() {
   const { shopId } = Route.useSearch();
   const [candidate, setCandidate] = useState<ConfirmedDeliveryPoint | null>(null);
+  const [secondsOnPage, setSecondsOnPage] = useState(0);
+  const previewAuthBypassActive = isPreviewCheckoutMapAuthBypassActive();
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setSecondsOnPage(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   if (isBlockedHost()) {
     return (
@@ -52,6 +62,10 @@ function CheckoutMapDebugRoute() {
         <p className="mt-1 text-xs leading-5 text-amber-900">
           Uses the real checkout delivery map and public shop marker query. No cart, login, quote, or order submission runs here.
         </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px] text-amber-950">
+          <p>previewAuthBypass: {previewAuthBypassActive ? "active" : "inactive"}</p>
+          <p>secondsOnPage: {secondsOnPage}</p>
+        </div>
       </section>
 
       <section className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
@@ -76,6 +90,7 @@ function CheckoutMapDebugRoute() {
       </section>
 
       <DeliveryLocationPicker
+        key={candidate ? "with-preview-candidate" : "without-preview-candidate"}
         shopId={shopId ?? null}
         candidate={candidate}
         onCandidateChange={setCandidate}

@@ -2,7 +2,6 @@ export const MERCHANT_MARKER_VIEWPORT_PADDING_DEGREES = 0.01;
 export const MERCHANT_MARKER_QUERY_LIMIT = 100;
 export const CHECKOUT_MAP_SINGLE_POINT_ZOOM = 15;
 export const CHECKOUT_MAP_FIT_PADDING = { top: 56, right: 32, bottom: 112, left: 32 } as const;
-export const CHECKOUT_MAP_DEBUG_BLOCKED_HOSTS = ["mytree.cc", "www.mytree.cc", "local-menu-hub.pages.dev"] as const;
 
 export type MerchantMapViewport = {
   north: number;
@@ -89,8 +88,4 @@ export function boundsForMerchantPoints(points: Array<{ lat: number; lng: number
     east: valid[0]!.lng,
     west: valid[0]!.lng,
   });
-}
-
-export function isCheckoutMapDebugRouteAllowedHost(hostname: string): boolean {
-  return !CHECKOUT_MAP_DEBUG_BLOCKED_HOSTS.includes(hostname as typeof CHECKOUT_MAP_DEBUG_BLOCKED_HOSTS[number]);
 }

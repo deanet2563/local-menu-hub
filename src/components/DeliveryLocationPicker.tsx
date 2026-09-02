@@ -384,7 +384,8 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     }
 
     clearMerchantMarkers();
-    merchantMarkersRef.current = merchantShops.filter((shop) => shop.shopId !== cartShop?.shopId).map((shop) => {
+    const excludedShopId = cartShop?.shopId ?? shopId;
+    merchantMarkersRef.current = merchantShops.filter((shop) => shop.shopId !== excludedShopId).map((shop) => {
       const marker = new AdvancedMarkerElement({
         map,
         position: { lat: shop.lat, lng: shop.lng },
@@ -397,7 +398,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     });
 
     return clearMerchantMarkers;
-  }, [advancedMarkerAvailable, cartShop?.shopId, mapReady, merchantShops]);
+  }, [advancedMarkerAvailable, cartShop?.shopId, mapReady, merchantShops, shopId]);
 
   useEffect(() => {
     const map = mapRef.current;

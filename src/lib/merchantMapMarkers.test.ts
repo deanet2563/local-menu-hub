@@ -2,12 +2,15 @@ import {
   boundsForMerchantPoints,
   CHECKOUT_MAP_FIT_PADDING,
   CHECKOUT_MAP_SINGLE_POINT_ZOOM,
-  isCheckoutMapDebugRouteAllowedHost,
   MERCHANT_MARKER_VIEWPORT_PADDING_DEGREES,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
   type MerchantMapRow,
 } from "@/lib/merchantMapMarkers";
+import {
+  isCheckoutMapDebugRouteAllowedHost,
+  isPreviewCheckoutMapAuthBypassLocation,
+} from "@/lib/previewDebugRoute";
 
 const rows: MerchantMapRow[] = [
   {
@@ -58,6 +61,19 @@ export const merchantMapMarkersCompileChecks = {
     wwwProductionDomainBlocked: isCheckoutMapDebugRouteAllowedHost("www.mytree.cc") === false,
     productionPagesBlocked: isCheckoutMapDebugRouteAllowedHost("local-menu-hub.pages.dev") === false,
     hashedPreviewAllowed: isCheckoutMapDebugRouteAllowedHost("6a526645.local-menu-hub.pages.dev") === true,
+    arbitraryHostBlocked: isCheckoutMapDebugRouteAllowedHost("example.com") === false,
+    authBypassRequiresPreviewHostAndExactPath: isPreviewCheckoutMapAuthBypassLocation({
+      hostname: "6a526645.local-menu-hub.pages.dev",
+      pathname: "/debug/checkout-map",
+    }) === true,
+    authBypassRejectsCartOnPreview: isPreviewCheckoutMapAuthBypassLocation({
+      hostname: "6a526645.local-menu-hub.pages.dev",
+      pathname: "/cart",
+    }) === false,
+    authBypassRejectsDebugPathOnProduction: isPreviewCheckoutMapAuthBypassLocation({
+      hostname: "mytree.cc",
+      pathname: "/debug/checkout-map",
+    }) === false,
   },
   visibleShopNames: normalizeMerchantMapRows(rows).map((shop) => shop.name),
 };
