@@ -36,6 +36,7 @@ export const Route = createFileRoute("/debug/checkout-map")({
 function CheckoutMapDebugRoute() {
   const { shopId } = Route.useSearch();
   const [candidate, setCandidate] = useState<ConfirmedDeliveryPoint | null>(null);
+  const [debugVisible, setDebugVisible] = useState(true);
   const [secondsOnPage, setSecondsOnPage] = useState(0);
   const previewAuthBypassActive = isPreviewCheckoutMapAuthBypassActive();
 
@@ -87,6 +88,13 @@ function CheckoutMapDebugRoute() {
             Candidate 13.789336,100.686407
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setDebugVisible((current) => !current)}
+          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700"
+        >
+          {debugVisible ? "ซ่อนข้อมูล Debug" : "แสดงข้อมูล Debug"}
+        </button>
       </section>
 
       <DeliveryLocationPicker
@@ -94,7 +102,7 @@ function CheckoutMapDebugRoute() {
         shopId={shopId ?? null}
         candidate={candidate}
         onCandidateChange={setCandidate}
-        debug
+        debug={debugVisible}
       />
     </main>
   );

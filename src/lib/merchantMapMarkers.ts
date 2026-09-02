@@ -16,6 +16,8 @@ export type MerchantMapRow = {
   category: string | null;
   description: string | null;
   address: string | null;
+  logo_url: string | null;
+  is_open: boolean | null;
   lat: number | null;
   lng: number | null;
 };
@@ -26,6 +28,8 @@ export type MerchantMapShop = {
   category: string | null;
   description: string | null;
   address: string | null;
+  logoUrl: string | null;
+  isOpen: boolean | null;
   lat: number;
   lng: number;
 };
@@ -59,9 +63,30 @@ export function normalizeMerchantMapRows(rows: MerchantMapRow[]): MerchantMapSho
       category: row.category,
       description: row.description,
       address: row.address,
+      logoUrl: normalizeMerchantLogoUrl(row.logo_url),
+      isOpen: typeof row.is_open === "boolean" ? row.is_open : null,
       lat: row.lat as number,
       lng: row.lng as number,
     }));
+}
+
+export function normalizeMerchantLogoUrl(value: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" || url.protocol === "http:" ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function merchantFallbackIcon(category: string | null): string {
+  const normalized = category?.toLocaleLowerCase("th-TH") ?? "";
+  if (/กาแฟ|ชา|เครื่องดื่ม|cafe|coffee|drink/.test(normalized)) return "☕";
+  if (/ขนม|เบเกอรี่|bakery|dessert|หวาน|ซาลาเปา|ติ่มซำ/.test(normalized)) return "🥟";
+  if (/อาหาร|ตามสั่ง|food|ครัว|ก๋วยเตี๋ยว|ข้าว/.test(normalized)) return "🍽";
+  return "M";
 }
 
 export function paddedMerchantViewport(viewport: MerchantMapViewport): MerchantMapViewport {

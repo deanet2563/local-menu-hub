@@ -10,6 +10,7 @@ import {
   CHECKOUT_MAP_FIT_PADDING,
   CHECKOUT_MAP_SINGLE_POINT_ZOOM,
   MERCHANT_MARKER_QUERY_LIMIT,
+  merchantFallbackIcon,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
   type MerchantMapBoundsPadding,
@@ -180,9 +181,35 @@ function viewportFromMap(map: GoogleMap): MerchantMapViewport | null {
 function markerContent(shop: MerchantMapShop, kind: MerchantMarkerKind): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.className = kind === "cart-shop" ? "mytree-merchant-marker mytree-cart-shop-marker" : "mytree-merchant-marker";
-  wrapper.textContent = shop.name;
   wrapper.setAttribute("aria-label", `ดูร้าน ${shop.name}`);
+  wrapper.setAttribute("role", "img");
+
+  const visual = document.createElement("span");
+  visual.className = "mytree-merchant-marker-visual";
+  if (shop.logoUrl) {
+    const image = document.createElement("img");
+    image.src = shop.logoUrl;
+    image.alt = "";
+    image.loading = "lazy";
+    image.className = "mytree-merchant-marker-logo";
+    image.onerror = () => {
+      image.remove();
+      visual.textContent = merchantFallbackIcon(shop.category);
+      visual.classList.add("mytree-merchant-marker-fallback");
+    };
+    visual.appendChild(image);
+  } else {
+    visual.textContent = merchantFallbackIcon(shop.category);
+    visual.classList.add("mytree-merchant-marker-fallback");
+  }
+  wrapper.appendChild(visual);
   return wrapper;
+}
+
+function merchantStatusLabel(shop: MerchantMapShop): string | null {
+  if (shop.isOpen === true) return "เปิดอยู่";
+  if (shop.isOpen === false) return "ปิดอยู่";
+  return null;
 }
 
 export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false }: Props) {
@@ -198,7 +225,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const cartShopRequestSeqRef = useRef(0);
   const initialFitDoneRef = useRef(false);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
-  const [debugEnabled] = useState(() => debug || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mapDebug") === "1"));
+  const debugEnabled = debug || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mapDebug") === "1");
   const [mapsError, setMapsError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [markerLibraryState, setMarkerLibraryState] = useState<MarkerLibraryState>("not_requested");
@@ -321,7 +348,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setCartShopStatus(null);
     publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
       .eq("shop_id", shopId)
       .eq("is_approved", true)
       .eq("is_banned", false)
@@ -353,7 +380,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setMerchantError(null);
     const { data, error } = await publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
       .eq("is_approved", true)
       .eq("is_banned", false)
       .not("lat", "is", null)
@@ -560,42 +587,57 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
           <style>{`
             .mytree-merchant-marker {
               position: relative;
-              max-width: 112px;
+              display: grid;
+              width: 44px;
+              height: 52px;
+              place-items: start center;
+              overflow: visible;
+              cursor: pointer;
+            }
+            .mytree-merchant-marker-visual {
+              display: grid;
+              width: 40px;
+              height: 40px;
+              place-items: center;
               overflow: hidden;
               border: 2px solid #14532d;
               border-radius: 999px;
-              background: #22c55e;
+              background: #dcfce7;
               box-shadow: 0 8px 20px rgba(20, 83, 45, 0.28);
               color: #052e16;
-              cursor: pointer;
-              font-size: 12px;
+              font-size: 17px;
               font-weight: 800;
               line-height: 1;
-              padding: 7px 10px;
-              text-overflow: ellipsis;
-              white-space: nowrap;
+            }
+            .mytree-merchant-marker-logo {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+            }
+            .mytree-merchant-marker-fallback {
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             }
             .mytree-merchant-marker::after {
               position: absolute;
               left: 50%;
-              bottom: -7px;
+              bottom: 7px;
               width: 10px;
               height: 10px;
               border-right: 2px solid #14532d;
               border-bottom: 2px solid #14532d;
-              background: #22c55e;
+              background: #dcfce7;
               content: "";
               transform: translateX(-50%) rotate(45deg);
             }
-            .mytree-cart-shop-marker {
+            .mytree-cart-shop-marker .mytree-merchant-marker-visual {
               border-color: #9a3412;
-              background: #f97316;
+              background: #ffedd5;
               box-shadow: 0 10px 24px rgba(154, 52, 18, 0.34);
-              color: #fff7ed;
+              color: #9a3412;
             }
             .mytree-cart-shop-marker::after {
               border-color: #9a3412;
-              background: #f97316;
+              background: #ffedd5;
             }
           `}</style>
           {debugEnabled && (
@@ -619,15 +661,28 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
             </div>
           )}
           {selectedMerchant && (
-            <div className="absolute inset-x-3 bottom-3 rounded-lg border border-green-200 bg-white p-3 text-left shadow-lg">
-              <p className="text-sm font-bold leading-5 text-gray-900">{selectedMerchant.name}</p>
-              {(selectedMerchant.category || selectedMerchant.description) && (
-                <p className="mt-1 text-xs leading-4 text-gray-600">{selectedMerchant.category || selectedMerchant.description}</p>
-              )}
-              {selectedMerchant.category && selectedMerchant.description && (
-                <p className="mt-0.5 text-xs leading-4 text-gray-500">{selectedMerchant.description}</p>
-              )}
-              <div className="mt-2 flex gap-2">
+            <div className="absolute inset-x-3 bottom-3 max-h-[45%] overflow-auto rounded-lg border border-green-200 bg-white p-3 text-left shadow-lg">
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-green-700 bg-green-50 text-sm font-black text-green-900">
+                  {selectedMerchant.logoUrl ? (
+                    <img src={selectedMerchant.logoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span aria-hidden="true">{merchantFallbackIcon(selectedMerchant.category)}</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold leading-5 text-gray-900">{selectedMerchant.name}</p>
+                  {(selectedMerchant.category || selectedMerchant.description) && (
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-gray-600">{selectedMerchant.category || selectedMerchant.description}</p>
+                  )}
+                  {merchantStatusLabel(selectedMerchant) && (
+                    <p className={`mt-1 text-[11px] font-semibold ${selectedMerchant.isOpen ? "text-green-700" : "text-gray-500"}`}>
+                      {merchantStatusLabel(selectedMerchant)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
                 <a href={`/shop/${encodeURIComponent(selectedMerchant.shopId)}`} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-semibold text-white">
                   ดูร้านค้า
                 </a>
