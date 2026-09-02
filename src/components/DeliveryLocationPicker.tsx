@@ -41,12 +41,20 @@ type GoogleMarker = {
 type GoogleMapsApi = {
   maps: {
     Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean; mapId?: string }) => GoogleMap;
-    Marker: new (options: { map: GoogleMap; position: LatLngLiteral; draggable?: boolean; title?: string; zIndex?: number; label?: string | { text: string; color?: string; fontSize?: string; fontWeight?: string } }) => GoogleMarker;
+    Marker: new (options: { map: GoogleMap; position: LatLngLiteral; draggable?: boolean; title?: string; zIndex?: number; label?: string | { text: string; color?: string; fontSize?: string; fontWeight?: string }; icon?: GoogleMarkerIcon }) => GoogleMarker;
+    Size?: new (width: number, height: number) => unknown;
+    Point?: new (x: number, y: number) => unknown;
     importLibrary?: (name: string) => Promise<unknown>;
     marker?: {
       AdvancedMarkerElement: new (options: { map: GoogleMap; position: LatLngLiteral; title: string; content: HTMLElement; zIndex: number }) => GoogleAdvancedMarker;
     };
   };
+};
+
+type GoogleMarkerIcon = {
+  url: string;
+  scaledSize: unknown;
+  anchor: unknown;
 };
 
 type GoogleAdvancedMarker = {
@@ -210,6 +218,22 @@ function merchantStatusLabel(shop: MerchantMapShop): string | null {
   if (shop.isOpen === true) return "เปิดอยู่";
   if (shop.isOpen === false) return "ปิดอยู่";
   return null;
+}
+
+function legacyMerchantMarkerIcon(): { url: string; scaledSize: unknown; anchor: unknown } | undefined {
+  if (!window.google?.maps?.Size || !window.google?.maps?.Point) return undefined;
+  const svg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">',
+    '<path d="M22 51 14 39h16l-8 12Z" fill="#9a3412"/>',
+    '<circle cx="22" cy="21" r="18" fill="#ffedd5" stroke="#9a3412" stroke-width="4"/>',
+    '<text x="22" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="800" fill="#9a3412">M</text>',
+    "</svg>",
+  ].join("");
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(44, 52),
+    anchor: new window.google.maps.Point(22, 52),
+  };
 }
 
 export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false }: Props) {
@@ -458,7 +482,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       position: { lat: cartShop.lat, lng: cartShop.lng },
       title: cartShop.name,
       zIndex: 20_000,
-      label: { text: cartShop.name, color: "#9a3412", fontSize: "12px", fontWeight: "700" },
+      icon: legacyMerchantMarkerIcon(),
     });
     const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
     cartShopMarkerRef.current = { listeners, clear: () => marker.setMap(null) };
