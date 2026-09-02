@@ -145,27 +145,12 @@ function viewportFromMap(map: GoogleMap): MerchantMapViewport | null {
   };
 }
 
-function merchantPoint(shop: MerchantMapShop): ConfirmedDeliveryPoint {
-  return {
-    lat: shop.lat,
-    lng: shop.lng,
-    accuracy: null,
-    source: "map_pin",
-    submittedValue: null,
-    resolvedUrl: null,
-    placeId: null,
-    displayName: shop.name,
-    formattedAddress: shop.address,
-    resolutionMethod: null,
-  };
-}
-
 function markerContent(shop: MerchantMapShop): HTMLElement {
   const wrapper = document.createElement("button");
   wrapper.type = "button";
   wrapper.className = "mytree-merchant-marker";
   wrapper.textContent = shop.name;
-  wrapper.setAttribute("aria-label", `เลือกร้าน ${shop.name} เป็นจุดส่ง`);
+  wrapper.setAttribute("aria-label", `ดูร้าน ${shop.name}`);
   return wrapper;
 }
 
@@ -349,12 +334,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setQuery(result.displayName);
   }
 
-  function selectMerchant(shop: MerchantMapShop) {
-    onCandidateChange(merchantPoint(shop));
-    if (shop.address) onSafeFormattedAddress?.(shop.address);
-    setSelectedMerchant(null);
-  }
-
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -438,9 +417,9 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
                 <p className="mt-0.5 text-xs leading-4 text-gray-500">{selectedMerchant.description}</p>
               )}
               <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => selectMerchant(selectedMerchant)} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white">
-                  ใช้ตำแหน่งนี้
-                </button>
+                <a href={`/shop/${encodeURIComponent(selectedMerchant.shopId)}`} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-semibold text-white">
+                  ดูร้านค้า
+                </a>
                 <button type="button" onClick={() => setSelectedMerchant(null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600">
                   ปิด
                 </button>
