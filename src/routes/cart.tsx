@@ -83,6 +83,7 @@ function pointFromDraft(destination: NonNullable<CheckoutDraft["destination"]>):
 
 function CartCheckout() {
   const c = useCart();
+  const checkoutShopId = c.shopId ?? c.items[0]?.shopId ?? null;
   const [shop, setShop] = useState<ShopCheckout | null>(null);
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
   const [payment, setPayment] = useState<"cash" | "qr_transfer">("cash");
@@ -138,18 +139,18 @@ function CartCheckout() {
 
   useEffect(() => {
     (async () => {
-      if (!c.shopId) return;
+      if (!checkoutShopId) return;
       const { data } = await publicSupabase
         .from("shops")
         .select("name,delivery_enabled,pickup_enabled,payment_cash_enabled,payment_qr_enabled,qr_code_url,accepts_preorders,is_open,business_hours")
-        .eq("shop_id", c.shopId)
+        .eq("shop_id", checkoutShopId)
         .maybeSingle();
       const row = data as ShopCheckout | null;
       setShop(row);
       if (row?.delivery_enabled === false && row.pickup_enabled !== false) setFulfillment("pickup");
       if (!row?.payment_cash_enabled && row?.payment_qr_enabled) setPayment("qr_transfer");
     })();
-  }, [c.shopId]);
+  }, [checkoutShopId]);
 
   useEffect(() => {
     if (!shop || !availability || restoredDraftRef.current) return;
@@ -164,17 +165,17 @@ function CartCheckout() {
   const confirmDeliveryPoint = useCallback(async (point: ConfirmedDeliveryPoint) => {
     setCandidatePoint(point);
     setFieldErrors((current) => ({ ...current, deliveryPoint: undefined }));
-    const quoteKey = `${c.shopId}:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
+    const quoteKey = `${checkoutShopId}:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
     if (isSameDeliveryPoint(deliveryPoint, point) && routeQuote && latestQuoteKeyRef.current === quoteKey) {
       setShowDestinationChooser(false);
       return;
     }
     setRouteQuote(null);
-    if (!c.shopId) return;
+    if (!checkoutShopId) return;
     setQuotingRoute(true);
     setError(null);
     try {
-      const quote = await quoteDeliveryRoute(c.shopId, point);
+      const quote = await quoteDeliveryRoute(checkoutShopId, point);
       latestQuoteKeyRef.current = quoteKey;
       setDeliveryPoint(point);
       setRouteQuote(quote);
@@ -186,7 +187,7 @@ function CartCheckout() {
     } finally {
       setQuotingRoute(false);
     }
-  }, [c.shopId, deliveryPoint, routeQuote]);
+  }, [checkoutShopId, deliveryPoint, routeQuote]);
 
   useEffect(() => {
     (async () => {
@@ -197,7 +198,7 @@ function CartCheckout() {
         setDeliveryAddresses(loadCustomerDeliveryAddresses(cid));
         const { data } = await supabase.from("customers").select("name,phone").eq("id", cid).maybeSingle();
         const row = data as { name: string | null; phone: string | null } | null;
-        const draft = loadCheckoutDraft(cid, c.shopId);
+        const draft = loadCheckoutDraft(cid, checkoutShopId);
         if (draft) {
           restoredDraftRef.current = true;
           setCustomerName(draft.customerName);
@@ -227,12 +228,12 @@ function CartCheckout() {
         // Preview/external browser: leave editable contact fields blank.
       }
     })();
-  }, [c.shopId]);
+  }, [checkoutShopId]);
 
   useEffect(() => {
-    if (!customerId || !c.shopId || done) return;
+    if (!customerId || !checkoutShopId || done) return;
     const timer = window.setTimeout(() => {
-      saveCheckoutDraft(customerId, c.shopId, {
+      saveCheckoutDraft(customerId, checkoutShopId, {
         savedAt: new Date().toISOString(),
         customerName,
         customerPhone,
@@ -261,7 +262,7 @@ function CartCheckout() {
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [customerId, c.shopId, done, customerName, customerPhone, fulfillment, payment, timing, requestedForLocal, deliveryAddress, note, selectedAddressId, saveAddress, saveAddressLabel, makeDefaultAddress, deliveryPoint]);
+  }, [customerId, checkoutShopId, done, customerName, customerPhone, fulfillment, payment, timing, requestedForLocal, deliveryAddress, note, selectedAddressId, saveAddress, saveAddressLabel, makeDefaultAddress, deliveryPoint]);
 
   const handleCandidateChange = useCallback((point: ConfirmedDeliveryPoint) => {
     setCandidatePoint(point);
@@ -319,7 +320,7 @@ function CartCheckout() {
     setResolvingLocation(true);
     setError(null);
     try {
-      const point = await resolveDeliveryLocation(locationInput.trim(), c.shopId);
+      const point = await resolveDeliveryLocation(locationInput.trim(), checkoutShopId);
       setCandidatePoint(point);
       setDeliveryPoint(null);
       setRouteQuote(null);
@@ -372,7 +373,7 @@ function CartCheckout() {
   }
 
   async function confirm() {
-    if (!c.shopId) return;
+    if (!checkoutShopId) return;
     const formattedAddress = formatDeliveryAddress(deliveryAddress);
     const nextFieldErrors: CheckoutErrors = {};
     if (fulfillment === "delivery" && !deliveryPoint) nextFieldErrors.deliveryPoint = "กรุณายืนยันจุดส่งจริงสำหรับ Rider";
@@ -399,7 +400,7 @@ function CartCheckout() {
     if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
 
     const res = await submitOrder({
-      shopId: c.shopId,
+      shopId: checkoutShopId,
       items: c.items.map((i) => ({
         lineId: i.lineId,
         kind: i.kind,
@@ -442,7 +443,7 @@ function CartCheckout() {
       saveCustomerDeliveryAddresses(customerId, nextAddresses);
       setDeliveryAddresses(nextAddresses);
     }
-    clearCheckoutDraft(customerId, c.shopId);
+    clearCheckoutDraft(customerId, checkoutShopId);
     cart.clear();
     setDone(true);
   }
@@ -467,8 +468,8 @@ function CartCheckout() {
   return (
     <div className="p-4 pb-44 space-y-4 max-w-md mx-auto">
       <div className="flex items-center gap-3">
-        {c.shopId && (
-          <Link to="/shop/$shopId" params={{ shopId: c.shopId }} className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700">
+        {checkoutShopId && (
+          <Link to="/shop/$shopId" params={{ shopId: checkoutShopId }} className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700">
             <span aria-hidden="true">←</span>
             <span>กลับไปเพิ่มสินค้า</span>
           </Link>
@@ -594,7 +595,7 @@ function CartCheckout() {
             </div>
           ) : (
             <div className="space-y-3">
-              <DeliveryLocationPicker shopId={c.shopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
+              <DeliveryLocationPicker shopId={checkoutShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
               <button type="button" onClick={captureDeliveryPoint} disabled={locating || quotingRoute} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-800 disabled:opacity-50">{locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบัน"}</button>
               <div className="rounded-lg border border-gray-200 bg-white">
                 <button type="button" onClick={() => setFallbackExpanded((current) => !current)} className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-gray-800">
