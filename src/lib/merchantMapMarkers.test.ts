@@ -2,6 +2,7 @@ import {
   boundsForMerchantPoints,
   CHECKOUT_MAP_FIT_PADDING,
   CHECKOUT_MAP_SINGLE_POINT_ZOOM,
+  isCheckoutMapDebugRouteAllowedHost,
   MERCHANT_MARKER_VIEWPORT_PADDING_DEGREES,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
@@ -52,5 +53,11 @@ export const merchantMapMarkersCompileChecks = {
     { lat: 13.789336, lng: 100.686407 },
     { lat: 13.773212302227083, lng: 100.67610292467903 },
   ]),
+  debugHostGate: {
+    productionDomainBlocked: isCheckoutMapDebugRouteAllowedHost("mytree.cc") === false,
+    wwwProductionDomainBlocked: isCheckoutMapDebugRouteAllowedHost("www.mytree.cc") === false,
+    productionPagesBlocked: isCheckoutMapDebugRouteAllowedHost("local-menu-hub.pages.dev") === false,
+    hashedPreviewAllowed: isCheckoutMapDebugRouteAllowedHost("6a526645.local-menu-hub.pages.dev") === true,
+  },
   visibleShopNames: normalizeMerchantMapRows(rows).map((shop) => shop.name),
 };

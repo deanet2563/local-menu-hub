@@ -64,6 +64,7 @@ type MarkerHandle = {
 
 type MerchantMarkerKind = "cart-shop" | "viewport";
 type CartShopQueryState = "waiting_for_shop_id" | "loading" | "loaded" | "not_found_or_no_coordinates" | "error";
+type MarkerLibraryState = "not_requested" | "loading" | "loaded" | "unavailable";
 
 declare global {
   interface Window {
@@ -76,6 +77,7 @@ type Props = {
   candidate: ConfirmedDeliveryPoint | null;
   onCandidateChange: (point: ConfirmedDeliveryPoint) => void;
   onSafeFormattedAddress?: (formattedAddress: string) => void;
+  debug?: boolean;
 };
 
 const DEFAULT_CENTER = { lat: 13.777, lng: 100.674 };
@@ -184,7 +186,7 @@ function markerContent(shop: MerchantMapShop, kind: MerchantMarkerKind): HTMLEle
   return wrapper;
 }
 
-export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress }: Props) {
+export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false }: Props) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const advancedMarkerRef = useRef<GoogleMarkerLibrary["AdvancedMarkerElement"] | null>(null);
@@ -197,10 +199,13 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const cartShopRequestSeqRef = useRef(0);
   const initialFitDoneRef = useRef(false);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
-  const [debugEnabled] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mapDebug") === "1");
+  const [debugEnabled] = useState(() => debug || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mapDebug") === "1"));
   const [mapsError, setMapsError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [markerLibraryState, setMarkerLibraryState] = useState<MarkerLibraryState>("not_requested");
   const [advancedMarkerAvailable, setAdvancedMarkerAvailable] = useState(false);
+  const [legacyFallbackUsed, setLegacyFallbackUsed] = useState(false);
+  const [cartShopMarkerCreated, setCartShopMarkerCreated] = useState(false);
   const [initialFitExecuted, setInitialFitExecuted] = useState(false);
   const [mapConfigStatus, setMapConfigStatus] = useState<string | null>(null);
   const [merchantLoading, setMerchantLoading] = useState(false);
@@ -267,9 +272,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
           if (viewport) void loadMerchantShops(viewport);
         });
         mapListenersRef.current = [clickListener, idleListener];
+        setMarkerLibraryState("loading");
         void loadGoogleMarkerLibrary(google).then((markerLibrary) => {
           if (disposed) return;
           advancedMarkerRef.current = markerLibrary?.AdvancedMarkerElement ?? null;
+          setMarkerLibraryState(markerLibrary?.AdvancedMarkerElement ? "loaded" : "unavailable");
           setAdvancedMarkerAvailable(Boolean(markerLibrary?.AdvancedMarkerElement));
           if (!markerLibrary?.AdvancedMarkerElement) {
             setMerchantError("AdvancedMarkerElement ยังไม่พร้อม จะแสดงหมุดร้านค้าในตะกร้าด้วยหมุดสำรอง");
@@ -293,7 +300,10 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       advancedMarkerRef.current = null;
       markerRef.current = null;
       setMapReady(false);
+      setMarkerLibraryState("not_requested");
       setAdvancedMarkerAvailable(false);
+      setLegacyFallbackUsed(false);
+      setCartShopMarkerCreated(false);
     };
   }, [onCandidateChange]);
 
@@ -393,6 +403,8 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     const map = mapRef.current;
     if (!map || !mapReady || !cartShop || !window.google) {
       clearCartShopMarker();
+      setLegacyFallbackUsed(false);
+      setCartShopMarkerCreated(false);
       return;
     }
 
@@ -408,6 +420,8 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       });
       const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
       cartShopMarkerRef.current = { listeners, clear: () => { marker.map = null; } };
+      setLegacyFallbackUsed(false);
+      setCartShopMarkerCreated(true);
       return clearCartShopMarker;
     }
 
@@ -421,6 +435,8 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     });
     const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
     cartShopMarkerRef.current = { listeners, clear: () => marker.setMap(null) };
+    setLegacyFallbackUsed(true);
+    setCartShopMarkerCreated(true);
 
     return clearCartShopMarker;
   }, [advancedMarkerAvailable, cartShop, mapReady]);
@@ -589,7 +605,10 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               <p>cartShopQuery: {cartShopQueryState}</p>
               <p>cartShop: {cartShop ? `${cartShop.name} @ ${cartShop.lat.toFixed(6)},${cartShop.lng.toFixed(6)}` : "none"}</p>
               <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
+              <p>markerLibrary: {markerLibraryState}</p>
               <p>advancedMarker: {advancedMarkerAvailable ? "yes" : "no"}</p>
+              <p>legacyFallback: {legacyFallbackUsed ? "yes" : "no"}</p>
+              <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
               <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
               <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
             </div>
