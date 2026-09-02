@@ -249,7 +249,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const cartShopRequestSeqRef = useRef(0);
   const initialFitDoneRef = useRef(false);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
-  const debugEnabled = debug || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mapDebug") === "1");
+  const debugEnabled = debug;
   const [mapsError, setMapsError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [markerLibraryState, setMarkerLibraryState] = useState<MarkerLibraryState>("not_requested");
