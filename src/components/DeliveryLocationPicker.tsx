@@ -178,8 +178,7 @@ function viewportFromMap(map: GoogleMap): MerchantMapViewport | null {
 }
 
 function markerContent(shop: MerchantMapShop, kind: MerchantMarkerKind): HTMLElement {
-  const wrapper = document.createElement("button");
-  wrapper.type = "button";
+  const wrapper = document.createElement("div");
   wrapper.className = kind === "cart-shop" ? "mytree-merchant-marker mytree-cart-shop-marker" : "mytree-merchant-marker";
   wrapper.textContent = shop.name;
   wrapper.setAttribute("aria-label", `ดูร้าน ${shop.name}`);
