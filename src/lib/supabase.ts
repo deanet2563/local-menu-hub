@@ -11,7 +11,7 @@ import {
   storeLineReturnPath,
 } from "@/lib/lineSessionRecovery";
 export { LineSessionAuthError, isLineSessionAuthError } from "@/lib/lineSessionRecovery";
-import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
+import { isPreviewDebugAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
 // ============================================================
@@ -54,7 +54,7 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 /** Initialise the environment-selected LIFF app exactly once. */
 export function initLiff(): Promise<void> {
-  if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
+  if (isPreviewDebugAuthBypassActive()) return Promise.resolve();
   if (!liffReady) {
     liffReady = liff.init({
       liffId: LIFF_ID,
@@ -73,7 +73,7 @@ function lineLoginRedirectUri(): string | undefined {
 }
 
 export async function startLineSessionRecovery(options: AuthOptions & { force?: boolean } = {}): Promise<LineSessionRecoveryStartResult> {
-  if (isPreviewCheckoutMapAuthBypassActive() || isOrderingPreview()) return "preview_blocked";
+  if (isPreviewDebugAuthBypassActive() || isOrderingPreview()) return "preview_blocked";
   if (typeof window === "undefined") return "unavailable";
 
   storeLineReturnPath(options.returnPath ?? currentLineReturnPath());
@@ -86,7 +86,7 @@ export async function startLineSessionRecovery(options: AuthOptions & { force?: 
 }
 
 export async function completeLineSessionReturnIfReady(): Promise<string | null> {
-  if (isPreviewCheckoutMapAuthBypassActive() || typeof window === "undefined") return null;
+  if (isPreviewDebugAuthBypassActive() || typeof window === "undefined") return null;
   const pendingPath = readLineReturnPath();
   if (!pendingPath) return null;
   await initLiff();
@@ -100,7 +100,7 @@ export async function completeLineSessionReturnIfReady(): Promise<string | null>
 }
 
 export async function getLineIdToken(options: AuthOptions = {}): Promise<string> {
-  if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  if (isPreviewDebugAuthBypassActive()) return "";
   const interactive = options.interactive ?? true;
   await initLiff();
   if (!liff.isLoggedIn()) {
@@ -120,7 +120,7 @@ export async function getLineIdToken(options: AuthOptions = {}): Promise<string>
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(options: AuthOptions = {}): Promise<string> {
-  if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  if (isPreviewDebugAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (!options.refresh && cached && cached.exp - 60 > now) return cached.token;
 

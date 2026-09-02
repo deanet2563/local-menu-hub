@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { LineSessionRecoveryPanel } from "@/components/LineSessionRecoveryPanel";
-import { isCheckoutMapDebugRouteAllowedHost } from "@/lib/previewDebugRoute";
+import { isPreviewDebugAuthBypassActive } from "@/lib/previewDebugRoute";
 
 type SimulationState = "required" | "recovering" | "failed";
 
@@ -10,18 +10,18 @@ export const Route = createFileRoute("/debug/line-session-recovery")({ component
 function LineSessionRecoveryDebugRoute() {
   const [state, setState] = useState<SimulationState>("required");
   const [cartRetained, setCartRetained] = useState(true);
-  const allowed = typeof window !== "undefined" && isCheckoutMapDebugRouteAllowedHost(window.location.hostname);
+  const previewAuthBypassActive = isPreviewDebugAuthBypassActive();
 
-  if (!allowed) {
+  if (!previewAuthBypassActive) {
     return <main className="mx-auto max-w-md p-6 text-center"><h1 className="text-lg font-semibold text-gray-900">Not Found</h1></main>;
   }
 
   return (
     <main className="mx-auto max-w-md space-y-4 p-4 pb-10">
       <section className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-        <h1 className="text-base font-black tracking-normal text-amber-950">PREVIEW LINE SESSION TEST  NO ORDER SUBMISSION</h1>
+        <h1 className="text-base font-black tracking-normal text-amber-950">PREVIEW LINE SESSION TEST  NO REAL LOGIN / NO ORDER SUBMISSION</h1>
         <p className="mt-1 text-xs leading-5 text-amber-900">Simulated auth recovery only. This route never calls LINE Login, Supabase auth, quote, payment, or order APIs.</p>
-        <p className="mt-2 font-mono text-xs text-amber-950">previewAuthBypass: inactive</p>
+        <p className="mt-2 font-mono text-xs text-amber-950">previewAuthBypass: active</p>
       </section>
 
       <section className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">

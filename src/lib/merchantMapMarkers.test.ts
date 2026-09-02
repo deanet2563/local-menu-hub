@@ -11,8 +11,56 @@ import {
 } from "@/lib/merchantMapMarkers";
 import {
   isCheckoutMapDebugRouteAllowedHost,
-  isPreviewCheckoutMapAuthBypassLocation,
+  isPreviewDebugAuthBypassLocation,
 } from "@/lib/previewDebugRoute";
+
+type Hex = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "a" | "b" | "c" | "d" | "e" | "f";
+type BlockedPreviewDebugHost = "mytree.cc" | "www.mytree.cc" | "local-menu-hub.pages.dev";
+type PreviewDebugAuthBypassPath = "/debug/checkout-map" | "/debug/line-session-recovery";
+type IsHexChar<Value extends string> = Value extends Hex ? true : false;
+type IsEightHexPrefix<Value extends string> =
+  Value extends `${infer A}${infer B}${infer C}${infer D}${infer E}${infer F}${infer G}${infer H}`
+    ? Value extends `${string}${infer Extra}`
+      ? string extends Extra
+        ? false
+        : IsHexChar<A> extends true
+          ? IsHexChar<B> extends true
+            ? IsHexChar<C> extends true
+              ? IsHexChar<D> extends true
+                ? IsHexChar<E> extends true
+                  ? IsHexChar<F> extends true
+                    ? IsHexChar<G> extends true
+                      ? IsHexChar<H>
+                      : false
+                    : false
+                  : false
+                : false
+              : false
+            : false
+          : false
+      : false
+    : false;
+type IsEightHexPreviewHost<Hostname extends string> =
+  Hostname extends `${infer Prefix}.local-menu-hub.pages.dev` ? IsEightHexPrefix<Prefix> : false;
+type PreviewDebugAuthBypassAllowed<Hostname extends string, Pathname extends string> =
+  Hostname extends BlockedPreviewDebugHost
+    ? false
+    : IsEightHexPreviewHost<Hostname> extends true
+      ? Pathname extends PreviewDebugAuthBypassPath
+        ? true
+        : false
+      : false;
+type AssertTrue<T extends true> = T;
+type AssertFalse<T extends false> = T;
+
+export type PreviewDebugAuthBypassSecurityContract = {
+  hashedPreviewRecoveryAllowed: AssertTrue<PreviewDebugAuthBypassAllowed<"6a526645.local-menu-hub.pages.dev", "/debug/line-session-recovery">>;
+  hashedPreviewCartDenied: AssertFalse<PreviewDebugAuthBypassAllowed<"6a526645.local-menu-hub.pages.dev", "/cart">>;
+  branchAliasRecoveryDenied: AssertFalse<PreviewDebugAuthBypassAllowed<"codex-line-session-recovery.local-menu-hub.pages.dev", "/debug/line-session-recovery">>;
+  productionPagesRecoveryDenied: AssertFalse<PreviewDebugAuthBypassAllowed<"local-menu-hub.pages.dev", "/debug/line-session-recovery">>;
+  productionDomainRecoveryDenied: AssertFalse<PreviewDebugAuthBypassAllowed<"mytree.cc", "/debug/line-session-recovery">>;
+  wwwProductionDomainRecoveryDenied: AssertFalse<PreviewDebugAuthBypassAllowed<"www.mytree.cc", "/debug/line-session-recovery">>;
+};
 
 const rows: MerchantMapRow[] = [
   {
@@ -70,17 +118,33 @@ export const merchantMapMarkersCompileChecks = {
     productionPagesBlocked: isCheckoutMapDebugRouteAllowedHost("local-menu-hub.pages.dev") === false,
     hashedPreviewAllowed: isCheckoutMapDebugRouteAllowedHost("6a526645.local-menu-hub.pages.dev") === true,
     arbitraryHostBlocked: isCheckoutMapDebugRouteAllowedHost("example.com") === false,
-    authBypassRequiresPreviewHostAndExactPath: isPreviewCheckoutMapAuthBypassLocation({
+    authBypassRequiresPreviewHostAndExactCheckoutMapPath: isPreviewDebugAuthBypassLocation({
       hostname: "6a526645.local-menu-hub.pages.dev",
       pathname: "/debug/checkout-map",
     }) === true,
-    authBypassRejectsCartOnPreview: isPreviewCheckoutMapAuthBypassLocation({
+    authBypassAllowsExactRecoveryPathOnHashedPreview: isPreviewDebugAuthBypassLocation({
+      hostname: "6a526645.local-menu-hub.pages.dev",
+      pathname: "/debug/line-session-recovery",
+    }) === true,
+    authBypassRejectsCartOnPreview: isPreviewDebugAuthBypassLocation({
       hostname: "6a526645.local-menu-hub.pages.dev",
       pathname: "/cart",
     }) === false,
-    authBypassRejectsDebugPathOnProduction: isPreviewCheckoutMapAuthBypassLocation({
+    authBypassRejectsRecoveryPathOnBranchAlias: isPreviewDebugAuthBypassLocation({
+      hostname: "codex-line-session-recovery.local-menu-hub.pages.dev",
+      pathname: "/debug/line-session-recovery",
+    }) === false,
+    authBypassRejectsRecoveryPathOnProductionPages: isPreviewDebugAuthBypassLocation({
+      hostname: "local-menu-hub.pages.dev",
+      pathname: "/debug/line-session-recovery",
+    }) === false,
+    authBypassRejectsRecoveryPathOnProductionDomain: isPreviewDebugAuthBypassLocation({
       hostname: "mytree.cc",
-      pathname: "/debug/checkout-map",
+      pathname: "/debug/line-session-recovery",
+    }) === false,
+    authBypassRejectsRecoveryPathOnWwwProductionDomain: isPreviewDebugAuthBypassLocation({
+      hostname: "www.mytree.cc",
+      pathname: "/debug/line-session-recovery",
     }) === false,
   },
   visibleShopNames: normalizeMerchantMapRows(rows).map((shop) => shop.name),
