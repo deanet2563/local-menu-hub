@@ -5,12 +5,23 @@ import {
   type ConfirmedDeliveryPoint,
   type DeliveryPlaceSearchResult,
 } from "@/lib/deliveryLocation";
+import {
+  MERCHANT_MARKER_QUERY_LIMIT,
+  normalizeMerchantMapRows,
+  paddedMerchantViewport,
+  type MerchantMapRow,
+  type MerchantMapShop,
+  type MerchantMapViewport,
+} from "@/lib/merchantMapMarkers";
+import { publicSupabase } from "@/lib/supabase";
 
 type LatLngLiteral = { lat: number; lng: number };
 
 type GoogleMap = {
   setCenter(position: LatLngLiteral): void;
+  getBounds(): { getNorthEast(): { lat(): number; lng(): number }; getSouthWest(): { lat(): number; lng(): number } } | undefined;
   addListener(eventName: "click", handler: (event: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void };
+  addListener(eventName: "idle", handler: () => void): { remove(): void };
 };
 
 type GoogleMarker = {
@@ -21,9 +32,22 @@ type GoogleMarker = {
 
 type GoogleMapsApi = {
   maps: {
-    Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean }) => GoogleMap;
+    Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean; mapId: string }) => GoogleMap;
     Marker: new (options: { map: GoogleMap; position: LatLngLiteral; draggable: boolean }) => GoogleMarker;
+    marker: {
+      AdvancedMarkerElement: new (options: { map: GoogleMap; position: LatLngLiteral; title: string; content: HTMLElement; zIndex: number }) => GoogleAdvancedMarker;
+    };
   };
+};
+
+type GoogleAdvancedMarker = {
+  map: GoogleMap | null;
+  addListener(eventName: "click", handler: () => void): { remove(): void };
+};
+
+type MerchantMarkerHandle = {
+  marker: GoogleAdvancedMarker;
+  listeners: Array<{ remove(): void }>;
 };
 
 declare global {
@@ -46,6 +70,10 @@ function getMapsApiKey(): string {
   return import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? "";
 }
 
+function getMapsMapId(): string {
+  return import.meta.env.VITE_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+}
+
 function loadGoogleMaps(): Promise<GoogleMapsApi> {
   if (window.google) return Promise.resolve(window.google);
   if (mapsLoadPromise) return mapsLoadPromise;
@@ -62,7 +90,7 @@ function loadGoogleMaps(): Promise<GoogleMapsApi> {
     }
 
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.dataset.mytreeGoogleMaps = "true";
@@ -104,12 +132,57 @@ function adjustedPoint(current: ConfirmedDeliveryPoint | null, position: LatLngL
   };
 }
 
+function viewportFromMap(map: GoogleMap): MerchantMapViewport | null {
+  const bounds = map.getBounds();
+  if (!bounds) return null;
+  const northEast = bounds.getNorthEast();
+  const southWest = bounds.getSouthWest();
+  return {
+    north: northEast.lat(),
+    south: southWest.lat(),
+    east: northEast.lng(),
+    west: southWest.lng(),
+  };
+}
+
+function merchantPoint(shop: MerchantMapShop): ConfirmedDeliveryPoint {
+  return {
+    lat: shop.lat,
+    lng: shop.lng,
+    accuracy: null,
+    source: "map_pin",
+    submittedValue: null,
+    resolvedUrl: null,
+    placeId: null,
+    displayName: shop.name,
+    formattedAddress: shop.address,
+    resolutionMethod: null,
+  };
+}
+
+function markerContent(shop: MerchantMapShop): HTMLElement {
+  const wrapper = document.createElement("button");
+  wrapper.type = "button";
+  wrapper.className = "mytree-merchant-marker";
+  wrapper.textContent = shop.name;
+  wrapper.setAttribute("aria-label", `เลือกร้าน ${shop.name} เป็นจุดส่ง`);
+  return wrapper;
+}
+
 export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress }: Props) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const markerRef = useRef<GoogleMarker | null>(null);
+  const mapListenersRef = useRef<Array<{ remove(): void }>>([]);
+  const markerListenersRef = useRef<Array<{ remove(): void }>>([]);
+  const merchantMarkersRef = useRef<MerchantMarkerHandle[]>([]);
+  const merchantRequestSeqRef = useRef(0);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
   const [mapsError, setMapsError] = useState<string | null>(null);
+  const [merchantLoading, setMerchantLoading] = useState(false);
+  const [merchantError, setMerchantError] = useState<string | null>(null);
+  const [merchantShops, setMerchantShops] = useState<MerchantMapShop[]>([]);
+  const [selectedMerchant, setSelectedMerchant] = useState<MerchantMapShop | null>(null);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -119,32 +192,104 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     candidateRef.current = candidate;
   }, [candidate]);
 
+  function clearMerchantMarkers() {
+    merchantMarkersRef.current.forEach(({ marker, listeners }) => {
+      listeners.forEach((listener) => listener.remove());
+      marker.map = null;
+    });
+    merchantMarkersRef.current = [];
+  }
+
   useEffect(() => {
     let disposed = false;
     void loadGoogleMaps()
       .then((google) => {
         if (disposed || !mapElementRef.current || mapRef.current) return;
+        const initialCandidate = candidateRef.current;
         const map = new google.maps.Map(mapElementRef.current, {
-          center: candidate ? { lat: candidate.lat, lng: candidate.lng } : DEFAULT_CENTER,
-          zoom: candidate ? 17 : 14,
+          center: initialCandidate ? { lat: initialCandidate.lat, lng: initialCandidate.lng } : DEFAULT_CENTER,
+          zoom: initialCandidate ? 17 : 14,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
+          mapId: getMapsMapId(),
         });
         mapRef.current = map;
-        map.addListener("click", (event) => {
+        const clickListener = map.addListener("click", (event) => {
           const latLng = event.latLng;
           if (!latLng) return;
+          setSelectedMerchant(null);
           onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
         });
+        const idleListener = map.addListener("idle", () => {
+          const viewport = viewportFromMap(map);
+          if (viewport) void loadMerchantShops(viewport);
+        });
+        mapListenersRef.current = [clickListener, idleListener];
       })
       .catch(() => {
         if (!disposed) setMapsError("เปิดแผนที่ในแอปไม่ได้ตอนนี้ ยังใช้ GPS หรือ Google Maps link ได้");
       });
     return () => {
       disposed = true;
+      merchantRequestSeqRef.current += 1;
+      mapListenersRef.current.forEach((listener) => listener.remove());
+      mapListenersRef.current = [];
+      markerListenersRef.current.forEach((listener) => listener.remove());
+      markerListenersRef.current = [];
+      clearMerchantMarkers();
+      mapRef.current = null;
+      markerRef.current = null;
     };
-  }, [candidate, onCandidateChange]);
+  }, [onCandidateChange]);
+
+  async function loadMerchantShops(viewport: MerchantMapViewport) {
+    const requestSeq = merchantRequestSeqRef.current + 1;
+    merchantRequestSeqRef.current = requestSeq;
+    const padded = paddedMerchantViewport(viewport);
+    setMerchantLoading(true);
+    setMerchantError(null);
+    const { data, error } = await publicSupabase
+      .from("shops")
+      .select("shop_id,name,category,description,address,lat,lng")
+      .eq("is_approved", true)
+      .eq("is_banned", false)
+      .not("lat", "is", null)
+      .not("lng", "is", null)
+      .gte("lat", padded.south)
+      .lte("lat", padded.north)
+      .gte("lng", padded.west)
+      .lte("lng", padded.east)
+      .limit(MERCHANT_MARKER_QUERY_LIMIT);
+
+    if (requestSeq !== merchantRequestSeqRef.current) return;
+    setMerchantLoading(false);
+    if (error) {
+      setMerchantError("โหลดหมุดร้านค้า MyTree ไม่สำเร็จ แต่ยังเลือกจุดส่งได้ตามปกติ");
+      return;
+    }
+    setMerchantShops(normalizeMerchantMapRows((data ?? []) as MerchantMapRow[]));
+  }
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps.marker?.AdvancedMarkerElement) return;
+
+    clearMerchantMarkers();
+    merchantMarkersRef.current = merchantShops.map((shop) => {
+      const marker = new window.google!.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat: shop.lat, lng: shop.lng },
+        title: shop.name,
+        content: markerContent(shop),
+        zIndex: 10_000,
+      });
+      const listeners = [marker.addListener("click", () => setSelectedMerchant(shop))];
+      return { marker, listeners };
+    });
+
+    return clearMerchantMarkers;
+  }, [merchantShops]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -153,11 +298,12 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     map.setCenter(position);
     if (!markerRef.current) {
       const marker = new window.google.maps.Marker({ map, position, draggable: true });
-      marker.addListener("dragend", (event) => {
+      const dragListener = marker.addListener("dragend", (event) => {
         const latLng = event.latLng;
         if (!latLng) return;
         onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
       });
+      markerListenersRef.current = [dragListener];
       markerRef.current = marker;
     } else {
       markerRef.current.setPosition(position);
@@ -203,6 +349,12 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setQuery(result.displayName);
   }
 
+  function selectMerchant(shop: MerchantMapShop) {
+    onCandidateChange(merchantPoint(shop));
+    if (shop.address) onSafeFormattedAddress?.(shop.address);
+    setSelectedMerchant(null);
+  }
+
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -240,6 +392,61 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       ) : (
         <div className="relative h-[320px] min-h-[320px] overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
           <div ref={mapElementRef} className="h-full w-full" />
+          <style>{`
+            .mytree-merchant-marker {
+              position: relative;
+              max-width: 112px;
+              overflow: hidden;
+              border: 2px solid #14532d;
+              border-radius: 999px;
+              background: #22c55e;
+              box-shadow: 0 8px 20px rgba(20, 83, 45, 0.28);
+              color: #052e16;
+              cursor: pointer;
+              font-size: 12px;
+              font-weight: 800;
+              line-height: 1;
+              padding: 7px 10px;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            .mytree-merchant-marker::after {
+              position: absolute;
+              left: 50%;
+              bottom: -7px;
+              width: 10px;
+              height: 10px;
+              border-right: 2px solid #14532d;
+              border-bottom: 2px solid #14532d;
+              background: #22c55e;
+              content: "";
+              transform: translateX(-50%) rotate(45deg);
+            }
+          `}</style>
+          {(merchantLoading || merchantError) && (
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
+              {merchantLoading ? "กำลังโหลดหมุดร้านค้า MyTree..." : merchantError}
+            </div>
+          )}
+          {selectedMerchant && (
+            <div className="absolute inset-x-3 bottom-3 rounded-lg border border-green-200 bg-white p-3 text-left shadow-lg">
+              <p className="text-sm font-bold leading-5 text-gray-900">{selectedMerchant.name}</p>
+              {(selectedMerchant.category || selectedMerchant.description) && (
+                <p className="mt-1 text-xs leading-4 text-gray-600">{selectedMerchant.category || selectedMerchant.description}</p>
+              )}
+              {selectedMerchant.category && selectedMerchant.description && (
+                <p className="mt-0.5 text-xs leading-4 text-gray-500">{selectedMerchant.description}</p>
+              )}
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => selectMerchant(selectedMerchant)} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white">
+                  ใช้ตำแหน่งนี้
+                </button>
+                <button type="button" onClick={() => setSelectedMerchant(null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600">
+                  ปิด
+                </button>
+              </div>
+            </div>
+          )}
           {!candidate && (
             <div className="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
               ค้นหาแล้วเลือกผลลัพธ์ หรือแตะแผนที่เพื่อวางหมุด
