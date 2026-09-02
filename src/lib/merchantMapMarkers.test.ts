@@ -1,4 +1,7 @@
 import {
+  boundsForMerchantPoints,
+  CHECKOUT_MAP_FIT_PADDING,
+  CHECKOUT_MAP_SINGLE_POINT_ZOOM,
   MERCHANT_MARKER_VIEWPORT_PADDING_DEGREES,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
@@ -36,6 +39,8 @@ const rows: MerchantMapRow[] = [
 ];
 
 export const merchantMapMarkersCompileChecks = {
+  fitPadding: CHECKOUT_MAP_FIT_PADDING,
+  singlePointZoom: CHECKOUT_MAP_SINGLE_POINT_ZOOM,
   padding: MERCHANT_MARKER_VIEWPORT_PADDING_DEGREES,
   bounds: paddedMerchantViewport({
     north: 13.78,
@@ -43,5 +48,9 @@ export const merchantMapMarkersCompileChecks = {
     east: 100.68,
     west: 100.67,
   }),
+  shopAndDestinationBounds: boundsForMerchantPoints([
+    { lat: 13.789336, lng: 100.686407 },
+    { lat: 13.773212302227083, lng: 100.67610292467903 },
+  ]),
   visibleShopNames: normalizeMerchantMapRows(rows).map((shop) => shop.name),
 };

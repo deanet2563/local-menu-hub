@@ -6,9 +6,13 @@ import {
   type DeliveryPlaceSearchResult,
 } from "@/lib/deliveryLocation";
 import {
+  boundsForMerchantPoints,
+  CHECKOUT_MAP_FIT_PADDING,
+  CHECKOUT_MAP_SINGLE_POINT_ZOOM,
   MERCHANT_MARKER_QUERY_LIMIT,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
+  type MerchantMapBoundsPadding,
   type MerchantMapRow,
   type MerchantMapShop,
   type MerchantMapViewport,
@@ -19,6 +23,8 @@ type LatLngLiteral = { lat: number; lng: number };
 
 type GoogleMap = {
   setCenter(position: LatLngLiteral): void;
+  setZoom(zoom: number): void;
+  fitBounds(bounds: MerchantMapViewport, padding: number | MerchantMapBoundsPadding): void;
   getBounds(): { getNorthEast(): { lat(): number; lng(): number }; getSouthWest(): { lat(): number; lng(): number } } | undefined;
   addListener(eventName: "click", handler: (event: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void };
   addListener(eventName: "idle", handler: () => void): { remove(): void };
@@ -32,7 +38,7 @@ type GoogleMarker = {
 
 type GoogleMapsApi = {
   maps: {
-    Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean; mapId: string }) => GoogleMap;
+    Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean; mapId?: string }) => GoogleMap;
     Marker: new (options: { map: GoogleMap; position: LatLngLiteral; draggable: boolean }) => GoogleMarker;
     marker: {
       AdvancedMarkerElement: new (options: { map: GoogleMap; position: LatLngLiteral; title: string; content: HTMLElement; zIndex: number }) => GoogleAdvancedMarker;
@@ -49,6 +55,8 @@ type MerchantMarkerHandle = {
   marker: GoogleAdvancedMarker;
   listeners: Array<{ remove(): void }>;
 };
+
+type MerchantMarkerKind = "cart-shop" | "viewport";
 
 declare global {
   interface Window {
@@ -70,8 +78,9 @@ function getMapsApiKey(): string {
   return import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? "";
 }
 
-function getMapsMapId(): string {
-  return import.meta.env.VITE_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+function getMapsMapId(): string | null {
+  const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+  return mapId ? String(mapId) : null;
 }
 
 function loadGoogleMaps(): Promise<GoogleMapsApi> {
@@ -145,10 +154,10 @@ function viewportFromMap(map: GoogleMap): MerchantMapViewport | null {
   };
 }
 
-function markerContent(shop: MerchantMapShop): HTMLElement {
+function markerContent(shop: MerchantMapShop, kind: MerchantMarkerKind): HTMLElement {
   const wrapper = document.createElement("button");
   wrapper.type = "button";
-  wrapper.className = "mytree-merchant-marker";
+  wrapper.className = kind === "cart-shop" ? "mytree-merchant-marker mytree-cart-shop-marker" : "mytree-merchant-marker";
   wrapper.textContent = shop.name;
   wrapper.setAttribute("aria-label", `ดูร้าน ${shop.name}`);
   return wrapper;
@@ -161,12 +170,18 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const mapListenersRef = useRef<Array<{ remove(): void }>>([]);
   const markerListenersRef = useRef<Array<{ remove(): void }>>([]);
   const merchantMarkersRef = useRef<MerchantMarkerHandle[]>([]);
+  const cartShopMarkerRef = useRef<MerchantMarkerHandle | null>(null);
   const merchantRequestSeqRef = useRef(0);
+  const cartShopRequestSeqRef = useRef(0);
+  const initialFitDoneRef = useRef(false);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
   const [mapsError, setMapsError] = useState<string | null>(null);
+  const [mapConfigStatus, setMapConfigStatus] = useState<string | null>(null);
   const [merchantLoading, setMerchantLoading] = useState(false);
   const [merchantError, setMerchantError] = useState<string | null>(null);
   const [merchantShops, setMerchantShops] = useState<MerchantMapShop[]>([]);
+  const [cartShop, setCartShop] = useState<MerchantMapShop | null>(null);
+  const [cartShopStatus, setCartShopStatus] = useState<string | null>(null);
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantMapShop | null>(null);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -185,19 +200,32 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     merchantMarkersRef.current = [];
   }
 
+  function clearCartShopMarker() {
+    if (!cartShopMarkerRef.current) return;
+    cartShopMarkerRef.current.listeners.forEach((listener) => listener.remove());
+    cartShopMarkerRef.current.marker.map = null;
+    cartShopMarkerRef.current = null;
+  }
+
   useEffect(() => {
     let disposed = false;
     void loadGoogleMaps()
       .then((google) => {
         if (disposed || !mapElementRef.current || mapRef.current) return;
         const initialCandidate = candidateRef.current;
+        const mapId = getMapsMapId();
+        setMapConfigStatus(mapId ? null : "ยังไม่ได้ตั้งค่า Google Maps Map ID สำหรับหมุดร้านค้า MyTree");
         const map = new google.maps.Map(mapElementRef.current, {
-          center: initialCandidate ? { lat: initialCandidate.lat, lng: initialCandidate.lng } : DEFAULT_CENTER,
-          zoom: initialCandidate ? 17 : 14,
+          center: initialCandidate
+            ? { lat: initialCandidate.lat, lng: initialCandidate.lng }
+            : cartShop
+              ? { lat: cartShop.lat, lng: cartShop.lng }
+              : DEFAULT_CENTER,
+          zoom: initialCandidate ? 17 : cartShop ? CHECKOUT_MAP_SINGLE_POINT_ZOOM : 14,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
-          mapId: getMapsMapId(),
+          ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
         const clickListener = map.addListener("click", (event) => {
@@ -218,15 +246,52 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     return () => {
       disposed = true;
       merchantRequestSeqRef.current += 1;
+      cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());
       mapListenersRef.current = [];
       markerListenersRef.current.forEach((listener) => listener.remove());
       markerListenersRef.current = [];
       clearMerchantMarkers();
+      clearCartShopMarker();
       mapRef.current = null;
       markerRef.current = null;
     };
   }, [onCandidateChange]);
+
+  useEffect(() => {
+    if (!shopId) {
+      cartShopRequestSeqRef.current += 1;
+      setCartShop(null);
+      setCartShopStatus("ยังไม่มีร้านค้าในตะกร้า");
+      return;
+    }
+
+    const requestSeq = cartShopRequestSeqRef.current + 1;
+    cartShopRequestSeqRef.current = requestSeq;
+    setCartShopStatus(null);
+    publicSupabase
+      .from("shops")
+      .select("shop_id,name,category,description,address,lat,lng")
+      .eq("shop_id", shopId)
+      .eq("is_approved", true)
+      .eq("is_banned", false)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (requestSeq !== cartShopRequestSeqRef.current) return;
+        if (error) {
+          setCartShop(null);
+          setCartShopStatus("โหลดพิกัดร้านค้าในตะกร้าไม่สำเร็จ");
+          return;
+        }
+        const [shop] = normalizeMerchantMapRows(data ? [data as MerchantMapRow] : []);
+        setCartShop(shop ?? null);
+        setCartShopStatus(shop ? null : "ร้านค้าในตะกร้ายังไม่มีพิกัดสำหรับแสดงบนแผนที่");
+      });
+
+    return () => {
+      cartShopRequestSeqRef.current += 1;
+    };
+  }, [shopId]);
 
   async function loadMerchantShops(viewport: MerchantMapViewport) {
     const requestSeq = merchantRequestSeqRef.current + 1;
@@ -258,15 +323,19 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !window.google?.maps.marker?.AdvancedMarkerElement) return;
+    if (!map) return;
+    if (!window.google?.maps.marker?.AdvancedMarkerElement) {
+      if (merchantShops.length > 0) setMerchantError("AdvancedMarkerElement ยังไม่พร้อม จึงแสดงหมุดร้านค้า MyTree ไม่ได้");
+      return;
+    }
 
     clearMerchantMarkers();
-    merchantMarkersRef.current = merchantShops.map((shop) => {
+    merchantMarkersRef.current = merchantShops.filter((shop) => shop.shopId !== cartShop?.shopId).map((shop) => {
       const marker = new window.google!.maps.marker.AdvancedMarkerElement({
         map,
         position: { lat: shop.lat, lng: shop.lng },
         title: shop.name,
-        content: markerContent(shop),
+        content: markerContent(shop, "viewport"),
         zIndex: 10_000,
       });
       const listeners = [marker.addListener("click", () => setSelectedMerchant(shop))];
@@ -274,7 +343,51 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     });
 
     return clearMerchantMarkers;
-  }, [merchantShops]);
+  }, [cartShop?.shopId, merchantShops]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cartShop) {
+      clearCartShopMarker();
+      return;
+    }
+    if (!window.google?.maps.marker?.AdvancedMarkerElement) {
+      setCartShopStatus("AdvancedMarkerElement ยังไม่พร้อม จึงแสดงหมุดร้านค้าในตะกร้าไม่ได้");
+      return;
+    }
+
+    clearCartShopMarker();
+    const marker = new window.google.maps.marker.AdvancedMarkerElement({
+      map,
+      position: { lat: cartShop.lat, lng: cartShop.lng },
+      title: cartShop.name,
+      content: markerContent(cartShop, "cart-shop"),
+      zIndex: 20_000,
+    });
+    const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
+    cartShopMarkerRef.current = { marker, listeners };
+
+    return clearCartShopMarker;
+  }, [cartShop]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cartShop || initialFitDoneRef.current) return;
+    const currentCandidate = candidateRef.current;
+    if (currentCandidate) {
+      const bounds = boundsForMerchantPoints([
+        { lat: cartShop.lat, lng: cartShop.lng },
+        { lat: currentCandidate.lat, lng: currentCandidate.lng },
+      ]);
+      if (!bounds) return;
+      initialFitDoneRef.current = true;
+      map.fitBounds(bounds, CHECKOUT_MAP_FIT_PADDING);
+      return;
+    }
+    initialFitDoneRef.current = true;
+    map.setCenter({ lat: cartShop.lat, lng: cartShop.lng });
+    map.setZoom(CHECKOUT_MAP_SINGLE_POINT_ZOOM);
+  }, [cartShop, candidate]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -401,10 +514,20 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               content: "";
               transform: translateX(-50%) rotate(45deg);
             }
+            .mytree-cart-shop-marker {
+              border-color: #9a3412;
+              background: #f97316;
+              box-shadow: 0 10px 24px rgba(154, 52, 18, 0.34);
+              color: #fff7ed;
+            }
+            .mytree-cart-shop-marker::after {
+              border-color: #9a3412;
+              background: #f97316;
+            }
           `}</style>
-          {(merchantLoading || merchantError) && (
+          {(merchantLoading || merchantError || cartShopStatus || mapConfigStatus) && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
-              {merchantLoading ? "กำลังโหลดหมุดร้านค้า MyTree..." : merchantError}
+              {mapConfigStatus ?? cartShopStatus ?? (merchantLoading ? "กำลังโหลดหมุดร้านค้า MyTree..." : merchantError)}
             </div>
           )}
           {selectedMerchant && (
