@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
+import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
 // ============================================================
@@ -34,6 +35,7 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 /** Initialise the environment-selected LIFF app exactly once. */
 export function initLiff(): Promise<void> {
+  if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
   if (!liffReady) {
     liffReady = liff.init({
       liffId: LIFF_ID,
@@ -48,6 +50,7 @@ export function initLiff(): Promise<void> {
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
+  if (isPreviewCheckoutMapAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
