@@ -6,6 +6,7 @@ const items = [
   { icon: '🗂️', title: 'จัดการหมวดหมู่', note: 'สร้างหมวดเมนูหลักของร้านและเปิด/ปิดการใช้งาน', route: '/categories' },
   { icon: '⚙️', title: 'Customize Options', note: 'คลัง Option กลางของร้าน แบ่งหมวดและใช้ซ้ำกับหลายเมนู', route: '/customize' },
   { icon: '🍜', title: 'จัดการเมนู', note: 'เพิ่มเมนู เลือกหมวด และเลือก Customize Option จาก All List ของร้าน', route: '/menu' },
+  { icon: '🛵', title: 'ตั้งค่าการส่ง', note: 'รับที่ร้าน · คิดตามระยะทาง · ร้านส่งเอง · ส่งฟรี · MyTree Rider', route: '/delivery' },
   { icon: '📦', title: 'รายการออเดอร์', note: 'ดูออเดอร์ล่าสุดและเปิดรายละเอียดงาน', route: '/orders' },
 ] as const;
 
@@ -13,7 +14,7 @@ export default function ManageScreen() {
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>MERCHANT TOOLS</Text>
     <Text style={styles.title}>จัดการร้าน</Text>
-    <Text style={styles.subtitle}>ตั้งค่าร้านและโครงสร้างเมนูทั้งหมดจากจุดเดียว</Text>
+    <Text style={styles.subtitle}>ตั้งค่าร้าน เมนู และการส่งทั้งหมดจากจุดเดียว</Text>
 
     <View style={styles.list}>
       {items.map((item) => <Pressable key={item.route} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -25,7 +26,7 @@ export default function ManageScreen() {
 
     <View style={styles.nextCard}>
       <Text style={styles.nextTitle}>Phase 1 กำลังต่อ</Text>
-      <Text style={styles.nextText}>Menu List + Add เชื่อม Category และ Customize Library แล้ว ขั้นถัดไปคือ Edit Menu เต็มรูปแบบ, Delivery Settings และ Order Status flow</Text>
+      <Text style={styles.nextText}>Dashboard, Settings, Category, Customize, Menu List/Add และ Delivery Settings อยู่ใน flow แล้ว ขั้นถัดไปคือ Edit Menu เต็มรูปแบบ + Order Detail/Status/Notification flow</Text>
     </View>
   </ScrollView>;
 }
