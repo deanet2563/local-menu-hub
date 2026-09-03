@@ -1,56 +1,52 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadShopOrderById } from '../../src/data/shopOrders';
 import {
   acceptShopOrder,
-  cancelShopDeliveryV3,
-  reofferShopDeliveryV3,
+  confirmCompleteAndRequestRider,
+  confirmShopPayment,
   requestShopDeliveryV3,
   setShopOrderStatus,
-  type RiderReofferReasonCode,
-  type ShopCancelReasonCode,
 } from '../../src/data/shopOrderActions';
 import type { ShopOrder } from '../../src/domain/orders';
 
 const DELIVERY_V3_ENABLED = process.env.EXPO_PUBLIC_ENABLE_RIDER_DELIVERY_V3 === 'true';
-const POLL_MS = 10_000;
+const POLL_MS = 8_000;
 
-const REOFFER_REASONS: Array<{ code: RiderReofferReasonCode; label: string }> = [
-  { code: 'rider_not_arriving', label: 'Rider ยังไม่มารับ' },
-  { code: 'rider_too_slow', label: 'Rider ช้าเกินไป' },
-  { code: 'cannot_contact_rider', label: 'ติดต่อ Rider ไม่ได้' },
-  { code: 'shop_operational_issue', label: 'ปัญหาการจัดส่งของร้าน' },
-  { code: 'other', label: 'อื่น ๆ' },
-];
+const ORDER_LABEL: Record<string, string> = {
+  pending: 'ออเดอร์ใหม่',
+  confirmed: 'รับออเดอร์แล้ว',
+  preparing: 'กำลังทำ',
+  completed: 'อาหารเสร็จแล้ว',
+  cancelled: 'ยกเลิก',
+};
 
-const CANCEL_REASONS: Array<{ code: ShopCancelReasonCode; label: string }> = [
-  { code: 'customer_requested', label: 'ลูกค้าขอยกเลิก' },
-  { code: 'order_cancelled', label: 'ต้องยกเลิกออเดอร์' },
-  { code: 'shop_operational_issue', label: 'ร้านไม่สามารถดำเนินออเดอร์ได้' },
-  { code: 'other', label: 'อื่น ๆ' },
-];
+const PAYMENT_LABEL: Record<string, string> = {
+  unpaid: 'ยังไม่ชำระ',
+  pending: 'รอตรวจยอด',
+  paid: 'ยืนยันยอดแล้ว',
+  refunded: 'คืนเงินแล้ว',
+  void: 'ยกเลิกยอด',
+};
 
-function formatRequestedFor(value: string): string {
+function deliveryLabel(order: ShopOrder): string | null {
+  if (order.delivery_status === 'delivered') return 'ส่งสำเร็จ';
+  if (order.delivery_status === 'picked_up') return 'ไรเดอร์รับสินค้าแล้ว';
+  if (order.delivery_status === 'rider_called' && order.assigned_rider_id) return 'ไรเดอร์รับงานแล้ว';
+  if (order.delivery_status === 'rider_called') return 'เรียกไรเดอร์แล้ว';
+  if (order.delivery_status === 'failed') return 'การจัดส่งมีปัญหา';
+  // `needs_rider` is intentionally not shown as “รอเรียกไรเดอร์”. It is an internal pre-delivery state.
+  return null;
+}
+
+function formatRequestedFor(value: string) {
   return new Date(value).toLocaleString('th-TH', {
     timeZone: 'Asia/Bangkok',
     dateStyle: 'long',
     timeStyle: 'short',
   });
-}
-
-function friendlyError(value: string): string {
-  if (value === 'unauthorized_shop_session' || value === 'shop_actor_not_authenticated') return 'Shop session หมดอายุ กรุณาเข้าสู่ระบบใหม่';
-  if (value === 'shop_actor_not_authorized') return 'บัญชีนี้ไม่มีสิทธิ์จัดการงานของร้านนี้';
-  if (value === 'delivery_not_open_for_riders') return 'งานนี้ไม่อยู่ในสถานะเปิดหา Rider แล้ว กรุณาโหลดใหม่';
-  if (value === 'reoffer_not_allowed_after_pickup' || value === 'cancellation_not_allowed_after_pickup') return 'ดำเนินการไม่ได้หลัง Rider รับสินค้าแล้ว';
-  if (value === 'delivery_has_no_releasable_rider') return 'ไม่มี Rider ที่สามารถปล่อยจากงานนี้ได้';
-  if (value === 'reoffer_transition_conflict' || value === 'cancellation_transition_conflict') return 'สถานะงานเปลี่ยนไปแล้ว กรุณาโหลดใหม่';
-  if (value === 'reoffer_note_required_for_other' || value === 'cancellation_note_required_for_other') return 'กรุณาระบุรายละเอียดเมื่อเลือก “อื่น ๆ”';
-  if (value === 'reoffer_note_too_long' || value === 'cancellation_note_too_long') return 'รายละเอียดต้องไม่เกิน 500 ตัวอักษร';
-  if (value === 'delivery_not_found') return 'ไม่พบงานจัดส่งนี้';
-  return value;
 }
 
 export default function OrderDetailScreen() {
@@ -60,19 +56,13 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [riderRequestMessage, setRiderRequestMessage] = useState<string | null>(null);
-  const [reofferReason, setReofferReason] = useState<RiderReofferReasonCode>('rider_not_arriving');
-  const [reofferNote, setReofferNote] = useState('');
-  const [cancelReason, setCancelReason] = useState<ShopCancelReasonCode>('customer_requested');
-  const [cancelNote, setCancelNote] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async (silent = false) => {
     if (!id) return;
     if (!silent) setLoading(true);
     try {
-      const next = await loadShopOrderById(id);
-      setOrder(next);
+      setOrder(await loadShopOrderById(id));
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'โหลดรายละเอียดออเดอร์ไม่สำเร็จ');
@@ -83,298 +73,146 @@ export default function OrderDetailScreen() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => { void load(true); }, POLL_MS);
+    const timer = setInterval(() => void load(true), POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
 
-  const runAction = useCallback(async (action: () => Promise<void>, successMessage: string) => {
+  const run = useCallback(async (action: () => Promise<unknown>, success: string) => {
     if (acting) return;
-    setActing(true);
-    setError(null);
-    setActionMessage(null);
+    setActing(true); setError(null); setMessage(null);
     try {
       await action();
-      setActionMessage(successMessage);
+      setMessage(success);
       await load(true);
     } catch (cause) {
-      const text = cause instanceof Error ? cause.message : String(cause);
-      setError(friendlyError(text));
+      setError(cause instanceof Error ? cause.message : String(cause));
       await load(true);
-    } finally {
-      setActing(false);
-    }
+    } finally { setActing(false); }
   }, [acting, load]);
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" /></View>;
-  if (error && !order) return <View style={styles.centerPad}><Text style={styles.error}>{error}</Text></View>;
-  if (!order) return <View style={styles.centerPad}><Text>ไม่พบออเดอร์นี้</Text></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดออเดอร์…</Text></View>;
+  if (!order) return <View style={styles.center}><Text style={styles.error}>{error || 'ไม่พบออเดอร์'}</Text></View>;
 
   const isDelivery = order.fulfillment_type === 'delivery';
-  const waitingForRider = isDelivery && order.delivery_status === 'needs_rider' && !order.assigned_rider_id;
-  const riderAssigned = isDelivery && order.delivery_status === 'rider_called' && !!order.assigned_rider_id;
-  const beforePickup = order.picked_up_at == null && order.delivered_at == null;
-  const deliveryOrderActive = order.order_status !== 'cancelled';
-  const canRequestRider = DELIVERY_V3_ENABLED && waitingForRider && beforePickup && deliveryOrderActive;
-  const canReoffer = DELIVERY_V3_ENABLED && riderAssigned && beforePickup && deliveryOrderActive;
-  const canCancelDelivery = DELIVERY_V3_ENABLED
-    && isDelivery
-    && beforePickup
-    && order.order_status !== 'cancelled'
-    && order.order_status !== 'completed'
-    && ['needs_rider', 'rider_called', 'failed'].includes(order.delivery_status);
+  const customerName = order.hub_orders?.customers?.name?.trim() || 'ลูกค้า MyTree';
+  const customerPhone = order.hub_orders?.customers?.phone?.trim() || '';
+  const deliveryText = isDelivery ? deliveryLabel(order) : null;
+  const riderFlowStarted = Boolean(deliveryText) && order.delivery_status !== 'failed';
+  const canRequestRider = DELIVERY_V3_ENABLED && isDelivery && !riderFlowStarted && order.order_status !== 'cancelled';
 
-  async function requestRider() {
-    if (acting || !order) return;
-    const subId = order.sub_id;
-    setActing(true);
-    setError(null);
-    setActionMessage(null);
-    setRiderRequestMessage(null);
-    try {
-      const result = await requestShopDeliveryV3(subId);
-      if (result.result === 'recently_requested') {
-        setRiderRequestMessage('เพิ่งส่งคำขอไปแล้ว · ระบบป้องกันการแจ้งซ้ำชั่วคราว');
-      } else {
-        const radius = result.usedRadiusKm ? ` · รัศมี ${result.usedRadiusKm} กม.` : '';
-        const push = result.pushed === true
-          ? ' · Push: ส่งแล้ว'
-          : result.pushed === false
-            ? ' · Push: ยังไม่ส่ง'
-            : ' · Push: ไม่ทราบสถานะ';
-        setRiderRequestMessage(`ส่งคำขอแล้ว · พบ Rider พร้อมรับ ${result.candidates ?? 0} คน${radius}${push}`);
-      }
-      await load(true);
-    } catch (cause) {
-      const text = cause instanceof Error ? cause.message : String(cause);
-      const friendly = friendlyError(text);
-      setRiderRequestMessage(`ส่งคำขอหา Rider ไม่สำเร็จ · ${friendly}`);
-      setError(friendly);
-      await load(true);
-    } finally {
-      setActing(false);
-    }
+  function callCustomer() {
+    if (!customerPhone) return Alert.alert('ไม่มีเบอร์โทร', 'ลูกค้ารายนี้ยังไม่มีเบอร์โทรในออเดอร์');
+    void Linking.openURL(`tel:${customerPhone.replace(/\s/g, '')}`);
   }
 
-  return (
-    <ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 32 }]}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>ORDER #{order.sub_id.slice(0, 6).toUpperCase()}</Text>
-        <Text style={styles.title}>{order.hub_orders?.customers?.name || 'ลูกค้า MyTree'}</Text>
-        <Text style={styles.body}>{order.hub_orders?.customers?.phone || 'ไม่มีเบอร์โทร'}</Text>
-        <Text style={styles.body}>{isDelivery ? 'จัดส่ง' : 'รับเอง'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
+  function openChat() {
+    router.push({ pathname: '/chat/[subId]', params: { subId: order.sub_id } });
+  }
+
+  async function requestRiderReadyFlow() {
+    if (!canRequestRider || acting) return;
+    const ready = order.payment_status === 'paid' && order.order_status === 'completed';
+
+    const execute = async () => {
+      if (ready) {
+        await run(async () => {
+          await requestShopDeliveryV3(order.sub_id);
+        }, 'ส่งคำขอแล้ว · เรียกไรเดอร์แล้ว');
+      } else {
+        await run(async () => {
+          await confirmCompleteAndRequestRider(order.sub_id, order.order_status, order.payment_status);
+        }, 'ยืนยันยอด + ออเดอร์เสร็จแล้ว และส่งคำขอเรียกไรเดอร์แล้ว');
+      }
+    };
+
+    if (ready) return execute();
+    Alert.alert(
+      'ยืนยันก่อนเรียกไรเดอร์',
+      'ยืนยันยอด และออเดอร์เสร็จเรียบร้อยแล้วใช่ไหม?',
+      [
+        { text: 'ยังไม่ใช่', style: 'cancel' },
+        { text: 'ใช่ · ยืนยันและเรียกไรเดอร์', onPress: () => void execute() },
+      ],
+    );
+  }
+
+  return <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
+    <View style={styles.headerCard}>
+      <Text style={styles.eyebrow}>ORDER #{order.sub_id.slice(0, 6).toUpperCase()}</Text>
+      <Text style={styles.customerName}>{customerName}</Text>
+      <Text style={styles.orderMeta}>{isDelivery ? 'จัดส่ง' : 'ลูกค้ามารับที่ร้าน'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
+      <View style={styles.contactRow}>
+        <Pressable onPress={callCustomer} style={styles.contactButton}><Text style={styles.contactButtonText}>📞 โทรหาลูกค้า</Text></Pressable>
+        <Pressable onPress={openChat} style={styles.contactButton}><Text style={styles.contactButtonText}>💬 แชทลูกค้า</Text></Pressable>
       </View>
+    </View>
 
-      {order.requested_for ? (
-        <View style={styles.preorderCard}>
-          <Text style={styles.preorderLabel}>🗓️ สั่งล่วงหน้า</Text>
-          <Text style={styles.preorderTime}>{isDelivery ? 'ส่งวันที่' : 'รับวันที่'} {formatRequestedFor(order.requested_for)}</Text>
-          <Text style={styles.preorderHint}>กรุณาเตรียมออเดอร์ให้พร้อมตามวันและเวลานี้</Text>
-        </View>
-      ) : null}
+    {order.requested_for ? <View style={styles.preorderCard}><Text style={styles.preorderTitle}>🗓️ สั่งล่วงหน้า</Text><Text style={styles.preorderText}>{isDelivery ? 'ส่ง' : 'รับ'} {formatRequestedFor(order.requested_for)}</Text></View> : null}
+    {message ? <View style={styles.successBox}><Text style={styles.successText}>✓ {message}</Text></View> : null}
+    {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>รายการอาหาร</Text>
-        {order.order_items.map((item, index) => (
-          <View key={`${item.item_name_snapshot}-${index}`} style={styles.row}>
-            <Text style={styles.body}>{item.item_name_snapshot} × {item.qty}</Text>
-            <Text style={styles.body}>฿{Number(item.line_total).toFixed(0)}</Text>
-          </View>
-        ))}
-        <View style={styles.divider} />
-        <View style={styles.row}><Text style={styles.sectionTitle}>รวม</Text><Text style={styles.total}>฿{Number(order.amount).toFixed(0)}</Text></View>
+    <View style={styles.card}>
+      <Text style={styles.sectionTitle}>สถานะออเดอร์</Text>
+      <View style={styles.statusGrid}>
+        <StatusButton label={ORDER_LABEL[order.order_status] ?? order.order_status} tone={order.order_status === 'completed' ? 'green' : order.order_status === 'cancelled' ? 'red' : 'amber'} />
+        <StatusButton label={PAYMENT_LABEL[order.payment_status] ?? order.payment_status} tone={order.payment_status === 'paid' ? 'green' : 'blue'} />
+        {deliveryText ? <StatusButton label={deliveryText} tone={order.delivery_status === 'delivered' ? 'green' : order.delivery_status === 'failed' ? 'red' : 'purple'} wide /> : null}
       </View>
+      {isDelivery && riderFlowStarted ? <Text style={styles.syncNote}>สถานะการจัดส่งหลังจากนี้เปลี่ยนจาก Rider โดยอัตโนมัติ ร้านไม่ต้องกด “รับสินค้า” หรือ “ส่งสำเร็จ”</Text> : null}
+    </View>
 
-      {order.delivery_address ? <View style={styles.card}><Text style={styles.sectionTitle}>ที่อยู่จัดส่ง</Text><Text style={styles.body}>{order.delivery_address}</Text></View> : null}
-      {order.customer_note ? <View style={styles.card}><Text style={styles.sectionTitle}>หมายเหตุ</Text><Text style={styles.body}>{order.customer_note}</Text></View> : null}
+    <View style={styles.card}>
+      <Text style={styles.sectionTitle}>รายการอาหาร</Text>
+      {order.order_items.map((item, index) => <View key={`${item.item_name_snapshot}-${index}`} style={styles.itemRow}><View style={{ flex: 1 }}><Text style={styles.itemName}>{item.item_name_snapshot}</Text><Text style={styles.qty}>จำนวน {item.qty}</Text></View><Text style={styles.lineTotal}>฿{Number(item.line_total).toFixed(0)}</Text></View>)}
+      <View style={styles.totalRow}><Text style={styles.totalLabel}>รวม</Text><Text style={styles.total}>฿{Number(order.amount).toFixed(0)}</Text></View>
+    </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>สถานะ</Text>
-        <Text style={styles.body}>ออเดอร์: {order.order_status}</Text>
-        <Text style={styles.body}>ชำระเงิน: {order.payment_status}</Text>
-        <Text style={styles.body}>จัดส่ง: {order.delivery_status}</Text>
-        {riderAssigned ? <Text style={styles.success}>✓ Rider ชนะ First Accept และ backend ล็อกงานแล้ว</Text> : null}
-        {order.order_status === 'cancelled' && order.cancelled_reason ? <Text style={styles.cancelledText}>เหตุผลยกเลิก: {order.cancelled_reason}</Text> : null}
-      </View>
+    {order.payment_slip_url ? <View style={styles.card}>
+      <Text style={styles.sectionTitle}>สลิปจากลูกค้า</Text>
+      <Image source={{ uri: order.payment_slip_url }} style={styles.slip} resizeMode="cover" />
+      <Pressable onPress={() => void Linking.openURL(order.payment_slip_url!)} style={styles.secondaryButton}><Text style={styles.secondaryText}>ดูรูปเต็ม</Text></Pressable>
+      {order.payment_status !== 'paid' ? <Pressable disabled={acting} onPress={() => void run(() => confirmShopPayment(order.sub_id), 'ยืนยันยอดแล้ว')} style={styles.paymentButton}><Text style={styles.paymentButtonText}>✓ ยืนยันยอด</Text></Pressable> : <Text style={styles.confirmedText}>✓ ยืนยันยอดแล้ว</Text>}
+    </View> : order.payment_method === 'qr_transfer' ? <View style={styles.card}><Text style={styles.sectionTitle}>สลิปจากลูกค้า</Text><Text style={styles.muted}>ลูกค้ายังไม่ได้แนบสลิป</Text></View> : null}
 
-      {isDelivery ? (
-        <View style={styles.riderCard}>
-          <Text style={styles.sectionTitle}>🛵 Rider Delivery V3</Text>
-          {!DELIVERY_V3_ENABLED ? (
-            <Text style={styles.gateText}>Delivery V3 ยังไม่เปิดใน production build นี้</Text>
-          ) : canRequestRider ? (
-            <>
-              <Text style={styles.actionHint}>กดส่งคำขอเพื่อแจ้ง Rider ใกล้ร้าน Rider คนแรกที่ backend ยืนยัน First Accept สำเร็จจะได้งาน ร้านไม่ต้องเลือกรายชื่อ Rider</Text>
-              <Pressable
-                disabled={acting}
-                onPress={() => void requestRider()}
-                style={({ pressed }) => [styles.primaryButton, acting && styles.disabled, pressed && styles.pressed]}
-              >
-                {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>ส่งคำขอหา Rider ใกล้ร้าน</Text>}
-              </Pressable>
-              {riderRequestMessage ? <Text style={styles.riderResultBanner}>{riderRequestMessage}</Text> : null}
-            </>
-          ) : riderAssigned ? (
-            <Text style={styles.actionHint}>ระบบล็อก Rider ผู้ชนะแล้ว ร้านจะเห็น Pickup/Delivery จาก backend อัตโนมัติ หากต้องเปลี่ยน Rider ก่อนรับสินค้าให้ใช้ “ปล่อย Rider และหาใหม่” ด้านล่าง</Text>
-          ) : (
-            <>
-              <Text style={styles.actionHint}>สถานะ Rider แสดงจาก backend โดยตรง</Text>
-              {riderRequestMessage ? <Text style={styles.riderResultBanner}>{riderRequestMessage}</Text> : null}
-            </>
-          )}
-        </View>
-      ) : null}
+    {order.delivery_address ? <View style={styles.card}><Text style={styles.sectionTitle}>ที่อยู่จัดส่ง</Text><Text style={styles.body}>{order.delivery_address}</Text></View> : null}
+    {order.customer_note ? <View style={styles.card}><Text style={styles.sectionTitle}>หมายเหตุจากลูกค้า</Text><Text style={styles.body}>{order.customer_note}</Text></View> : null}
 
-      {(order.order_status === 'pending' || order.order_status === 'confirmed' || order.order_status === 'preparing') ? (
-        <View style={styles.actionCard}>
-          <Text style={styles.sectionTitle}>จัดการออเดอร์</Text>
-          <Text style={styles.actionHint}>Ordering Flow V2 เดินหน้าได้ทีละขั้น</Text>
-          {order.order_status === 'pending' ? (
-            <Pressable disabled={acting} onPress={() => void runAction(() => acceptShopOrder(order.sub_id), 'รับออเดอร์แล้ว')} style={({ pressed }) => [styles.primaryButton, acting && styles.disabled, pressed && styles.pressed]}>
-              {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>✓ รับออเดอร์</Text>}
-            </Pressable>
-          ) : null}
-          {order.order_status === 'confirmed' ? (
-            <Pressable disabled={acting} onPress={() => void runAction(() => setShopOrderStatus(order.sub_id, 'preparing'), 'เริ่มเตรียมออเดอร์แล้ว')} style={({ pressed }) => [styles.primaryButton, acting && styles.disabled, pressed && styles.pressed]}>
-              {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>เริ่มเตรียมออเดอร์</Text>}
-            </Pressable>
-          ) : null}
-          {order.order_status === 'preparing' ? (
-            <Pressable disabled={acting} onPress={() => void runAction(() => setShopOrderStatus(order.sub_id, 'completed'), 'ออเดอร์เสร็จแล้ว')} style={({ pressed }) => [styles.primaryButton, acting && styles.disabled, pressed && styles.pressed]}>
-              {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>ทำออเดอร์เสร็จแล้ว</Text>}
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+    {order.order_status !== 'cancelled' && order.order_status !== 'completed' ? <View style={styles.card}>
+      <Text style={styles.sectionTitle}>จัดการออเดอร์</Text>
+      <Text style={styles.helper}>เปลี่ยนสถานะด้วยปุ่มสี ไม่ใช้ Dropdown</Text>
+      {order.order_status === 'pending' ? <ActionButton label="รับออเดอร์" disabled={acting} onPress={() => void run(() => acceptShopOrder(order.sub_id), 'รับออเดอร์แล้ว')} /> : null}
+      {order.order_status === 'confirmed' ? <ActionButton label="เริ่มทำ" disabled={acting} onPress={() => void run(() => setShopOrderStatus(order.sub_id, 'preparing'), 'เปลี่ยนเป็นกำลังทำแล้ว')} /> : null}
+      {order.order_status === 'preparing' ? <ActionButton label="อาหารเสร็จแล้ว" disabled={acting} onPress={() => void run(() => setShopOrderStatus(order.sub_id, 'completed'), 'ออเดอร์เสร็จแล้ว')} /> : null}
+    </View> : null}
 
-      {canReoffer ? (
-        <View style={styles.reofferCard}>
-          <Text style={styles.reofferTitle}>เปลี่ยน Rider โดยไม่ยกเลิกออเดอร์</Text>
-          <Text style={styles.actionHint}>ใช้เมื่อ Rider ยังไม่มารับ ช้า หรือติดต่อไม่ได้ ระบบจะปล่อย Rider เดิมแล้วเปิดหา Rider ใหม่ทันที</Text>
-          <ReasonButtons options={REOFFER_REASONS} value={reofferReason} onChange={setReofferReason} disabled={acting} />
-          <TextInput
-            editable={!acting}
-            maxLength={500}
-            multiline
-            onChangeText={setReofferNote}
-            placeholder={reofferReason === 'other' ? 'กรุณาระบุรายละเอียด' : 'รายละเอียดเพิ่มเติม (ถ้ามี)'}
-            style={styles.textInput}
-            value={reofferNote}
-          />
-          <Pressable
-            disabled={acting || (reofferReason === 'other' && !reofferNote.trim())}
-            onPress={() => void runAction(async () => {
-              const result = await reofferShopDeliveryV3(order.sub_id, reofferReason, reofferNote);
-              setReofferNote('');
-              setActionMessage(result.offerResult === 'recently_requested' ? 'ปล่อย Rider เดิมแล้ว · คำขอหา Rider ใหม่ถูกเปิดไว้แล้ว' : 'ปล่อย Rider เดิมและส่งคำขอหา Rider ใหม่แล้ว');
-            }, 'ปล่อย Rider เดิมและเปิดหา Rider ใหม่แล้ว')}
-            style={({ pressed }) => [styles.reofferButton, (acting || (reofferReason === 'other' && !reofferNote.trim())) && styles.disabled, pressed && styles.pressed]}
-          >
-            {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>ปล่อย Rider และหาใหม่</Text>}
-          </Pressable>
-        </View>
-      ) : null}
-
-      {canCancelDelivery ? (
-        <View style={styles.cancelCard}>
-          <Text style={styles.cancelTitle}>ยกเลิกออเดอร์ทั้งหมด</Text>
-          <Text style={styles.actionHint}>ใช้เฉพาะเมื่อต้องยกเลิกออเดอร์จริง ไม่ใช่กรณีต้องการเปลี่ยน Rider การยกเลิกนี้ไม่เปลี่ยน payment/refund อัตโนมัติ</Text>
-          <ReasonButtons options={CANCEL_REASONS} value={cancelReason} onChange={setCancelReason} disabled={acting} />
-          <TextInput
-            editable={!acting}
-            maxLength={500}
-            multiline
-            onChangeText={setCancelNote}
-            placeholder={cancelReason === 'other' ? 'กรุณาระบุรายละเอียด' : 'รายละเอียดเพิ่มเติม (ถ้ามี)'}
-            style={styles.textInput}
-            value={cancelNote}
-          />
-          <Pressable
-            disabled={acting || (cancelReason === 'other' && !cancelNote.trim())}
-            onPress={() => void runAction(async () => {
-              const result = await cancelShopDeliveryV3(order.sub_id, cancelReason, cancelNote);
-              setCancelNote('');
-              setActionMessage(result === 'already_cancelled' ? 'ออเดอร์นี้ถูกยกเลิกแล้ว' : 'ยกเลิกออเดอร์และปิดงาน Rider แล้ว');
-            }, 'ยกเลิกออเดอร์แล้ว')}
-            style={({ pressed }) => [styles.cancelButton, (acting || (cancelReason === 'other' && !cancelNote.trim())) && styles.disabled, pressed && styles.pressed]}
-          >
-            {acting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.cancelButtonText}>ยืนยันยกเลิกออเดอร์</Text>}
-          </Pressable>
-        </View>
-      ) : null}
-
-      {actionMessage ? <Text style={styles.successBanner}>{actionMessage}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </ScrollView>
-  );
+    {isDelivery ? <View style={styles.riderCard}>
+      <Text style={styles.sectionTitle}>🛵 การจัดส่ง</Text>
+      {!DELIVERY_V3_ENABLED ? <Text style={styles.helper}>Rider Delivery V3 ยังไม่เปิดใน build นี้</Text> : riderFlowStarted ? <>
+        <StatusButton label={deliveryText || 'กำลังจัดส่ง'} tone={order.delivery_status === 'delivered' ? 'green' : 'purple'} wide />
+        <Text style={styles.helper}>Shop Request → Rider First Accept → Auto Lock → Shop Notified → Pickup → Delivered</Text>
+      </> : <>
+        <Text style={styles.helper}>เมื่อกดเรียกไรเดอร์ ระบบตรวจ “ยืนยันยอด” และ “อาหารเสร็จแล้ว” ก่อน หากยังไม่ครบจะถามยืนยันครั้งเดียว แล้วส่งคำขอ Rider ต่ออัตโนมัติ</Text>
+        <Pressable disabled={!canRequestRider || acting} onPress={() => void requestRiderReadyFlow()} style={({ pressed }) => [styles.riderButton, (!canRequestRider || acting) && styles.disabled, pressed && styles.pressed]}>{acting ? <ActivityIndicator color="#fff" /> : <Text style={styles.riderButtonText}>เรียกไรเดอร์</Text>}</Pressable>
+      </>}
+    </View> : null}
+  </ScrollView>;
 }
 
-function ReasonButtons<T extends string>({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
-  options: Array<{ code: T; label: string }>;
-  value: T;
-  onChange: (value: T) => void;
-  disabled: boolean;
-}) {
-  return (
-    <View style={styles.reasonWrap}>
-      {options.map((option) => (
-        <Pressable
-          key={option.code}
-          disabled={disabled}
-          onPress={() => onChange(option.code)}
-          style={[styles.reasonChip, value === option.code && styles.reasonChipSelected, disabled && styles.disabled]}
-        >
-          <Text style={[styles.reasonText, value === option.code && styles.reasonTextSelected]}>{option.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
+function StatusButton({ label, tone, wide = false }: { label: string; tone: 'green' | 'amber' | 'blue' | 'purple' | 'red'; wide?: boolean }) {
+  return <View style={[styles.statusButton, wide && styles.statusWide, styles[`status_${tone}`]]}><Text style={[styles.statusText, styles[`statusText_${tone}`]]}>{label}</Text></View>;
+}
+
+function ActionButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
+  return <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.actionButton, disabled && styles.disabled, pressed && styles.pressed]}><Text style={styles.actionButtonText}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, gap: 12, backgroundColor: '#F7FAF7' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  centerPad: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { borderRadius: 20, backgroundColor: '#FFFFFF', padding: 18, borderWidth: 1, borderColor: '#E4ECE6' },
-  preorderCard: { borderRadius: 20, backgroundColor: '#FFF7E8', padding: 18, borderWidth: 2, borderColor: '#F4A62A' },
-  preorderLabel: { fontSize: 15, fontWeight: '900', color: '#B85C00' },
-  preorderTime: { marginTop: 6, fontSize: 18, lineHeight: 26, fontWeight: '900', color: '#6F3500' },
-  preorderHint: { marginTop: 6, fontSize: 12, lineHeight: 18, color: '#91643A' },
-  actionCard: { borderRadius: 20, backgroundColor: '#F0F7F2', padding: 18, borderWidth: 1, borderColor: '#D8E8DC' },
-  riderCard: { borderRadius: 20, backgroundColor: '#F5F7FF', padding: 18, borderWidth: 1, borderColor: '#DDE4F7' },
-  reofferCard: { borderRadius: 20, backgroundColor: '#FFF9EC', padding: 18, borderWidth: 1, borderColor: '#F4D48A' },
-  cancelCard: { borderRadius: 20, backgroundColor: '#FFF4F3', padding: 18, borderWidth: 1, borderColor: '#F2B8B5' },
-  eyebrow: { fontSize: 12, letterSpacing: 1.2, fontWeight: '800', color: '#52705B' },
-  title: { marginTop: 8, fontSize: 24, fontWeight: '800', color: '#173C2C' },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: '#173C2C' },
-  reofferTitle: { fontSize: 17, fontWeight: '800', color: '#7A4C00' },
-  cancelTitle: { fontSize: 17, fontWeight: '800', color: '#8D2E2A' },
-  body: { marginTop: 6, fontSize: 15, lineHeight: 22, color: '#647168' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
-  divider: { height: 1, backgroundColor: '#E4ECE6', marginVertical: 14 },
-  total: { fontSize: 20, fontWeight: '800', color: '#173C2C' },
-  actionHint: { marginTop: 8, color: '#647168', fontSize: 13, lineHeight: 19 },
-  gateText: { marginTop: 8, color: '#8A5B16', fontSize: 13, lineHeight: 19, fontWeight: '700' },
-  primaryButton: { marginTop: 14, minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1F6B45', paddingHorizontal: 16 },
-  reofferButton: { marginTop: 12, minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#B56A00', paddingHorizontal: 16 },
-  cancelButton: { marginTop: 12, minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#B42318', paddingHorizontal: 16 },
-  primaryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  cancelButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  success: { marginTop: 10, color: '#1F6B45', fontWeight: '700' },
-  successBanner: { borderRadius: 12, padding: 12, backgroundColor: '#ECFDF3', color: '#16794C', fontWeight: '700' },
-  riderResultBanner: { marginTop: 12, borderRadius: 12, padding: 12, backgroundColor: '#EAF2FF', color: '#163E72', fontWeight: '700', lineHeight: 20 },
-  cancelledText: { marginTop: 8, color: '#A13A36', fontSize: 13, lineHeight: 19 },
-  error: { marginTop: 10, color: '#A13A36' },
-  reasonWrap: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  reasonChip: { borderRadius: 999, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11, paddingVertical: 8 },
-  reasonChipSelected: { borderColor: '#3157B8', backgroundColor: '#EEF2FF' },
-  reasonText: { fontSize: 12, color: '#475467', fontWeight: '700' },
-  reasonTextSelected: { color: '#2949A4' },
-  textInput: { marginTop: 10, minHeight: 72, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 12, backgroundColor: '#FFFFFF', padding: 12, textAlignVertical: 'top', color: '#344054' },
-  disabled: { opacity: 0.45 },
-  pressed: { opacity: 0.75 },
+  page: { flex: 1, backgroundColor: '#F5F7F6' }, content: { padding: 16, gap: 12 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#F5F7F6' }, muted: { color: '#718078', marginTop: 5 }, error: { color: '#A13A36' },
+  headerCard: { padding: 18, borderRadius: 24, backgroundColor: '#12261E' }, eyebrow: { color: '#65D3A9', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 }, customerName: { marginTop: 6, color: '#fff', fontSize: 25, fontWeight: '900' }, orderMeta: { marginTop: 5, color: '#B9CAC2', fontSize: 12 }, contactRow: { flexDirection: 'row', gap: 8, marginTop: 14 }, contactButton: { flex: 1, minHeight: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#24483A' }, contactButtonText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  preorderCard: { padding: 14, borderRadius: 18, backgroundColor: '#F3ECFF', borderWidth: 1, borderColor: '#DECDF8' }, preorderTitle: { color: '#68459A', fontWeight: '900' }, preorderText: { marginTop: 4, color: '#7654A4', fontSize: 12 }, successBox: { padding: 12, borderRadius: 14, backgroundColor: '#E8F7F0' }, successText: { color: '#0F7653', fontWeight: '800' }, errorBox: { padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' },
+  card: { padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, sectionTitle: { color: '#12261E', fontSize: 16, fontWeight: '900' }, body: { marginTop: 8, color: '#52645C', fontSize: 13, lineHeight: 20 }, helper: { marginTop: 7, color: '#7C8B83', fontSize: 11, lineHeight: 17 }, syncNote: { marginTop: 10, color: '#567065', fontSize: 11, lineHeight: 17 },
+  statusGrid: { marginTop: 11, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, statusButton: { minWidth: '47%', minHeight: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, statusWide: { width: '100%' }, statusText: { fontWeight: '900', fontSize: 12 }, status_green: { backgroundColor: '#E5F7EF' }, statusText_green: { color: '#0F7653' }, status_amber: { backgroundColor: '#FFF3D7' }, statusText_amber: { color: '#806018' }, status_blue: { backgroundColor: '#E8F3FA' }, statusText_blue: { color: '#25657E' }, status_purple: { backgroundColor: '#F0E9FA' }, statusText_purple: { color: '#68459A' }, status_red: { backgroundColor: '#FFEDEC' }, statusText_red: { color: '#A13A36' },
+  itemRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#EDF1EF' }, itemName: { color: '#344A41', fontWeight: '800' }, qty: { marginTop: 3, color: '#8A9891', fontSize: 11 }, lineTotal: { color: '#12261E', fontWeight: '900' }, totalRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#DDE5E1', flexDirection: 'row', justifyContent: 'space-between' }, totalLabel: { color: '#12261E', fontWeight: '900', fontSize: 16 }, total: { color: '#12261E', fontWeight: '900', fontSize: 20 },
+  slip: { width: '100%', height: 260, marginTop: 12, borderRadius: 16, backgroundColor: '#EDF1EF' }, secondaryButton: { marginTop: 10, minHeight: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF3F1' }, secondaryText: { color: '#50635A', fontWeight: '800' }, paymentButton: { marginTop: 9, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, paymentButtonText: { color: '#fff', fontWeight: '900' }, confirmedText: { marginTop: 11, color: '#0F7653', fontWeight: '900', textAlign: 'center' },
+  actionButton: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0A33A' }, actionButtonText: { color: '#fff', fontWeight: '900' }, riderCard: { padding: 16, borderRadius: 22, backgroundColor: '#EAF5FA', borderWidth: 1, borderColor: '#CCE6F1' }, riderButton: { marginTop: 13, minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#176985' }, riderButtonText: { color: '#fff', fontWeight: '900', fontSize: 15 }, disabled: { opacity: 0.45 }, pressed: { opacity: 0.72 },
 });
