@@ -29,6 +29,7 @@ export default function RootLayout() {
         <Stack.Screen name="categories" options={{ title: 'จัดการหมวดหมู่' }} />
         <Stack.Screen name="customize" options={{ title: 'Customize Options' }} />
         <Stack.Screen name="menu" options={{ title: 'จัดการเมนู' }} />
+        <Stack.Screen name="menu-edit/[id]" options={{ title: 'แก้ไขเมนู' }} />
         <Stack.Screen name="delivery" options={{ title: 'ตั้งค่าการส่ง' }} />
         <Stack.Screen name="signup" options={{ title: 'สมัครร้านค้า' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'รายละเอียดออเดอร์' }} />
