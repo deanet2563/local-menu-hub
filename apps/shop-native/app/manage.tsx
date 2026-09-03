@@ -5,16 +5,18 @@ const items = [
   { icon: '🏪', title: 'ตั้งค่าร้าน / Onboarding', note: 'Logo · Cover · QR · Location · Social · เวลาเปิดร้าน', route: '/settings' },
   { icon: '🗂️', title: 'จัดการหมวดหมู่', note: 'สร้างหมวดเมนูหลักของร้านและเปิด/ปิดการใช้งาน', route: '/categories' },
   { icon: '⚙️', title: 'Customize Options', note: 'คลัง Option กลางของร้าน แบ่งหมวดและใช้ซ้ำกับหลายเมนู', route: '/customize' },
-  { icon: '🍜', title: 'จัดการเมนู', note: 'เพิ่มเมนู เลือกหมวด และเลือก Customize Option จาก All List ของร้าน', route: '/menu' },
+  { icon: '🍜', title: 'จัดการเมนู', note: 'เพิ่ม/แก้เมนู เลือกหมวด และเลือก Customize Option จาก All List ของร้าน', route: '/menu' },
   { icon: '🛵', title: 'ตั้งค่าการส่ง', note: 'รับที่ร้าน · คิดตามระยะทาง · ร้านส่งเอง · ส่งฟรี · MyTree Rider', route: '/delivery' },
   { icon: '📦', title: 'รายการออเดอร์', note: 'ดูออเดอร์ล่าสุดและเปิดรายละเอียดงาน', route: '/orders' },
+  { icon: '⭐', title: 'รีวิวร้าน', note: 'Verified Order Reviews · Rating · ตอบรีวิวลูกค้า', route: '/reviews' },
+  { icon: '◆', title: 'Premium & Badge', note: 'Premium eligibility · MyTree Verified process · Trust badges', route: '/premium' },
 ] as const;
 
 export default function ManageScreen() {
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>MERCHANT TOOLS</Text>
     <Text style={styles.title}>จัดการร้าน</Text>
-    <Text style={styles.subtitle}>ตั้งค่าร้าน เมนู และการส่งทั้งหมดจากจุดเดียว</Text>
+    <Text style={styles.subtitle}>ตั้งค่าร้าน เมนู การส่ง Reputation และ Premium จากจุดเดียว</Text>
 
     <View style={styles.list}>
       {items.map((item) => <Pressable key={item.route} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -25,8 +27,8 @@ export default function ManageScreen() {
     </View>
 
     <View style={styles.nextCard}>
-      <Text style={styles.nextTitle}>Phase 1 กำลังต่อ</Text>
-      <Text style={styles.nextText}>Dashboard, Settings, Category, Customize, Menu List/Add และ Delivery Settings อยู่ใน flow แล้ว ขั้นถัดไปคือ Edit Menu เต็มรูปแบบ + Order Detail/Status/Notification flow</Text>
+      <Text style={styles.nextTitle}>Phase 1 / Foundation</Text>
+      <Text style={styles.nextText}>Dashboard, Settings, Category, Customize, Menu Add/Edit, Delivery, Order Detail, Notifications, Chat, Reviews และ Premium foundation อยู่ใน flow แล้ว ส่วนที่ยังต้องปิดงานคือ native image upload, customer-side delivery policy/options/About-Contact และ live DB migration verification</Text>
     </View>
   </ScrollView>;
 }
