@@ -5,6 +5,7 @@ const items = [
   { icon: '🏪', title: 'ตั้งค่าร้าน / Onboarding', note: 'Logo · Cover · QR · Location · Social · เวลาเปิดร้าน', route: '/settings' },
   { icon: '🗂️', title: 'จัดการหมวดหมู่', note: 'สร้างหมวดเมนูหลักของร้านและเปิด/ปิดการใช้งาน', route: '/categories' },
   { icon: '⚙️', title: 'Customize Options', note: 'คลัง Option กลางของร้าน แบ่งหมวดและใช้ซ้ำกับหลายเมนู', route: '/customize' },
+  { icon: '🍜', title: 'จัดการเมนู', note: 'เพิ่มเมนู เลือกหมวด และเลือก Customize Option จาก All List ของร้าน', route: '/menu' },
   { icon: '📦', title: 'รายการออเดอร์', note: 'ดูออเดอร์ล่าสุดและเปิดรายละเอียดงาน', route: '/orders' },
 ] as const;
 
@@ -24,7 +25,7 @@ export default function ManageScreen() {
 
     <View style={styles.nextCard}>
       <Text style={styles.nextTitle}>Phase 1 กำลังต่อ</Text>
-      <Text style={styles.nextText}>ถัดจากนี้จะเชื่อม “เพิ่ม/แก้ไขเมนู” ให้เลือก Category และ All Customize Options จากคลังกลางนี้ จากนั้นต่อ Delivery Settings และ Order Status flow</Text>
+      <Text style={styles.nextText}>Menu List + Add เชื่อม Category และ Customize Library แล้ว ขั้นถัดไปคือ Edit Menu เต็มรูปแบบ, Delivery Settings และ Order Status flow</Text>
     </View>
   </ScrollView>;
 }
