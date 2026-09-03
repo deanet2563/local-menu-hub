@@ -18,12 +18,13 @@ export default function RootLayout() {
           options={{
             title: 'MyTree Shop',
             headerRight: () => (
-              <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
-                <Text style={{ color: '#0F8A5F', fontWeight: '800' }}>ตั้งค่าร้าน</Text>
+              <Pressable onPress={() => router.push('/manage')} hitSlop={10}>
+                <Text style={{ color: '#0F8A5F', fontWeight: '800' }}>จัดการร้าน</Text>
               </Pressable>
             ),
           }}
         />
+        <Stack.Screen name="manage" options={{ title: 'จัดการร้าน' }} />
         <Stack.Screen name="settings" options={{ title: 'ตั้งค่าร้าน / Onboarding' }} />
         <Stack.Screen name="categories" options={{ title: 'จัดการหมวดหมู่' }} />
         <Stack.Screen name="customize" options={{ title: 'Customize Options' }} />
