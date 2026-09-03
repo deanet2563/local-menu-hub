@@ -25,6 +25,8 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen name="settings" options={{ title: 'ตั้งค่าร้าน / Onboarding' }} />
+        <Stack.Screen name="categories" options={{ title: 'จัดการหมวดหมู่' }} />
+        <Stack.Screen name="customize" options={{ title: 'Customize Options' }} />
         <Stack.Screen name="signup" options={{ title: 'สมัครร้านค้า' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'รายละเอียดออเดอร์' }} />
       </Stack>
