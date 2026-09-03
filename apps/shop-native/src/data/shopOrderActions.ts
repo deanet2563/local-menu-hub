@@ -89,3 +89,56 @@ export async function setShopOrderStatus(
   if (error) throw error;
   if (!data) throw new Error(`Order can only move from ${allowedFrom} to ${nextStatus}`);
 }
+
+export async function confirmShopPayment(subId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('sub_orders')
+    .update({ payment_status: 'paid' })
+    .eq('sub_id', subId)
+    .neq('payment_status', 'paid')
+    .select('sub_id')
+    .maybeSingle();
+  if (error) throw error;
+  // Already paid is idempotent and should not block Rider flow.
+  if (!data) {
+    const { data: current, error: currentError } = await supabase
+      .from('sub_orders')
+      .select('payment_status')
+      .eq('sub_id', subId)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (current?.payment_status !== 'paid') throw new Error('ยืนยันยอดไม่สำเร็จ');
+  }
+}
+
+export async function completeShopOrderForRider(
+  subId: string,
+  currentStatus: string,
+  paymentStatus: string,
+): Promise<void> {
+  if (paymentStatus !== 'paid') await confirmShopPayment(subId);
+
+  let status = currentStatus;
+  if (status === 'pending') {
+    await acceptShopOrder(subId);
+    status = 'confirmed';
+  }
+  if (status === 'confirmed') {
+    await setShopOrderStatus(subId, 'preparing');
+    status = 'preparing';
+  }
+  if (status === 'preparing') {
+    await setShopOrderStatus(subId, 'completed');
+    status = 'completed';
+  }
+  if (status !== 'completed') throw new Error('ออเดอร์ยังไม่พร้อมสำหรับเรียก Rider');
+}
+
+export async function confirmCompleteAndRequestRider(
+  subId: string,
+  currentStatus: string,
+  paymentStatus: string,
+) {
+  await completeShopOrderForRider(subId, currentStatus, paymentStatus);
+  return requestShopDeliveryV3(subId);
+}
