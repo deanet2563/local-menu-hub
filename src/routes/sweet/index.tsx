@@ -1,14 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ShopDashboard } from "@/components/shop/ShopDashboard";
 
 export const Route = createFileRoute("/sweet/")({
-  component: AdminDashboard,
+  component: ShopDashboard,
 });
-
-function AdminDashboard() {
-  return (
-    <div>
-      <h1>Admin / POS</h1>
-      <p>แดชบอร์ดแอดมิน</p>
-    </div>
-  );
-}
