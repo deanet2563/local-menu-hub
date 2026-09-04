@@ -1,8 +1,9 @@
 -- MyTree Premium / Trust Badge foundation.
 -- Premium is a commercial eligibility layer; trust badges such as MyTree Verified cannot be purchased directly.
+-- Production compatibility: shops.shop_id is text and fn_staff_shop_ids() returns SETOF text.
 
 create table if not exists public.shop_memberships (
-  shop_id uuid primary key references public.shops(shop_id) on delete cascade,
+  shop_id text primary key references public.shops(shop_id) on delete cascade,
   plan text not null default 'free' check (plan in ('free','premium')),
   status text not null default 'active' check (status in ('active','past_due','cancelled','expired')),
   starts_at timestamptz not null default now(),
@@ -12,7 +13,7 @@ create table if not exists public.shop_memberships (
 
 create table if not exists public.shop_verification_requests (
   request_id uuid primary key default gen_random_uuid(),
-  shop_id uuid not null references public.shops(shop_id) on delete cascade,
+  shop_id text not null references public.shops(shop_id) on delete cascade,
   verification_type text not null default 'mytree_verified' check (verification_type in ('mytree_verified')),
   status text not null default 'pending' check (status in ('pending','in_review','approved','rejected','cancelled')),
   merchant_note text,
@@ -25,7 +26,7 @@ create table if not exists public.shop_verification_requests (
 
 create table if not exists public.shop_badges (
   badge_id uuid primary key default gen_random_uuid(),
-  shop_id uuid not null references public.shops(shop_id) on delete cascade,
+  shop_id text not null references public.shops(shop_id) on delete cascade,
   badge_code text not null,
   label text not null,
   badge_source text not null default 'mytree' check (badge_source in ('mytree','reputation','business_history','media','external_review')),
@@ -48,17 +49,17 @@ alter table public.shop_badges enable row level security;
 
 drop policy if exists shop_memberships_owner_select on public.shop_memberships;
 create policy shop_memberships_owner_select on public.shop_memberships
-for select using (shop_id = any(public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
+for select using (shop_id in (select public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
 
 drop policy if exists shop_badges_public_select on public.shop_badges;
 create policy shop_badges_public_select on public.shop_badges
-for select using (is_active = true or shop_id = any(public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
+for select using (is_active = true or shop_id in (select public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
 
 drop policy if exists shop_verification_requests_staff_select on public.shop_verification_requests;
 create policy shop_verification_requests_staff_select on public.shop_verification_requests
-for select using (shop_id = any(public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
+for select using (shop_id in (select public.fn_staff_shop_ids()) or public.fn_is_platform_admin());
 
-create or replace function public.fn_request_mytree_verification(p_shop_id uuid, p_note text default null)
+create or replace function public.fn_request_mytree_verification(p_shop_id text, p_note text default null)
 returns uuid
 language plpgsql
 security definer
@@ -68,7 +69,7 @@ declare
   v_request_id uuid;
   v_is_premium boolean;
 begin
-  if not (p_shop_id = any(public.fn_staff_shop_ids())) then
+  if not (p_shop_id in (select public.fn_staff_shop_ids())) then
     raise exception 'not_authorized_for_shop';
   end if;
 
@@ -107,7 +108,8 @@ begin
 end;
 $$;
 
-grant execute on function public.fn_request_mytree_verification(uuid, text) to authenticated;
+revoke all on function public.fn_request_mytree_verification(text, text) from public;
+grant execute on function public.fn_request_mytree_verification(text, text) to authenticated;
 
 -- Membership status and trust-badge awards are intentionally not writable by shop clients.
 -- Payment/admin workflows will own these writes. Verification approval should award `mytree_verified`
