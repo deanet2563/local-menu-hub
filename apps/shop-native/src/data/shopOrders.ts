@@ -13,6 +13,7 @@ const ORDER_SELECT = [
   'customer_note',
   'delivery_address',
   'amount',
+  'customer_delivery_charge',
   'assigned_rider_id',
   'picked_up_at',
   'delivered_at',
