@@ -11,6 +11,7 @@ type Shop = {
   is_open: boolean | null; delivery_note: string | null; is_approved: boolean; is_banned: boolean;
 };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+type Promotion = { promotion_id: string; title: string; description: string | null; banner_url: string | null; sort_order: number };
 
 function setNumber(setId: string | null | undefined) {
   const m = /^customer-set-(\d+)$/.exec(setId ?? "");
@@ -25,6 +26,7 @@ function ContactLink({ href, label }: { href: string | null; label: string }) {
 export function ShopPage({ shopId }: { shopId: string }) {
   const [shop, setShop] = useState<Shop | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuring, setConfiguring] = useState<Item | null>(null);
   const [activeSetNo, setActiveSetNo] = useState(1);
@@ -33,12 +35,14 @@ export function ShopPage({ shopId }: { shopId: string }) {
 
   useEffect(() => {
     (async () => {
-      const [{ data: s }, { data: m }] = await Promise.all([
+      const [{ data: s }, { data: m }, { data: p }] = await Promise.all([
         publicSupabase.from("shops").select("shop_id,name,category,logo_url,cover_url,description,phone,address,google_maps_url,website_url,facebook_url,instagram_url,tiktok_url,line_url,is_open,delivery_note,is_approved,is_banned").eq("shop_id", shopId).maybeSingle(),
         publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("shop_id", shopId).eq("is_available", true),
+        publicSupabase.from("shop_promotions").select("promotion_id,title,description,banner_url,sort_order").eq("shop_id", shopId).order("sort_order").order("created_at", { ascending: false }),
       ]);
       setShop(s as Shop);
       setItems((m as Item[]) ?? []);
+      setPromotions((p as Promotion[]) ?? []);
       setLoading(false);
     })();
   }, [shopId]);
@@ -95,6 +99,19 @@ export function ShopPage({ shopId }: { shopId: string }) {
           <p className="text-xs text-gray-400 truncate">{shop.category}{shop.delivery_note ? ` · ${shop.delivery_note}` : ""}</p>
         </div>
       </div>
+
+      {promotions.length > 0 && (
+        <section className="px-4 pt-4 space-y-2" aria-label="โปรโมชั่นร้าน">
+          {promotions.map((promotion) => <div key={promotion.promotion_id} className="overflow-hidden rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 shadow-sm">
+            {promotion.banner_url && <img src={promotion.banner_url} alt={promotion.title} className="h-32 w-full object-cover bg-orange-50" />}
+            <div className="p-4">
+              <p className="text-[11px] font-bold tracking-wide text-orange-600">PROMOTION</p>
+              <p className="mt-1 text-base font-bold text-orange-950">{promotion.title}</p>
+              {promotion.description && <p className="mt-1 text-xs leading-5 text-orange-800 whitespace-pre-wrap">{promotion.description}</p>}
+            </div>
+          </div>)}
+        </section>
+      )}
 
       {(shop.description || hasContact) && (
         <section className="mx-4 mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
