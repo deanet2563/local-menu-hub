@@ -35,15 +35,8 @@ export async function saveShopReviewReply(review: ShopReview, replyText: string)
   const text = replyText.trim();
   if (!text) throw new Error('กรุณาพิมพ์คำตอบรีวิว');
   if (text.length > 3000) throw new Error('คำตอบรีวิวยาวเกิน 3,000 ตัวอักษร');
-  const existing = review.shop_review_replies?.[0];
-  if (existing) {
-    const { error } = await supabase
-      .from('shop_review_replies')
-      .update({ reply_text: text, updated_at: new Date().toISOString() })
-      .eq('reply_id', existing.reply_id);
-    if (error) throw error;
-    return;
-  }
+  if (review.shop_review_replies?.length) throw new Error('รีวิวนี้ตอบแล้ว และไม่สามารถแก้ไขคำตอบได้');
+
   const { error } = await supabase.from('shop_review_replies').insert({
     review_id: review.review_id,
     shop_id: review.shop_id,
