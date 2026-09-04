@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, AppState, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { exchangeLineIdToken } from '../src/auth/broker';
@@ -13,6 +13,7 @@ import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
 import {
   getDashboardContentBottomPadding,
   getNonCriticalDashboardMessage,
+  getSalesTreeStage,
   getShopStatusCopy,
 } from '../src/dashboardState';
 
@@ -41,6 +42,7 @@ function statusLabel(status: string) {
 
 export default function ShopHomeScreen() {
   const insets = useSafeAreaInsets();
+  const salesPulse = useRef(new Animated.Value(0)).current;
   const [orders, setOrders] = useState<ShopOrderSummary[]>([]);
   const [shop, setShop] = useState<OwnedShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -185,8 +187,20 @@ export default function ShopHomeScreen() {
     return () => { subscription.remove(); if (interval) clearInterval(interval); };
   }, [load]);
 
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(salesPulse, { toValue: 1, duration: 1700, useNativeDriver: true }),
+        Animated.timing(salesPulse, { toValue: 0, duration: 1700, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [salesPulse]);
+
   const todayOrders = useMemo(() => orders.filter((o) => isToday(o.createdAt)), [orders]);
   const todaySales = useMemo(() => todayOrders.reduce((sum, o) => sum + o.amount, 0), [todayOrders]);
+  const salesTreeStage = useMemo(() => getSalesTreeStage(todaySales), [todaySales]);
   const waitingToMake = useMemo(() => orders.filter((o) => ['pending', 'confirmed', 'preparing'].includes(o.status)).length, [orders]);
 
   const refresh = () => { setRefreshing(true); void load(); };
@@ -218,6 +232,9 @@ export default function ShopHomeScreen() {
 
   const shopStatus = getShopStatusCopy(shop.is_open);
   const contentBottomPadding = getDashboardContentBottomPadding(insets.bottom);
+  const salesGlowOpacity = salesPulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.34] });
+  const salesGlowScale = salesPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] });
+  const waterTranslateY = salesPulse.interpolate({ inputRange: [0, 1], outputRange: [3, -3] });
   const header = (
     <View>
       <View style={styles.header}>
@@ -240,7 +257,23 @@ export default function ShopHomeScreen() {
       <View style={styles.sectionHeader}><Text style={styles.sectionEyebrow}>DASHBOARD</Text><Text style={styles.sectionTitle}>ภาพรวมวันนี้</Text></View>
       <View style={styles.metricGrid}>
         <View style={styles.metricCard}><Text style={styles.metricLabel}>ออเดอร์วันนี้</Text><Text style={styles.metricValue}>{todayOrders.length}</Text><Text style={styles.metricFoot}>รายการ</Text></View>
-        <View style={[styles.metricCard, styles.metricDark]}><Text style={styles.metricLabelDark}>ยอดขายวันนี้</Text><Text style={styles.metricValueDark}>฿{money(todaySales)}</Text><Text style={styles.metricFootDark}>ยอดจากออเดอร์วันนี้</Text></View>
+        <View style={[styles.metricCard, styles.metricSalesCard]}>
+          <Animated.View pointerEvents="none" style={[styles.salesGlow, { opacity: salesGlowOpacity, transform: [{ scale: salesGlowScale }] }]} />
+          <View style={styles.salesContent}>
+            <View style={styles.salesTopRow}>
+              <Text style={styles.metricLabelSales}>ยอดขายวันนี้</Text>
+              <Animated.View style={[styles.waterDrop, { transform: [{ translateY: waterTranslateY }] }]} />
+            </View>
+            <Text style={styles.metricValueSales}>฿{money(todaySales)}</Text>
+            <View style={styles.salesTreeRow}>
+              <View style={styles.treeStageBadge}><Text style={styles.treeStageIcon}>{salesTreeStage.icon}</Text></View>
+              <View style={styles.treeStageTextBlock}>
+                <Text style={styles.treeStageLabel}>{salesTreeStage.label}</Text>
+                <View style={styles.salesProgressTrack}><View style={[styles.salesProgressFill, { width: `${Math.round(salesTreeStage.progress * 100)}%` }]} /></View>
+              </View>
+            </View>
+          </View>
+        </View>
         <View style={[styles.metricCard, styles.metricWarm]}><Text style={styles.metricLabelWarm}>รอทำ</Text><Text style={styles.metricValueWarm}>{waitingToMake}</Text><Text style={styles.metricFootWarm}>ต้องดำเนินการ</Text></View>
         <View style={[styles.metricCard, styles.metricBlue]}><Text style={styles.metricLabelBlue}>รอ Rider</Text><Text style={styles.metricValueBlue}>—</Text><Text style={styles.metricFootBlue}>เชื่อมสถานะในขั้นถัดไป</Text></View>
       </View>
@@ -323,6 +356,20 @@ const styles = StyleSheet.create({
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   metricCard: { width: '48.5%', minHeight: 126, borderRadius: 22, backgroundColor: '#FFFFFF', padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#E7ECE9' },
   metricDark: { backgroundColor: '#12261E', borderColor: '#12261E' },
+  metricSalesCard: { minHeight: 146, backgroundColor: '#0F8A5F', borderColor: '#63C99D', overflow: 'hidden' },
+  salesGlow: { position: 'absolute', top: 6, left: 6, right: 6, bottom: 6, borderRadius: 20, borderWidth: 2, borderColor: '#D7FBE8', backgroundColor: '#36B97F' },
+  salesContent: { flex: 1 },
+  salesTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  metricLabelSales: { color: '#D9F8E8', fontSize: 12, fontWeight: '800' },
+  waterDrop: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#C5F6E0', opacity: 0.72 },
+  metricValueSales: { marginTop: 8, color: '#FFFFFF', fontSize: 31, lineHeight: 36, fontWeight: '900' },
+  salesTreeRow: { marginTop: 10, minHeight: 40, flexDirection: 'row', alignItems: 'center' },
+  treeStageBadge: { width: 36, height: 36, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  treeStageIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  treeStageTextBlock: { flex: 1, marginLeft: 9 },
+  treeStageLabel: { color: '#E8FFF2', fontSize: 11, lineHeight: 15, fontWeight: '800' },
+  salesProgressTrack: { marginTop: 6, height: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  salesProgressFill: { height: 5, borderRadius: 999, backgroundColor: '#E9FFF4' },
   metricWarm: { backgroundColor: '#FFF6DF', borderColor: '#F4E3B5' },
   metricBlue: { backgroundColor: '#EAF5FA', borderColor: '#CDE7F2' },
   metricLabel: { color: '#718078', fontSize: 12, fontWeight: '700' },
