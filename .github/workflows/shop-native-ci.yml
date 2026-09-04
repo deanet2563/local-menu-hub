@@ -40,6 +40,19 @@ jobs:
             exit 1
           fi
 
+      - name: Guard atomic customer delivery pricing order wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          atomic='supabase/migrations/20260904101500_atomic_customer_delivery_pricing_order_v3.sql'
+          test -f "$atomic"
+          grep -Fq 'function public.fn_create_order_v3_priced' "$atomic"
+          grep -Fq 'from public.fn_create_order_v2(' "$atomic"
+          grep -Fq 'update public.sub_orders' "$atomic"
+          grep -Fq 'customer_delivery_charge = v_customer_delivery_charge' "$atomic"
+          grep -Fq 'delivery_fee_payer = v_delivery_fee_payer' "$atomic"
+          grep -Fq "raise exception 'failed to persist atomic delivery pricing snapshot'" "$atomic"
+
   validate:
     runs-on: ubuntu-latest
     defaults:
