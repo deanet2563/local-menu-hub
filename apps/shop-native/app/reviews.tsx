@@ -20,7 +20,7 @@ export default function ReviewsScreen() {
       setDrafts((old) => {
         const next = { ...old };
         for (const review of rows) {
-          if (!(review.review_id in next)) next[review.review_id] = review.shop_review_replies?.[0]?.reply_text ?? '';
+          if (!(review.review_id in next)) next[review.review_id] = '';
         }
         return next;
       });
@@ -48,7 +48,7 @@ export default function ReviewsScreen() {
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>REPUTATION</Text>
     <Text style={styles.title}>รีวิวร้าน</Text>
-    <Text style={styles.subtitle}>รีวิวผูกกับออเดอร์จริง ร้านตอบได้ แต่ไม่สามารถแก้คะแนนหรือข้อความของลูกค้า</Text>
+    <Text style={styles.subtitle}>รีวิวผูกกับออเดอร์จริง ลูกค้าแก้รีวิวไม่ได้ และร้านตอบได้ครั้งเดียวโดยแก้คำตอบภายหลังไม่ได้</Text>
 
     <View style={styles.summaryGrid}>
       <View style={styles.summaryCard}><Text style={styles.summaryLabel}>Rating</Text><Text style={styles.summaryValue}>{summary.rating ? summary.rating.toFixed(1) : '—'}</Text><Text style={styles.stars}>★★★★★</Text></View>
@@ -68,18 +68,25 @@ export default function ReviewsScreen() {
         <Text style={styles.date}>{new Date(review.created_at).toLocaleDateString('th-TH', { dateStyle: 'medium' })}</Text>
 
         <View style={styles.replyBox}>
-          <Text style={styles.replyLabel}>{reply ? 'คำตอบจากร้าน' : 'ตอบรีวิวนี้'}</Text>
-          <TextInput
-            value={drafts[review.review_id] ?? ''}
-            onChangeText={(value) => setDrafts((old) => ({ ...old, [review.review_id]: value }))}
-            multiline
-            maxLength={3000}
-            placeholder="ขอบคุณสำหรับรีวิว…"
-            style={styles.input}
-          />
-          <Pressable disabled={savingId === review.review_id} onPress={() => void saveReply(review)} style={({ pressed }) => [styles.replyButton, savingId === review.review_id && styles.disabled, pressed && styles.pressed]}>
-            {savingId === review.review_id ? <ActivityIndicator color="#fff" /> : <Text style={styles.replyButtonText}>{reply ? 'บันทึกคำตอบใหม่' : 'ส่งคำตอบ'}</Text>}
-          </Pressable>
+          {reply ? <>
+            <Text style={styles.replyLabel}>คำตอบจากร้าน</Text>
+            <View style={styles.readOnlyReply}><Text style={styles.replyText}>{reply.reply_text}</Text></View>
+            <Text style={styles.lockedNote}>🔒 ส่งคำตอบแล้ว · ไม่สามารถแก้ไขได้</Text>
+          </> : <>
+            <Text style={styles.replyLabel}>ตอบรีวิวนี้</Text>
+            <TextInput
+              value={drafts[review.review_id] ?? ''}
+              onChangeText={(value) => setDrafts((old) => ({ ...old, [review.review_id]: value }))}
+              multiline
+              maxLength={3000}
+              placeholder="ขอบคุณสำหรับรีวิว…"
+              style={styles.input}
+            />
+            <Text style={styles.warning}>ตรวจข้อความให้เรียบร้อยก่อนส่ง เพราะส่งแล้วแก้ไขไม่ได้</Text>
+            <Pressable disabled={savingId === review.review_id} onPress={() => void saveReply(review)} style={({ pressed }) => [styles.replyButton, savingId === review.review_id && styles.disabled, pressed && styles.pressed]}>
+              {savingId === review.review_id ? <ActivityIndicator color="#fff" /> : <Text style={styles.replyButtonText}>ส่งคำตอบ</Text>}
+            </Pressable>
+          </>}
         </View>
       </View>;
     })}
@@ -96,6 +103,6 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#0F8A5F', fontSize: 11, fontWeight: '900', letterSpacing: 1.4 }, title: { marginTop: 5, color: '#12261E', fontSize: 28, fontWeight: '900' }, subtitle: { marginTop: 7, color: '#718078', lineHeight: 21 },
   summaryGrid: { marginTop: 18, flexDirection: 'row', gap: 10 }, summaryCard: { flex: 1, padding: 16, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, summaryLabel: { color: '#7B8982', fontSize: 11, fontWeight: '800' }, summaryValue: { marginTop: 5, color: '#12261E', fontSize: 28, fontWeight: '900' }, stars: { marginTop: 3, color: '#ECA72C', letterSpacing: 1 }, summaryFoot: { marginTop: 5, color: '#0F7653', fontSize: 10, fontWeight: '800' },
   reviewCard: { marginTop: 13, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, reviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }, rating: { color: '#ECA72C', fontSize: 17, letterSpacing: 1 }, orderId: { marginTop: 4, color: '#87958E', fontSize: 9, fontWeight: '800' }, verifiedBadge: { borderRadius: 999, backgroundColor: '#E8F7F0', paddingHorizontal: 9, paddingVertical: 5 }, verifiedText: { color: '#0F7653', fontSize: 9, fontWeight: '900' }, reviewText: { marginTop: 13, color: '#344A41', fontSize: 14, lineHeight: 21 }, date: { marginTop: 7, color: '#9AA59F', fontSize: 10 },
-  replyBox: { marginTop: 14, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#EDF1EF' }, replyLabel: { color: '#52645C', fontWeight: '900', fontSize: 12 }, input: { marginTop: 8, minHeight: 82, borderRadius: 14, borderWidth: 1, borderColor: '#DCE5E0', backgroundColor: '#FAFCFB', padding: 12, textAlignVertical: 'top' }, replyButton: { marginTop: 8, minHeight: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#123E30' }, replyButtonText: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  replyBox: { marginTop: 14, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#EDF1EF' }, replyLabel: { color: '#52645C', fontWeight: '900', fontSize: 12 }, input: { marginTop: 8, minHeight: 82, borderRadius: 14, borderWidth: 1, borderColor: '#DCE5E0', backgroundColor: '#FAFCFB', padding: 12, textAlignVertical: 'top' }, readOnlyReply: { marginTop: 8, borderRadius: 14, backgroundColor: '#F4F7F5', padding: 12 }, replyText: { color: '#43574E', fontSize: 13, lineHeight: 20 }, lockedNote: { marginTop: 7, color: '#7C8B83', fontSize: 10 }, warning: { marginTop: 6, color: '#956B1C', fontSize: 10, lineHeight: 15 }, replyButton: { marginTop: 8, minHeight: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#123E30' }, replyButtonText: { color: '#fff', fontWeight: '900', fontSize: 12 },
   infoCard: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: '#EAF5FA', borderWidth: 1, borderColor: '#CDE5F0' }, infoTitle: { color: '#184E65', fontWeight: '900' }, infoText: { marginTop: 6, color: '#517889', fontSize: 12, lineHeight: 19 }, empty: { marginTop: 18, padding: 24, alignItems: 'center', borderRadius: 20, backgroundColor: '#fff' }, emptyTitle: { color: '#12261E', fontWeight: '900' }, errorBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' }, error: { color: '#A13A36' }, disabled: { opacity: 0.45 }, pressed: { opacity: 0.72 },
 });
