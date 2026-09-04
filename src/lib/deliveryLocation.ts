@@ -1,5 +1,6 @@
 import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
+import { cart } from "@/lib/cart";
 
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
@@ -30,6 +31,10 @@ export type DeliveryRouteQuote = {
   deliveryFee: number;
   provider: string;
   quoteToken: string;
+  routeDeliveryFee?: number;
+  pricingMode?: "distance" | "flat" | "free";
+  promotionApplied?: boolean;
+  eligibleSubtotal?: number;
 };
 
 export type DeliveryPlaceSearchResult = {
@@ -74,9 +79,29 @@ type QuoteBinding = {
   lat: number;
   lng: number;
   token: string;
+  cartSignature: string;
 };
 
 let latestQuoteBinding: QuoteBinding | null = null;
+
+function currentCartQuoteItems() {
+  return cart.getState().items.map((item) => ({
+    lineId: item.lineId,
+    kind: item.kind,
+    itemId: item.itemId,
+    qty: item.qty,
+    options: item.options.map((option) => ({ groupId: option.groupId, optionId: option.optionId })),
+    bundleSelections: item.bundleSelections.map((selection) => ({
+      groupId: selection.groupId,
+      itemId: selection.itemId,
+      qty: selection.qty,
+    })),
+  }));
+}
+
+function currentCartQuoteSignature(): string {
+  return JSON.stringify(currentCartQuoteItems());
+}
 
 export async function resolveDeliveryLocation(value: string, shopId?: string | null): Promise<ConfirmedDeliveryPoint> {
   const response = await fetch(LOCATION_RESOLVE_URL, {
@@ -144,10 +169,14 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
   const idToken = liff.getIDToken();
   if (!idToken) throw new Error("ไม่พบ LINE idToken สำหรับคำนวณค่าส่ง");
 
+  const items = currentCartQuoteItems();
+  if (!items.length) throw new Error("ตะกร้าว่าง ไม่สามารถคำนวณค่าส่งได้");
+  const cartSignature = JSON.stringify(items);
+
   const response = await fetch(DELIVERY_QUOTE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, shopId, destinationLat: point.lat, destinationLng: point.lng }),
+    body: JSON.stringify({ idToken, shopId, destinationLat: point.lat, destinationLng: point.lng, items }),
   });
   const payload = await response.json().catch(() => null) as QuoteResponse | null;
   if (!response.ok || !payload?.ok || !payload.quote || !payload.quoteToken) {
@@ -160,6 +189,7 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
     lat: point.lat,
     lng: point.lng,
     token: payload.quoteToken,
+    cartSignature,
   };
   return { ...payload.quote, quoteToken: payload.quoteToken };
 }
@@ -169,6 +199,7 @@ export function getDeliveryQuoteToken(shopId: string, lat: number | null, lng: n
   if (!binding || typeof lat !== "number" || typeof lng !== "number") return null;
   if (binding.shopId !== shopId) return null;
   if (Math.abs(binding.lat - lat) > 0.000001 || Math.abs(binding.lng - lng) > 0.000001) return null;
+  if (binding.cartSignature !== currentCartQuoteSignature()) return null;
   return binding.token;
 }
 
@@ -200,6 +231,9 @@ function quoteErrorText(code?: string): string {
     case "google_routes_not_configured": return "ระบบเส้นทางยังไม่ได้ตั้งค่า Google Routes API";
     case "google_routes_no_route": return "ไม่พบเส้นทางมอเตอร์ไซค์ระหว่างร้านและจุดส่ง";
     case "google_routes_failed": return "Google Routes คำนวณเส้นทางไม่สำเร็จ กรุณาลองใหม่";
+    case "cart_items_required": return "กรุณาเพิ่มสินค้าในตะกร้าก่อนคำนวณค่าส่ง";
+    case "cart_item_unavailable": return "มีสินค้าในตะกร้าที่ไม่พร้อมขาย กรุณาตรวจตะกร้าใหม่";
+    case "shop_delivery_policy_not_configured": return "ร้านยังตั้งค่านโยบายค่าส่งไม่ครบ";
     default: return "คำนวณระยะทางและค่าส่งไม่สำเร็จ กรุณาลองใหม่";
   }
 }
