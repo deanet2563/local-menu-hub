@@ -1,10 +1,11 @@
 -- MyTree reputation foundation: one review per completed order, immutable customer review content,
--- with a separate merchant reply controlled by the shop.
+-- with a separate one-time merchant reply controlled by the shop.
+-- Production compatibility: shops.shop_id is text and fn_staff_shop_ids() returns SETOF text.
 
 create table if not exists public.shop_order_reviews (
   review_id uuid primary key default gen_random_uuid(),
   sub_id uuid not null unique references public.sub_orders(sub_id) on delete restrict,
-  shop_id uuid not null references public.shops(shop_id) on delete restrict,
+  shop_id text not null references public.shops(shop_id) on delete restrict,
   customer_id uuid not null references public.customers(id) on delete restrict,
   rating smallint not null check (rating between 1 and 5),
   review_text text,
@@ -17,7 +18,7 @@ create table if not exists public.shop_order_reviews (
 create table if not exists public.shop_review_replies (
   reply_id uuid primary key default gen_random_uuid(),
   review_id uuid not null unique references public.shop_order_reviews(review_id) on delete cascade,
-  shop_id uuid not null references public.shops(shop_id) on delete restrict,
+  shop_id text not null references public.shops(shop_id) on delete restrict,
   reply_text text not null check (length(trim(reply_text)) between 1 and 3000),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -96,7 +97,7 @@ for select using (true);
 drop policy if exists shop_review_replies_staff_insert on public.shop_review_replies;
 create policy shop_review_replies_staff_insert on public.shop_review_replies
 for insert with check (
-  shop_id = any(public.fn_staff_shop_ids())
+  shop_id in (select public.fn_staff_shop_ids())
   and exists (
     select 1 from public.shop_order_reviews r
     where r.review_id = shop_review_replies.review_id
@@ -104,9 +105,8 @@ for insert with check (
   )
 );
 
+-- Replies are intentionally insert-only. The follow-up immutability migration
+-- adds a trigger as defense in depth; no UPDATE policy is granted here.
 drop policy if exists shop_review_replies_staff_update on public.shop_review_replies;
-create policy shop_review_replies_staff_update on public.shop_review_replies
-for update using (shop_id = any(public.fn_staff_shop_ids()))
-with check (shop_id = any(public.fn_staff_shop_ids()));
 
 grant execute on function public.fn_can_review_order(uuid) to authenticated;
