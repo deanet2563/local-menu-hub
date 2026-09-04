@@ -37,7 +37,6 @@ function deliveryLabel(order: ShopOrder): string | null {
   if (order.delivery_status === 'rider_called' && order.assigned_rider_id) return 'ไรเดอร์รับงานแล้ว';
   if (order.delivery_status === 'rider_called') return 'เรียกไรเดอร์แล้ว';
   if (order.delivery_status === 'failed') return 'การจัดส่งมีปัญหา';
-  // `needs_rider` is intentionally not shown as “รอเรียกไรเดอร์”. It is an internal pre-delivery state.
   return null;
 }
 
@@ -93,12 +92,13 @@ export default function OrderDetailScreen() {
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดออเดอร์…</Text></View>;
   if (!order) return <View style={styles.center}><Text style={styles.error}>{error || 'ไม่พบออเดอร์'}</Text></View>;
 
-  const isDelivery = order.fulfillment_type === 'delivery';
-  const customerName = order.hub_orders?.customers?.name?.trim() || 'ลูกค้า MyTree';
-  const customerPhone = order.hub_orders?.customers?.phone?.trim() || '';
-  const deliveryText = isDelivery ? deliveryLabel(order) : null;
-  const riderFlowStarted = Boolean(deliveryText) && order.delivery_status !== 'failed';
-  const canRequestRider = DELIVERY_V3_ENABLED && isDelivery && !riderFlowStarted && order.order_status !== 'cancelled';
+  const currentOrder = order;
+  const isDelivery = currentOrder.fulfillment_type === 'delivery';
+  const customerName = currentOrder.hub_orders?.customers?.name?.trim() || 'ลูกค้า MyTree';
+  const customerPhone = currentOrder.hub_orders?.customers?.phone?.trim() || '';
+  const deliveryText = isDelivery ? deliveryLabel(currentOrder) : null;
+  const riderFlowStarted = Boolean(deliveryText) && currentOrder.delivery_status !== 'failed';
+  const canRequestRider = DELIVERY_V3_ENABLED && isDelivery && !riderFlowStarted && currentOrder.order_status !== 'cancelled';
 
   function callCustomer() {
     if (!customerPhone) return Alert.alert('ไม่มีเบอร์โทร', 'ลูกค้ารายนี้ยังไม่มีเบอร์โทรในออเดอร์');
@@ -106,21 +106,21 @@ export default function OrderDetailScreen() {
   }
 
   function openChat() {
-    router.push({ pathname: '/chat/[subId]', params: { subId: order.sub_id } });
+    router.push({ pathname: '/chat/[subId]', params: { subId: currentOrder.sub_id } });
   }
 
   async function requestRiderReadyFlow() {
     if (!canRequestRider || acting) return;
-    const ready = order.payment_status === 'paid' && order.order_status === 'completed';
+    const ready = currentOrder.payment_status === 'paid' && currentOrder.order_status === 'completed';
 
     const execute = async () => {
       if (ready) {
         await run(async () => {
-          await requestShopDeliveryV3(order.sub_id);
+          await requestShopDeliveryV3(currentOrder.sub_id);
         }, 'ส่งคำขอแล้ว · เรียกไรเดอร์แล้ว');
       } else {
         await run(async () => {
-          await confirmCompleteAndRequestRider(order.sub_id, order.order_status, order.payment_status);
+          await confirmCompleteAndRequestRider(currentOrder.sub_id, currentOrder.order_status, currentOrder.payment_status);
         }, 'ยืนยันยอด + ออเดอร์เสร็จแล้ว และส่งคำขอเรียกไรเดอร์แล้ว');
       }
     };
@@ -138,57 +138,57 @@ export default function OrderDetailScreen() {
 
   return <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
     <View style={styles.headerCard}>
-      <Text style={styles.eyebrow}>ORDER #{order.sub_id.slice(0, 6).toUpperCase()}</Text>
+      <Text style={styles.eyebrow}>ORDER #{currentOrder.sub_id.slice(0, 6).toUpperCase()}</Text>
       <Text style={styles.customerName}>{customerName}</Text>
-      <Text style={styles.orderMeta}>{isDelivery ? 'จัดส่ง' : 'ลูกค้ามารับที่ร้าน'} · {order.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
+      <Text style={styles.orderMeta}>{isDelivery ? 'จัดส่ง' : 'ลูกค้ามารับที่ร้าน'} · {currentOrder.payment_method === 'cash' ? 'เงินสด' : 'QR / โอนตรง'}</Text>
       <View style={styles.contactRow}>
         <Pressable onPress={callCustomer} style={styles.contactButton}><Text style={styles.contactButtonText}>📞 โทรหาลูกค้า</Text></Pressable>
         <Pressable onPress={openChat} style={styles.contactButton}><Text style={styles.contactButtonText}>💬 แชทลูกค้า</Text></Pressable>
       </View>
     </View>
 
-    {order.requested_for ? <View style={styles.preorderCard}><Text style={styles.preorderTitle}>🗓️ สั่งล่วงหน้า</Text><Text style={styles.preorderText}>{isDelivery ? 'ส่ง' : 'รับ'} {formatRequestedFor(order.requested_for)}</Text></View> : null}
+    {currentOrder.requested_for ? <View style={styles.preorderCard}><Text style={styles.preorderTitle}>🗓️ สั่งล่วงหน้า</Text><Text style={styles.preorderText}>{isDelivery ? 'ส่ง' : 'รับ'} {formatRequestedFor(currentOrder.requested_for)}</Text></View> : null}
     {message ? <View style={styles.successBox}><Text style={styles.successText}>✓ {message}</Text></View> : null}
     {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
 
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>สถานะออเดอร์</Text>
       <View style={styles.statusGrid}>
-        <StatusButton label={ORDER_LABEL[order.order_status] ?? order.order_status} tone={order.order_status === 'completed' ? 'green' : order.order_status === 'cancelled' ? 'red' : 'amber'} />
-        <StatusButton label={PAYMENT_LABEL[order.payment_status] ?? order.payment_status} tone={order.payment_status === 'paid' ? 'green' : 'blue'} />
-        {deliveryText ? <StatusButton label={deliveryText} tone={order.delivery_status === 'delivered' ? 'green' : order.delivery_status === 'failed' ? 'red' : 'purple'} wide /> : null}
+        <StatusButton label={ORDER_LABEL[currentOrder.order_status] ?? currentOrder.order_status} tone={currentOrder.order_status === 'completed' ? 'green' : currentOrder.order_status === 'cancelled' ? 'red' : 'amber'} />
+        <StatusButton label={PAYMENT_LABEL[currentOrder.payment_status] ?? currentOrder.payment_status} tone={currentOrder.payment_status === 'paid' ? 'green' : 'blue'} />
+        {deliveryText ? <StatusButton label={deliveryText} tone={currentOrder.delivery_status === 'delivered' ? 'green' : currentOrder.delivery_status === 'failed' ? 'red' : 'purple'} wide /> : null}
       </View>
       {isDelivery && riderFlowStarted ? <Text style={styles.syncNote}>สถานะการจัดส่งหลังจากนี้เปลี่ยนจาก Rider โดยอัตโนมัติ ร้านไม่ต้องกด “รับสินค้า” หรือ “ส่งสำเร็จ”</Text> : null}
     </View>
 
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>รายการอาหาร</Text>
-      {order.order_items.map((item, index) => <View key={`${item.item_name_snapshot}-${index}`} style={styles.itemRow}><View style={{ flex: 1 }}><Text style={styles.itemName}>{item.item_name_snapshot}</Text><Text style={styles.qty}>จำนวน {item.qty}</Text></View><Text style={styles.lineTotal}>฿{Number(item.line_total).toFixed(0)}</Text></View>)}
-      <View style={styles.totalRow}><Text style={styles.totalLabel}>รวม</Text><Text style={styles.total}>฿{Number(order.amount).toFixed(0)}</Text></View>
+      {currentOrder.order_items.map((item, index) => <View key={`${item.item_name_snapshot}-${index}`} style={styles.itemRow}><View style={{ flex: 1 }}><Text style={styles.itemName}>{item.item_name_snapshot}</Text><Text style={styles.qty}>จำนวน {item.qty}</Text></View><Text style={styles.lineTotal}>฿{Number(item.line_total).toFixed(0)}</Text></View>)}
+      <View style={styles.totalRow}><Text style={styles.totalLabel}>รวม</Text><Text style={styles.total}>฿{Number(currentOrder.amount).toFixed(0)}</Text></View>
     </View>
 
-    {order.payment_slip_url ? <View style={styles.card}>
+    {currentOrder.payment_slip_url ? <View style={styles.card}>
       <Text style={styles.sectionTitle}>สลิปจากลูกค้า</Text>
-      <Image source={{ uri: order.payment_slip_url }} style={styles.slip} resizeMode="cover" />
-      <Pressable onPress={() => void Linking.openURL(order.payment_slip_url!)} style={styles.secondaryButton}><Text style={styles.secondaryText}>ดูรูปเต็ม</Text></Pressable>
-      {order.payment_status !== 'paid' ? <Pressable disabled={acting} onPress={() => void run(() => confirmShopPayment(order.sub_id), 'ยืนยันยอดแล้ว')} style={styles.paymentButton}><Text style={styles.paymentButtonText}>✓ ยืนยันยอด</Text></Pressable> : <Text style={styles.confirmedText}>✓ ยืนยันยอดแล้ว</Text>}
-    </View> : order.payment_method === 'qr_transfer' ? <View style={styles.card}><Text style={styles.sectionTitle}>สลิปจากลูกค้า</Text><Text style={styles.muted}>ลูกค้ายังไม่ได้แนบสลิป</Text></View> : null}
+      <Image source={{ uri: currentOrder.payment_slip_url }} style={styles.slip} resizeMode="cover" />
+      <Pressable onPress={() => void Linking.openURL(currentOrder.payment_slip_url!)} style={styles.secondaryButton}><Text style={styles.secondaryText}>ดูรูปเต็ม</Text></Pressable>
+      {currentOrder.payment_status !== 'paid' ? <Pressable disabled={acting} onPress={() => void run(() => confirmShopPayment(currentOrder.sub_id), 'ยืนยันยอดแล้ว')} style={styles.paymentButton}><Text style={styles.paymentButtonText}>✓ ยืนยันยอด</Text></Pressable> : <Text style={styles.confirmedText}>✓ ยืนยันยอดแล้ว</Text>}
+    </View> : currentOrder.payment_method === 'qr_transfer' ? <View style={styles.card}><Text style={styles.sectionTitle}>สลิปจากลูกค้า</Text><Text style={styles.muted}>ลูกค้ายังไม่ได้แนบสลิป</Text></View> : null}
 
-    {order.delivery_address ? <View style={styles.card}><Text style={styles.sectionTitle}>ที่อยู่จัดส่ง</Text><Text style={styles.body}>{order.delivery_address}</Text></View> : null}
-    {order.customer_note ? <View style={styles.card}><Text style={styles.sectionTitle}>หมายเหตุจากลูกค้า</Text><Text style={styles.body}>{order.customer_note}</Text></View> : null}
+    {currentOrder.delivery_address ? <View style={styles.card}><Text style={styles.sectionTitle}>ที่อยู่จัดส่ง</Text><Text style={styles.body}>{currentOrder.delivery_address}</Text></View> : null}
+    {currentOrder.customer_note ? <View style={styles.card}><Text style={styles.sectionTitle}>หมายเหตุจากลูกค้า</Text><Text style={styles.body}>{currentOrder.customer_note}</Text></View> : null}
 
-    {order.order_status !== 'cancelled' && order.order_status !== 'completed' ? <View style={styles.card}>
+    {currentOrder.order_status !== 'cancelled' && currentOrder.order_status !== 'completed' ? <View style={styles.card}>
       <Text style={styles.sectionTitle}>จัดการออเดอร์</Text>
       <Text style={styles.helper}>เปลี่ยนสถานะด้วยปุ่มสี ไม่ใช้ Dropdown</Text>
-      {order.order_status === 'pending' ? <ActionButton label="รับออเดอร์" disabled={acting} onPress={() => void run(() => acceptShopOrder(order.sub_id), 'รับออเดอร์แล้ว')} /> : null}
-      {order.order_status === 'confirmed' ? <ActionButton label="เริ่มทำ" disabled={acting} onPress={() => void run(() => setShopOrderStatus(order.sub_id, 'preparing'), 'เปลี่ยนเป็นกำลังทำแล้ว')} /> : null}
-      {order.order_status === 'preparing' ? <ActionButton label="อาหารเสร็จแล้ว" disabled={acting} onPress={() => void run(() => setShopOrderStatus(order.sub_id, 'completed'), 'ออเดอร์เสร็จแล้ว')} /> : null}
+      {currentOrder.order_status === 'pending' ? <ActionButton label="รับออเดอร์" disabled={acting} onPress={() => void run(() => acceptShopOrder(currentOrder.sub_id), 'รับออเดอร์แล้ว')} /> : null}
+      {currentOrder.order_status === 'confirmed' ? <ActionButton label="เริ่มทำ" disabled={acting} onPress={() => void run(() => setShopOrderStatus(currentOrder.sub_id, 'preparing'), 'เปลี่ยนเป็นกำลังทำแล้ว')} /> : null}
+      {currentOrder.order_status === 'preparing' ? <ActionButton label="อาหารเสร็จแล้ว" disabled={acting} onPress={() => void run(() => setShopOrderStatus(currentOrder.sub_id, 'completed'), 'ออเดอร์เสร็จแล้ว')} /> : null}
     </View> : null}
 
     {isDelivery ? <View style={styles.riderCard}>
       <Text style={styles.sectionTitle}>🛵 การจัดส่ง</Text>
       {!DELIVERY_V3_ENABLED ? <Text style={styles.helper}>Rider Delivery V3 ยังไม่เปิดใน build นี้</Text> : riderFlowStarted ? <>
-        <StatusButton label={deliveryText || 'กำลังจัดส่ง'} tone={order.delivery_status === 'delivered' ? 'green' : 'purple'} wide />
+        <StatusButton label={deliveryText || 'กำลังจัดส่ง'} tone={currentOrder.delivery_status === 'delivered' ? 'green' : 'purple'} wide />
         <Text style={styles.helper}>Shop Request → Rider First Accept → Auto Lock → Shop Notified → Pickup → Delivered</Text>
       </> : <>
         <Text style={styles.helper}>เมื่อกดเรียกไรเดอร์ ระบบตรวจ “ยืนยันยอด” และ “อาหารเสร็จแล้ว” ก่อน หากยังไม่ครบจะถามยืนยันครั้งเดียว แล้วส่งคำขอ Rider ต่ออัตโนมัติ</Text>
