@@ -1,12 +1,16 @@
 import { publicSupabase } from "@/lib/supabase";
 import { loadItemOptionGroups, type OrderingOptionGroup } from "@/lib/ordering-config";
 
-// Backward-compatible customer option loader.
-// Existing menu option tables remain first priority; merchant-managed reusable
-// customize groups are used when an item has no legacy option-group links.
+// Reusable Shop Customize is intentionally feature-gated until the production
+// Worker order validator understands the same schema. This prevents a customer
+// from selecting a new-schema option that the authoritative /order endpoint
+// would reject. Legacy option groups remain fully available.
+const REUSABLE_SHOP_CUSTOMIZE_ENABLED = import.meta.env.VITE_ENABLE_REUSABLE_SHOP_CUSTOMIZE === "true";
+
 export async function loadCustomerItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
   const legacy = await loadItemOptionGroups(itemId).catch(() => [] as OrderingOptionGroup[]);
   if (legacy.length) return legacy;
+  if (!REUSABLE_SHOP_CUSTOMIZE_ENABLED) return [];
 
   const { data: links, error: linkError } = await publicSupabase
     .from("menu_item_customize_groups")
