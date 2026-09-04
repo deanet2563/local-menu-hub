@@ -31,6 +31,10 @@ jobs:
             echo 'Shop Native migrations must use text shop_id because production shops.shop_id is text.'
             exit 1
           fi
+          if grep -Ein 'p_shop_id[[:space:]]+uuid' "${files[@]}"; then
+            echo 'Shop-scoped migration functions must use text p_shop_id because production shops.shop_id is text.'
+            exit 1
+          fi
           if grep -Ein '= *any\(public\.fn_staff_shop_ids\(\)\)' "${files[@]}"; then
             echo 'fn_staff_shop_ids() returns SETOF text; use IN (SELECT public.fn_staff_shop_ids()).'
             exit 1
