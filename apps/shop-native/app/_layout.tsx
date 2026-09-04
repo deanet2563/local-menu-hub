@@ -76,6 +76,7 @@ export default function RootLayout() {
         <Stack.Screen name="menu-edit/[id]" options={{ title: 'แก้ไขเมนู' }} />
         <Stack.Screen name="delivery" options={{ title: 'ตั้งค่าการส่ง' }} />
         <Stack.Screen name="analytics" options={{ title: 'สถิติร้าน' }} />
+        <Stack.Screen name="promotions" options={{ title: 'โปรโมชั่น' }} />
         <Stack.Screen name="chat/[subId]" options={{ title: 'แชทกับลูกค้า' }} />
         <Stack.Screen name="reviews" options={{ title: 'รีวิวร้าน' }} />
         <Stack.Screen name="premium" options={{ title: 'Premium & Badge' }} />
