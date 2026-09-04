@@ -27,7 +27,7 @@ as $$
       select 1
       from public.sub_orders s
       where s.sub_id = p_sub_id
-        and s.shop_id = any(public.fn_staff_shop_ids())
+        and s.shop_id in (select public.fn_staff_shop_ids())
     )
     or public.fn_is_platform_admin();
 $$;
