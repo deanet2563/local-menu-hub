@@ -2,7 +2,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 const items = [
-  { icon: '🏪', title: 'ตั้งค่าร้าน / Onboarding', note: 'Logo · Cover · QR · Location · Social · เวลาเปิดร้าน', route: '/settings' },
+  { icon: '🏪', title: 'ตั้งค่าร้าน / Onboarding', note: 'ข้อมูลร้าน · Location · Social · เวลาเปิดร้าน', route: '/settings' },
+  { icon: '🖼️', title: 'รูปและ QR ร้าน', note: 'อัปโหลด/เปลี่ยน Logo · Cover · QR รับเงิน พร้อม Preview', route: '/shop-assets' },
   { icon: '🗂️', title: 'จัดการหมวดหมู่', note: 'สร้างหมวดเมนูหลักของร้านและเปิด/ปิดการใช้งาน', route: '/categories' },
   { icon: '⚙️', title: 'Customize Options', note: 'คลัง Option กลางของร้าน แบ่งหมวดและใช้ซ้ำกับหลายเมนู', route: '/customize' },
   { icon: '🍜', title: 'จัดการเมนู', note: 'เพิ่ม/แก้เมนู เลือกหมวด และเลือก Customize Option จาก All List ของร้าน', route: '/menu' },
@@ -28,7 +29,7 @@ export default function ManageScreen() {
 
     <View style={styles.nextCard}>
       <Text style={styles.nextTitle}>Phase 1 / Foundation</Text>
-      <Text style={styles.nextText}>Dashboard, Settings, Category, Customize, Menu Add/Edit, Delivery, Order Detail, Notifications, Chat, Reviews และ Premium foundation อยู่ใน flow แล้ว ส่วนที่ยังต้องปิดงานคือ native image upload, customer-side delivery policy/options/About-Contact และ live DB migration verification</Text>
+      <Text style={styles.nextText}>Dashboard, Settings, Native Media Upload, Category, Customize, Menu Add/Edit, Delivery, Order Detail, Notifications, Chat, Reviews และ Premium foundation อยู่ใน flow แล้ว ขั้นต่อไปคือ customer checkout pricing, customer review และ live DB migration verification</Text>
     </View>
   </ScrollView>;
 }
