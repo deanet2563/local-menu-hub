@@ -1,8 +1,9 @@
 -- MyTree Shop promotions: merchant-managed banners shown above the customer menu.
+-- Production compatibility: shops.shop_id is text and fn_staff_shop_ids() returns SETOF text.
 
 create table if not exists public.shop_promotions (
   promotion_id uuid primary key default gen_random_uuid(),
-  shop_id uuid not null references public.shops(shop_id) on delete cascade,
+  shop_id text not null references public.shops(shop_id) on delete cascade,
   title text not null check (length(trim(title)) between 1 and 120),
   description text,
   banner_url text,
@@ -23,8 +24,8 @@ alter table public.shop_promotions enable row level security;
 
 drop policy if exists shop_promotions_staff_all on public.shop_promotions;
 create policy shop_promotions_staff_all on public.shop_promotions
-for all using (shop_id = any(public.fn_staff_shop_ids()))
-with check (shop_id = any(public.fn_staff_shop_ids()));
+for all using (shop_id in (select public.fn_staff_shop_ids()))
+with check (shop_id in (select public.fn_staff_shop_ids()));
 
 drop policy if exists shop_promotions_public_select on public.shop_promotions;
 create policy shop_promotions_public_select on public.shop_promotions
@@ -36,6 +37,6 @@ for select using (
     select 1 from public.shops s
     where s.shop_id = shop_promotions.shop_id
       and s.is_approved = true
-      and s.is_banned = false
+      and coalesce(s.is_banned, false) = false
   )
 );
