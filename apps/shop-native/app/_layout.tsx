@@ -69,6 +69,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="manage" options={{ title: 'จัดการร้าน' }} />
         <Stack.Screen name="settings" options={{ title: 'ตั้งค่าร้าน / Onboarding' }} />
+        <Stack.Screen name="shop-assets" options={{ title: 'รูปและ QR ร้าน' }} />
         <Stack.Screen name="categories" options={{ title: 'จัดการหมวดหมู่' }} />
         <Stack.Screen name="customize" options={{ title: 'Customize Options' }} />
         <Stack.Screen name="menu" options={{ title: 'จัดการเมนู' }} />
