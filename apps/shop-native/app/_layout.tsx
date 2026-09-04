@@ -61,8 +61,15 @@ export default function RootLayout() {
           options={{
             title: 'MyTree Shop',
             headerRight: () => (
-              <Pressable onPress={() => router.push('/manage')} hitSlop={10}>
-                <Text style={{ color: '#0F8A5F', fontWeight: '800' }}>จัดการร้าน</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="จัดการร้าน"
+                onPress={() => router.push('/manage')}
+                hitSlop={8}
+                style={styles.manageHeaderButton}
+              >
+                <Text style={styles.manageHeaderIcon}>☰</Text>
+                <Text style={styles.manageHeaderText}>จัดการร้าน</Text>
               </Pressable>
             ),
           }}
@@ -104,6 +111,9 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(10, 24, 18, 0.58)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  manageHeaderButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#EAF7F2', borderWidth: 1, borderColor: '#B8E3D1', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  manageHeaderIcon: { color: '#0F8A5F', fontSize: 17, fontWeight: '900', lineHeight: 18 },
+  manageHeaderText: { color: '#0F8A5F', fontWeight: '900', fontSize: 13 },
   alertCard: { width: '100%', maxWidth: 420, borderRadius: 26, borderWidth: 4, backgroundColor: '#FFFFFF', padding: 22, alignItems: 'center' },
   alertIcon: { width: 62, height: 62, borderRadius: 20, backgroundColor: '#FFF3D7', alignItems: 'center', justifyContent: 'center' },
   adminIcon: { backgroundColor: '#E8F3FA' },

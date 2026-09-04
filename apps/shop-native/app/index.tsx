@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { exchangeLineIdToken } from '../src/auth/broker';
 import { loginWithLineNative } from '../src/native/lineLogin';
 import { getAccessToken, logoutShopSession } from '../src/lib/tokenStore';
@@ -9,6 +10,11 @@ import { getOwnedShopProfile, setShopOpen, type OwnedShopProfile } from '../src/
 import { registerShopPushDevice } from '../src/data/pushDeviceRepository';
 import { ensureShopPushReadiness, installShopNotificationResponseHandler } from '../src/services/notifications';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
+import {
+  getDashboardContentBottomPadding,
+  getNonCriticalDashboardMessage,
+  getShopStatusCopy,
+} from '../src/dashboardState';
 
 const POLL_MS = 15_000;
 
@@ -34,6 +40,7 @@ function statusLabel(status: string) {
 }
 
 export default function ShopHomeScreen() {
+  const insets = useSafeAreaInsets();
   const [orders, setOrders] = useState<ShopOrderSummary[]>([]);
   const [shop, setShop] = useState<OwnedShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,11 +50,14 @@ export default function ShopHomeScreen() {
   const [changingOpen, setChangingOpen] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dashboardDataError, setDashboardDataError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setDashboardDataError(null);
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -63,9 +73,15 @@ export default function ShopHomeScreen() {
         setOrders([]);
         return;
       }
-      const rows = await loadShopOrders(owned.shop_id);
-      setOrders(rows.map(toOrderSummary));
+      try {
+        const rows = await loadShopOrders(owned.shop_id);
+        setOrders(rows.map(toOrderSummary));
+      } catch (cause) {
+        if (__DEV__) console.warn('Shop dashboard orders load failed', cause);
+        setDashboardDataError(getNonCriticalDashboardMessage('orders'));
+      }
     } catch (cause) {
+      if (__DEV__) console.warn('Shop dashboard profile load failed', cause);
       setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลร้านไม่สำเร็จ');
     } finally {
       setLoading(false);
@@ -115,9 +131,13 @@ export default function ShopHomeScreen() {
     if (!shop || changingOpen) return;
     setChangingOpen(true);
     setError(null);
+    setStatusMessage(null);
     try {
-      await setShopOpen(shop, !shop.is_open);
-      await load();
+      const nextOpen = !shop.is_open;
+      await setShopOpen(shop, nextOpen);
+      setShop((current) => current?.shop_id === shop.shop_id ? { ...current, is_open: nextOpen } : current);
+      setStatusMessage(getShopStatusCopy(shop.is_open).success);
+      void load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'เปลี่ยนสถานะร้านไม่สำเร็จ');
     } finally {
@@ -189,29 +209,33 @@ export default function ShopHomeScreen() {
     return <View style={styles.centerPad}>
       <Text style={styles.brand}>MYTREE SHOP</Text>
       <Text style={styles.loginTitle}>เริ่มต้นร้านของคุณ</Text>
-      <Text style={styles.muted}>บัญชีนี้ยังไม่มีร้านที่เป็นเจ้าของใน MyTree</Text>
+      <Text style={styles.muted}>{error || 'บัญชีนี้ยังไม่มีร้านที่เป็นเจ้าของใน MyTree'}</Text>
       <Pressable onPress={() => router.push('/signup')} style={styles.primaryButton}><Text style={styles.primaryButtonText}>ตั้งค่าร้าน / Onboarding</Text></Pressable>
       <Pressable onPress={refresh} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>ตรวจสอบอีกครั้ง</Text></Pressable>
       <Pressable disabled={signingOut} onPress={signOut} style={styles.signOutButton}><Text style={styles.signOutText}>ออกจากระบบ</Text></Pressable>
     </View>;
   }
 
+  const shopStatus = getShopStatusCopy(shop.is_open);
+  const contentBottomPadding = getDashboardContentBottomPadding(insets.bottom);
   const header = (
     <View>
       <View style={styles.header}>
         <View style={styles.shopIdentity}>
           {shop.logo_url ? <Image source={{ uri: shop.logo_url }} style={styles.logo} /> : <View style={styles.logoFallback}><Text style={styles.logoFallbackText}>🌳</Text></View>}
-          <View style={styles.shopText}><Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text><Text style={styles.shopState}>{shop.is_open ? '● เปิดร้าน' : '● ปิดร้าน'}</Text></View>
+          <View style={styles.shopText}><Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text><Text style={[styles.shopState, !shop.is_open && styles.shopStateClosed]}>{shopStatus.stateIcon} {shopStatus.state}</Text></View>
         </View>
         <Pressable disabled={!shop.is_approved || shop.is_banned || changingOpen} onPress={() => void toggleShopOpen()} style={[styles.openToggle, shop.is_open && styles.openToggleOn]}>
-          <Text style={[styles.openToggleText, shop.is_open && styles.openToggleTextOn]}>{changingOpen ? '...' : shop.is_open ? 'เปิด' : 'ปิด'}</Text>
+          <Text style={[styles.openToggleText, shop.is_open && styles.openToggleTextOn]}>{changingOpen ? '...' : shopStatus.action}</Text>
         </Pressable>
       </View>
 
       {shop.is_banned ? <View style={styles.dangerBanner}><Text style={styles.dangerTitle}>ร้านถูกระงับ</Text><Text style={styles.bannerBody}>{shop.banned_reason || 'กรุณาติดต่อ MyTree Admin'}</Text></View> : null}
       {!shop.is_approved && !shop.is_banned ? <View style={styles.pendingBanner}><Text style={styles.pendingTitle}>กำลังรอ MyTree อนุมัติร้าน</Text><Text style={styles.bannerBody}>คุณสามารถเตรียมข้อมูลร้านและเมนูไว้ก่อนได้</Text></View> : null}
       {pushMessage ? <View style={styles.infoBanner}><Text style={styles.infoText}>🔔 {pushMessage}</Text></View> : null}
+      {statusMessage ? <View style={styles.successBanner}><Text style={styles.successText}>✓ {statusMessage}</Text></View> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {dashboardDataError ? <View style={styles.warningBanner}><Text style={styles.warningText}>{dashboardDataError}</Text><Pressable onPress={refresh} style={styles.retryButton}><Text style={styles.retryText}>ลองใหม่</Text></Pressable></View> : null}
 
       <View style={styles.sectionHeader}><Text style={styles.sectionEyebrow}>DASHBOARD</Text><Text style={styles.sectionTitle}>ภาพรวมวันนี้</Text></View>
       <View style={styles.metricGrid}>
@@ -240,7 +264,7 @@ export default function ShopHomeScreen() {
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       ListHeaderComponent={header}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: contentBottomPadding }]}
       ListEmptyComponent={<View style={styles.emptyCard}><Text style={styles.emptyTitle}>ยังไม่มีออเดอร์</Text><Text style={styles.muted}>ออเดอร์ใหม่จะปรากฏที่นี่อัตโนมัติ</Text></View>}
       renderItem={({ item }) => <Pressable onPress={() => router.push(`/orders/${item.id}`)} style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}>
         <View style={styles.orderTop}><Text style={styles.orderId}>#{item.shortId}</Text><Text style={styles.statusPill}>{statusLabel(item.status)}</Text></View>
@@ -274,9 +298,10 @@ const styles = StyleSheet.create({
   shopText: { flex: 1, marginLeft: 12 },
   shopName: { color: '#12261E', fontWeight: '900', fontSize: 18 },
   shopState: { marginTop: 3, color: '#0F8A5F', fontSize: 12, fontWeight: '800' },
-  openToggle: { minWidth: 64, paddingHorizontal: 14, minHeight: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E9EFEC' },
+  shopStateClosed: { color: '#A13A36' },
+  openToggle: { minWidth: 104, paddingHorizontal: 14, minHeight: 42, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E9EFEC' },
   openToggleOn: { backgroundColor: '#0F8A5F' },
-  openToggleText: { color: '#52645C', fontWeight: '900' },
+  openToggleText: { color: '#52645C', fontWeight: '900', fontSize: 13 },
   openToggleTextOn: { color: '#fff' },
   pendingBanner: { marginBottom: 12, borderRadius: 18, padding: 14, backgroundColor: '#FFF6DF', borderWidth: 1, borderColor: '#F1D58A' },
   pendingTitle: { color: '#785A10', fontWeight: '900', fontSize: 14 },
@@ -285,6 +310,12 @@ const styles = StyleSheet.create({
   bannerBody: { marginTop: 4, color: '#6F706B', fontSize: 12, lineHeight: 18 },
   infoBanner: { marginBottom: 12, borderRadius: 16, padding: 12, backgroundColor: '#EEF4F1' },
   infoText: { color: '#496158', fontSize: 12, lineHeight: 18 },
+  successBanner: { marginBottom: 12, borderRadius: 16, padding: 12, backgroundColor: '#E6F6EE', borderWidth: 1, borderColor: '#BEE8D1' },
+  successText: { color: '#0F7653', fontSize: 12, lineHeight: 18, fontWeight: '800' },
+  warningBanner: { marginBottom: 12, borderRadius: 16, padding: 12, backgroundColor: '#FFF7E8', borderWidth: 1, borderColor: '#EFD7A7', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  warningText: { flex: 1, color: '#7A5A19', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  retryButton: { minHeight: 34, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5C985' },
+  retryText: { color: '#70500F', fontSize: 12, fontWeight: '900' },
   error: { marginTop: 12, color: '#A13A36', lineHeight: 20 },
   sectionHeader: { marginTop: 8, marginBottom: 12 },
   sectionEyebrow: { color: '#0F8A5F', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
