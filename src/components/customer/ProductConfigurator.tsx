@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { OrderingOptionGroup } from "@/lib/ordering-config";
-import { loadItemOptionGroups } from "@/lib/ordering-config";
+import { loadCustomerItemOptionGroups } from "@/lib/customer-item-options";
 import type { CartOptionSelection } from "@/lib/cart";
 
 export type ConfigurableProduct = {
@@ -38,7 +38,7 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
     let active = true;
     (async () => {
       try {
-        const data = await loadItemOptionGroups(product.itemId);
+        const data = await loadCustomerItemOptionGroups(product.itemId);
         if (!active) return;
         setGroups(data);
         const defaults: Record<string, string[]> = {};
@@ -48,8 +48,6 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
         }
         setSelected(defaults);
       } catch (e) {
-        // Until the additive migration is applied, keep simple-product ordering
-        // available instead of breaking the existing flow.
         setError(e instanceof Error ? e.message : "ไม่สามารถโหลดตัวเลือกสินค้าได้");
       } finally {
         if (active) setLoading(false);
