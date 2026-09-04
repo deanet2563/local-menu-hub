@@ -10,6 +10,7 @@ const items = [
   { icon: '🛵', title: 'ตั้งค่าการส่ง', note: 'รับที่ร้าน · คิดตามระยะทาง · ร้านส่งเอง · ส่งฟรี · MyTree Rider', route: '/delivery' },
   { icon: '📦', title: 'รายการออเดอร์', note: 'ดูออเดอร์ล่าสุดและเปิดรายละเอียดงาน', route: '/orders' },
   { icon: '📊', title: 'สถิติร้าน', note: 'วันนี้ · 7 วัน · 30 วัน · 1 ปี · ตลอดอายุร้าน', route: '/analytics' },
+  { icon: '🎁', title: 'โปรโมชั่น', note: 'สร้าง/เปิด-ปิดโปรโมชั่น และแสดงด้านบนหน้าร้านก่อนเมนู', route: '/promotions' },
   { icon: '⭐', title: 'รีวิวร้าน', note: 'Verified Order Reviews · Rating · ตอบรีวิวลูกค้า', route: '/reviews' },
   { icon: '◆', title: 'Premium & Badge', note: 'Premium eligibility · MyTree Verified process · Trust badges', route: '/premium' },
 ] as const;
@@ -18,7 +19,7 @@ export default function ManageScreen() {
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>MERCHANT TOOLS</Text>
     <Text style={styles.title}>จัดการร้าน</Text>
-    <Text style={styles.subtitle}>ตั้งค่าร้าน เมนู การส่ง สถิติ Reputation และ Premium จากจุดเดียว</Text>
+    <Text style={styles.subtitle}>ตั้งค่าร้าน เมนู การส่ง สถิติ โปรโมชั่น Reputation และ Premium จากจุดเดียว</Text>
 
     <View style={styles.list}>
       {items.map((item) => <Pressable key={item.route} onPress={() => router.push(item.route)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -30,7 +31,7 @@ export default function ManageScreen() {
 
     <View style={styles.nextCard}>
       <Text style={styles.nextTitle}>Phase 1 / Foundation</Text>
-      <Text style={styles.nextText}>Dashboard, Settings, Media Upload, Category, Customize, Menu Add/Edit, Delivery, Order Detail, Notifications, Chat, Analytics, Reviews และ Premium foundation อยู่ใน flow แล้ว งานสำคัญถัดไปคือ customer checkout pricing และ live DB migration verification</Text>
+      <Text style={styles.nextText}>Dashboard, Settings, Media Upload, Category, Customize, Menu Add/Edit, Delivery, Order Detail, Notifications, Chat, Analytics, Promotions, Reviews และ Premium foundation อยู่ใน flow แล้ว งานสำคัญถัดไปคือ authoritative customer checkout pricing และ live DB migration verification</Text>
     </View>
   </ScrollView>;
 }
