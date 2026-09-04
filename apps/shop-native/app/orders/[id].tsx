@@ -16,19 +16,10 @@ const DELIVERY_V3_ENABLED = process.env.EXPO_PUBLIC_ENABLE_RIDER_DELIVERY_V3 ===
 const POLL_MS = 8_000;
 
 const ORDER_LABEL: Record<string, string> = {
-  pending: 'ออเดอร์ใหม่',
-  confirmed: 'รับออเดอร์แล้ว',
-  preparing: 'กำลังทำ',
-  completed: 'อาหารเสร็จแล้ว',
-  cancelled: 'ยกเลิก',
+  pending: 'ออเดอร์ใหม่', confirmed: 'รับออเดอร์แล้ว', preparing: 'กำลังทำ', completed: 'อาหารเสร็จแล้ว', cancelled: 'ยกเลิก',
 };
-
 const PAYMENT_LABEL: Record<string, string> = {
-  unpaid: 'ยังไม่ชำระ',
-  pending: 'รอตรวจยอด',
-  paid: 'ยืนยันยอดแล้ว',
-  refunded: 'คืนเงินแล้ว',
-  void: 'ยกเลิกยอด',
+  unpaid: 'ยังไม่ชำระ', pending: 'รอตรวจยอด', paid: 'ยืนยันยอดแล้ว', refunded: 'คืนเงินแล้ว', void: 'ยกเลิกยอด',
 };
 
 function deliveryLabel(order: ShopOrder): string | null {
@@ -41,11 +32,7 @@ function deliveryLabel(order: ShopOrder): string | null {
 }
 
 function formatRequestedFor(value: string) {
-  return new Date(value).toLocaleString('th-TH', {
-    timeZone: 'Asia/Bangkok',
-    dateStyle: 'long',
-    timeStyle: 'short',
-  });
+  return new Date(value).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'short' });
 }
 
 export default function OrderDetailScreen() {
@@ -99,41 +86,34 @@ export default function OrderDetailScreen() {
   const deliveryText = isDelivery ? deliveryLabel(currentOrder) : null;
   const riderFlowStarted = Boolean(deliveryText) && currentOrder.delivery_status !== 'failed';
   const canRequestRider = DELIVERY_V3_ENABLED && isDelivery && !riderFlowStarted && currentOrder.order_status !== 'cancelled';
+  const itemSubtotal = Number(currentOrder.amount) || 0;
+  const customerDeliveryCharge = isDelivery ? Math.max(0, Number(currentOrder.customer_delivery_charge) || 0) : 0;
+  const customerGrandTotal = itemSubtotal + customerDeliveryCharge;
+  const riderFee = isDelivery ? Math.max(0, Number(currentOrder.delivery_fee) || 0) : 0;
 
   function callCustomer() {
     if (!customerPhone) return Alert.alert('ไม่มีเบอร์โทร', 'ลูกค้ารายนี้ยังไม่มีเบอร์โทรในออเดอร์');
     void Linking.openURL(`tel:${customerPhone.replace(/\s/g, '')}`);
   }
-
-  function openChat() {
-    router.push({ pathname: '/chat/[subId]', params: { subId: currentOrder.sub_id } });
-  }
+  function openChat() { router.push({ pathname: '/chat/[subId]', params: { subId: currentOrder.sub_id } }); }
 
   async function requestRiderReadyFlow() {
     if (!canRequestRider || acting) return;
     const ready = currentOrder.payment_status === 'paid' && currentOrder.order_status === 'completed';
-
     const execute = async () => {
       if (ready) {
-        await run(async () => {
-          await requestShopDeliveryV3(currentOrder.sub_id);
-        }, 'ส่งคำขอแล้ว · เรียกไรเดอร์แล้ว');
+        await run(async () => { await requestShopDeliveryV3(currentOrder.sub_id); }, 'ส่งคำขอแล้ว · เรียกไรเดอร์แล้ว');
       } else {
         await run(async () => {
           await confirmCompleteAndRequestRider(currentOrder.sub_id, currentOrder.order_status, currentOrder.payment_status);
         }, 'ยืนยันยอด + ออเดอร์เสร็จแล้ว และส่งคำขอเรียกไรเดอร์แล้ว');
       }
     };
-
     if (ready) return execute();
-    Alert.alert(
-      'ยืนยันก่อนเรียกไรเดอร์',
-      'ยืนยันยอด และออเดอร์เสร็จเรียบร้อยแล้วใช่ไหม?',
-      [
-        { text: 'ยังไม่ใช่', style: 'cancel' },
-        { text: 'ใช่ · ยืนยันและเรียกไรเดอร์', onPress: () => void execute() },
-      ],
-    );
+    Alert.alert('ยืนยันก่อนเรียกไรเดอร์', 'ยืนยันยอด และออเดอร์เสร็จเรียบร้อยแล้วใช่ไหม?', [
+      { text: 'ยังไม่ใช่', style: 'cancel' },
+      { text: 'ใช่ · ยืนยันและเรียกไรเดอร์', onPress: () => void execute() },
+    ]);
   }
 
   return <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
@@ -164,7 +144,9 @@ export default function OrderDetailScreen() {
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>รายการอาหาร</Text>
       {currentOrder.order_items.map((item, index) => <View key={`${item.item_name_snapshot}-${index}`} style={styles.itemRow}><View style={{ flex: 1 }}><Text style={styles.itemName}>{item.item_name_snapshot}</Text><Text style={styles.qty}>จำนวน {item.qty}</Text></View><Text style={styles.lineTotal}>฿{Number(item.line_total).toFixed(0)}</Text></View>)}
-      <View style={styles.totalRow}><Text style={styles.totalLabel}>รวม</Text><Text style={styles.total}>฿{Number(currentOrder.amount).toFixed(0)}</Text></View>
+      <View style={styles.moneyRow}><Text style={styles.moneyLabel}>รวมสินค้า</Text><Text style={styles.moneyValue}>฿{itemSubtotal.toFixed(0)}</Text></View>
+      {isDelivery ? <View style={styles.moneyRow}><Text style={styles.moneyLabel}>ค่าส่งที่ลูกค้าจ่าย</Text><Text style={styles.moneyValue}>฿{customerDeliveryCharge.toFixed(0)}</Text></View> : null}
+      <View style={styles.totalRow}><Text style={styles.totalLabel}>ยอดที่ลูกค้าเห็น</Text><Text style={styles.total}>฿{customerGrandTotal.toFixed(0)}</Text></View>
     </View>
 
     {currentOrder.payment_slip_url ? <View style={styles.card}>
@@ -187,6 +169,11 @@ export default function OrderDetailScreen() {
 
     {isDelivery ? <View style={styles.riderCard}>
       <Text style={styles.sectionTitle}>🛵 การจัดส่ง</Text>
+      <View style={styles.internalFeeBox}>
+        <Text style={styles.internalTitle}>ข้อมูลภายในร้าน · Rider</Text>
+        <Text style={styles.helper}>ค่าจ้าง Rider ฿{riderFee.toFixed(0)} · ผู้รับภาระ: {currentOrder.delivery_fee_payer === 'shop' ? 'ร้าน' : 'ลูกค้า'}</Text>
+        <Text style={styles.helper}>ตัวเลขนี้แยกจาก “ค่าส่งที่ลูกค้าจ่าย” เพื่อรักษาค่าจ้าง Rider เต็มจำนวนและไม่ split payer</Text>
+      </View>
       {!DELIVERY_V3_ENABLED ? <Text style={styles.helper}>Rider Delivery V3 ยังไม่เปิดใน build นี้</Text> : riderFlowStarted ? <>
         <StatusButton label={deliveryText || 'กำลังจัดส่ง'} tone={currentOrder.delivery_status === 'delivered' ? 'green' : 'purple'} wide />
         <Text style={styles.helper}>Shop Request → Rider First Accept → Auto Lock → Shop Notified → Pickup → Delivered</Text>
@@ -201,7 +188,6 @@ export default function OrderDetailScreen() {
 function StatusButton({ label, tone, wide = false }: { label: string; tone: 'green' | 'amber' | 'blue' | 'purple' | 'red'; wide?: boolean }) {
   return <View style={[styles.statusButton, wide && styles.statusWide, styles[`status_${tone}`]]}><Text style={[styles.statusText, styles[`statusText_${tone}`]]}>{label}</Text></View>;
 }
-
 function ActionButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
   return <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.actionButton, disabled && styles.disabled, pressed && styles.pressed]}><Text style={styles.actionButtonText}>{label}</Text></Pressable>;
 }
@@ -212,7 +198,7 @@ const styles = StyleSheet.create({
   preorderCard: { padding: 14, borderRadius: 18, backgroundColor: '#F3ECFF', borderWidth: 1, borderColor: '#DECDF8' }, preorderTitle: { color: '#68459A', fontWeight: '900' }, preorderText: { marginTop: 4, color: '#7654A4', fontSize: 12 }, successBox: { padding: 12, borderRadius: 14, backgroundColor: '#E8F7F0' }, successText: { color: '#0F7653', fontWeight: '800' }, errorBox: { padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' },
   card: { padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, sectionTitle: { color: '#12261E', fontSize: 16, fontWeight: '900' }, body: { marginTop: 8, color: '#52645C', fontSize: 13, lineHeight: 20 }, helper: { marginTop: 7, color: '#7C8B83', fontSize: 11, lineHeight: 17 }, syncNote: { marginTop: 10, color: '#567065', fontSize: 11, lineHeight: 17 },
   statusGrid: { marginTop: 11, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, statusButton: { minWidth: '47%', minHeight: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, statusWide: { width: '100%' }, statusText: { fontWeight: '900', fontSize: 12 }, status_green: { backgroundColor: '#E5F7EF' }, statusText_green: { color: '#0F7653' }, status_amber: { backgroundColor: '#FFF3D7' }, statusText_amber: { color: '#806018' }, status_blue: { backgroundColor: '#E8F3FA' }, statusText_blue: { color: '#25657E' }, status_purple: { backgroundColor: '#F0E9FA' }, statusText_purple: { color: '#68459A' }, status_red: { backgroundColor: '#FFEDEC' }, statusText_red: { color: '#A13A36' },
-  itemRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#EDF1EF' }, itemName: { color: '#344A41', fontWeight: '800' }, qty: { marginTop: 3, color: '#8A9891', fontSize: 11 }, lineTotal: { color: '#12261E', fontWeight: '900' }, totalRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#DDE5E1', flexDirection: 'row', justifyContent: 'space-between' }, totalLabel: { color: '#12261E', fontWeight: '900', fontSize: 16 }, total: { color: '#12261E', fontWeight: '900', fontSize: 20 },
+  itemRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#EDF1EF' }, itemName: { color: '#344A41', fontWeight: '800' }, qty: { marginTop: 3, color: '#8A9891', fontSize: 11 }, lineTotal: { color: '#12261E', fontWeight: '900' }, moneyRow: { marginTop: 8, flexDirection: 'row', justifyContent: 'space-between' }, moneyLabel: { color: '#6D7B74', fontSize: 12 }, moneyValue: { color: '#344A41', fontSize: 12, fontWeight: '800' }, totalRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#DDE5E1', flexDirection: 'row', justifyContent: 'space-between' }, totalLabel: { color: '#12261E', fontWeight: '900', fontSize: 16 }, total: { color: '#12261E', fontWeight: '900', fontSize: 20 },
   slip: { width: '100%', height: 260, marginTop: 12, borderRadius: 16, backgroundColor: '#EDF1EF' }, secondaryButton: { marginTop: 10, minHeight: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF3F1' }, secondaryText: { color: '#50635A', fontWeight: '800' }, paymentButton: { marginTop: 9, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, paymentButtonText: { color: '#fff', fontWeight: '900' }, confirmedText: { marginTop: 11, color: '#0F7653', fontWeight: '900', textAlign: 'center' },
-  actionButton: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0A33A' }, actionButtonText: { color: '#fff', fontWeight: '900' }, riderCard: { padding: 16, borderRadius: 22, backgroundColor: '#EAF5FA', borderWidth: 1, borderColor: '#CCE6F1' }, riderButton: { marginTop: 13, minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#176985' }, riderButtonText: { color: '#fff', fontWeight: '900', fontSize: 15 }, disabled: { opacity: 0.45 }, pressed: { opacity: 0.72 },
+  actionButton: { marginTop: 10, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0A33A' }, actionButtonText: { color: '#fff', fontWeight: '900' }, riderCard: { padding: 16, borderRadius: 22, backgroundColor: '#EAF5FA', borderWidth: 1, borderColor: '#CCE6F1' }, internalFeeBox: { marginTop: 10, marginBottom: 4, padding: 12, borderRadius: 14, backgroundColor: '#FFFFFF' }, internalTitle: { color: '#184E65', fontSize: 11, fontWeight: '900' }, riderButton: { marginTop: 13, minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#176985' }, riderButtonText: { color: '#fff', fontWeight: '900', fontSize: 15 }, disabled: { opacity: 0.45 }, pressed: { opacity: 0.72 },
 });
