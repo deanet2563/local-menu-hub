@@ -25,6 +25,25 @@ Use this order when instructions overlap or conflict:
 
 External skills may improve method, debugging, planning, or research, but must not redefine MyTree product flows, authorization boundaries, security posture, or source-of-truth rules. If an external skill conflicts with levels 1-4, ignore the conflicting external instruction and record the conflict.
 
+## Approval and execution behavior
+
+When the user explicitly asks Codex to implement, fix, continue, build, test, or otherwise perform a bounded MyTree task, treat that request as approval to proceed through normal implementation, local verification, and non-destructive iteration without asking for a second confirmation after planning.
+
+Do not stop for conversational confirmations such as "ขออนุมัติเริ่ม implementation ตามนี้ครับ?" when the requested task is already clear and bounded. After a brief plan, continue working automatically.
+
+Only stop and ask the user when at least one of these is true:
+
+- a destructive or irreversible action is required, such as deleting meaningful data, force-resetting work, dropping production objects, or overwriting unknown user changes;
+- a production deployment, production database mutation, release publication, or merge to a protected/canonical branch is required and was not explicitly requested;
+- secrets, credentials, account authorization, paid purchase, or external approval are required;
+- requirements materially conflict with the current Bible, security rules, or verified runtime behavior;
+- there is a genuine blocker that cannot be resolved safely from available evidence;
+- Codex needs to choose between materially different product behaviors that the user has not already approved.
+
+For ordinary safe repo operations such as reading files, searching code, editing the active feature branch, running tests/typecheck/doctor/builds, and making non-destructive commits on the requested working branch, proceed without asking for conversational approval again.
+
+Never auto-approve destructive shell prompts blindly. If the shell/tool itself requires an elevated approval prompt, follow the active Codex approval policy and sandbox rules.
+
 ## Mandatory engineering workflow
 
 For any non-trivial source change:

@@ -177,6 +177,9 @@ export default function ActiveDeliveryScreen() {
                 <Text style={styles.secondaryButtonText}>โทรหาร้าน</Text>
               </Pressable>
             )}
+            <Pressable style={styles.secondaryButton} onPress={() => router.push('/chat')}>
+              <Text style={styles.secondaryButtonText}>แชทร้าน</Text>
+            </Pressable>
             <Pressable style={styles.navButton} onPress={() => openNavigation(shopMap)}>
               <Text style={styles.navButtonText}>นำทางไปร้าน</Text>
             </Pressable>
@@ -230,7 +233,7 @@ export default function ActiveDeliveryScreen() {
               onPress={pickedUp}
             >
               <Text style={styles.primaryButtonText}>
-                {updating ? 'กำลังยืนยันกับระบบ...' : riderFeatures.deliveryV3Accept ? 'รับสินค้าแล้ว · เริ่มนำส่ง' : 'Pickup รอ Delivery V3 production gate'}
+                {updating ? 'กำลังยืนยันกับระบบ...' : riderFeatures.deliveryV3Accept ? 'รับสินค้าแล้ว · เริ่มนำส่ง' : 'ระบบรับสินค้ายังไม่เปิดใน build นี้'}
               </Text>
             </Pressable>
             <Pressable
@@ -250,7 +253,7 @@ export default function ActiveDeliveryScreen() {
             <Text style={styles.proofText}>
               {riderFeatures.deliveryV3Accept
                 ? 'เมื่อส่งถึงลูกค้าแล้ว ให้ถ่ายรูปหลักฐานเพื่อปิดงานอย่างปลอดภัย'
-                : 'Proof upload และปิดงานยังถูกล็อกไว้จนกว่า Delivery V3 production gate จะเปิด'}
+                : 'การอัปโหลดหลักฐานและปิดงานยังไม่เปิดใน build นี้'}
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -258,8 +261,11 @@ export default function ActiveDeliveryScreen() {
               style={[styles.proofButton, !riderFeatures.deliveryV3Accept && styles.disabled]}
               onPress={() => router.push({ pathname: '/proof-delivery', params: { subId: job.sub_id } })}
             >
-              <Text style={styles.proofButtonText}>{riderFeatures.deliveryV3Accept ? 'ถ่ายรูปยืนยันการส่ง' : 'Proof รอ Delivery V3 production gate'}</Text>
+              <Text style={styles.proofButtonText}>{riderFeatures.deliveryV3Accept ? 'ถ่ายรูปยืนยันการส่ง' : 'ระบบยืนยันการส่งยังไม่เปิดใน build นี้'}</Text>
             </Pressable>
+            <View style={styles.finalChecklist}>
+              <Text style={styles.finalChecklistText}>ลายเซ็น / QR payment: แสดงเมื่อ order นี้กำหนดไว้</Text>
+            </View>
           </View>
         )}
 
@@ -304,7 +310,7 @@ const styles = StyleSheet.create({
   amountRow: { marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   amountLabel: { fontSize: 14, fontWeight: '700', color: '#667085' },
   amount: { fontSize: 18, fontWeight: '900', color: '#1D2939' },
-  row: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
   secondaryButton: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 13, backgroundColor: '#F2F4F7' },
   secondaryButtonText: { fontWeight: '700', color: '#344054' },
   navButton: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 13, backgroundColor: '#163E72' },
@@ -325,5 +331,7 @@ const styles = StyleSheet.create({
   proofText: { fontSize: 13, lineHeight: 19, color: '#6941C6' },
   proofButton: { alignItems: 'center', marginTop: 4, paddingVertical: 12, borderRadius: 13, backgroundColor: '#6941C6' },
   proofButtonText: { fontWeight: '800', color: '#FFFFFF' },
+  finalChecklist: { padding: 10, borderRadius: 8, backgroundColor: '#FFFFFF' },
+  finalChecklistText: { fontSize: 12, lineHeight: 18, color: '#6941C6' },
   message: { fontSize: 13, lineHeight: 19, color: '#667085' },
 });

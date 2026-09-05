@@ -20,6 +20,7 @@ export type ShopOrder = {
   customer_note: string | null;
   delivery_address: string | null;
   amount: number;
+  customer_delivery_charge: number;
   assigned_rider_id: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;

@@ -12,6 +12,7 @@ import {
 } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { completeDeliveryV3, uploadPrivateDeliveryProof } from '@/data/deliveryProofRepository';
+import { startCompletionJobAlert, stopCompletionJobAlert } from '@/services/jobAlertSound';
 
 type CapturedPhoto = { uri: string; mimeType?: string | null };
 
@@ -45,6 +46,7 @@ export default function ProofDeliveryScreen() {
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null);
   const [uploadedProofPath, setUploadedProofPath] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,10 +58,12 @@ export default function ProofDeliveryScreen() {
       try {
         setSession(await ensureFreshRiderSession());
       } catch {
-        setMessage('ต้องเข้าสู่ระบบ Rider ก่อนส่ง Proof of Delivery');
+        setMessage('ต้องเข้าสู่ระบบ Rider ก่อนส่งหลักฐานการส่ง');
       }
     })();
   }, []);
+
+  useEffect(() => () => { void stopCompletionJobAlert(); }, []);
 
   async function captureProof() {
     if (submitting || !riderFeatures.deliveryV3Accept) return;
@@ -101,7 +105,8 @@ export default function ProofDeliveryScreen() {
       if (result.result !== 'delivered' && result.result !== 'already_delivered') {
         throw new Error('unexpected_delivery_completion_result');
       }
-      router.back();
+      setCompleted(true);
+      await startCompletionJobAlert();
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
       setMessage(friendlyError(text));
@@ -113,11 +118,31 @@ export default function ProofDeliveryScreen() {
   const routeEnabled = riderFeatures.deliveryV3Accept;
   const enabled = Boolean(routeEnabled && session && subId && photo && !submitting);
 
+  async function acknowledgeCompleted() {
+    await stopCompletionJobAlert();
+    router.replace('/');
+  }
+
+  if (completed) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.completedContainer}>
+          <Text style={styles.completedEyebrow}>ส่งสำเร็จ</Text>
+          <Text style={styles.completedTitle}>ปิดงานเรียบร้อย</Text>
+          <Text style={styles.completedText}>ระบบบันทึกหลักฐานการส่งแล้ว กดยืนยันเพื่อหยุดเสียงแจ้งเตือนและกลับหน้าหลัก</Text>
+          <Pressable accessibilityRole="button" style={styles.completeButton} onPress={() => void acknowledgeCompleted()}>
+            <Text style={styles.completeButtonText}>รับทราบ</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>PROOF OF DELIVERY</Text>
+          <Text style={styles.eyebrow}>หลักฐานการส่ง</Text>
           <Text style={styles.title}>ถ่ายรูปยืนยันการส่ง</Text>
           <Text style={styles.subtitle}>งาน {subId ?? '-'}</Text>
         </View>
@@ -152,7 +177,7 @@ export default function ProofDeliveryScreen() {
         >
           {submitting ? <ActivityIndicator color="#FFFFFF" /> : (
             <Text style={styles.completeButtonText}>
-              {routeEnabled ? 'ส่งรูป + ยืนยันส่งสำเร็จ' : 'Proof รอ Delivery V3 production gate'}
+              {routeEnabled ? 'ส่งรูป + ยืนยันส่งสำเร็จ' : 'ระบบยืนยันการส่งยังไม่เปิดใน build นี้'}
             </Text>
           )}
         </Pressable>
@@ -189,6 +214,10 @@ const styles = StyleSheet.create({
   securityText: { fontSize: 13, lineHeight: 19, color: '#05603A' },
   completeButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#067647' },
   completeButtonText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  completedContainer: { flex: 1, justifyContent: 'center', padding: 24, gap: 14, backgroundColor: '#102018' },
+  completedEyebrow: { fontSize: 13, fontWeight: '900', color: '#8EE6B0' },
+  completedTitle: { fontSize: 34, fontWeight: '900', color: '#FFFFFF' },
+  completedText: { fontSize: 15, lineHeight: 22, color: '#D6E8DD' },
   disabled: { opacity: 0.4 },
   retryHint: { fontSize: 12, lineHeight: 18, color: '#475467' },
   message: { fontSize: 13, lineHeight: 19, color: '#B42318' },
