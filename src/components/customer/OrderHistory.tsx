@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { CustomerDeliveryCancel, CUSTOMER_RIDER_V3_ENABLED } from "@/components/customer/CustomerDeliveryCancel";
+import { attachPaymentSlipToOrder } from "@/lib/paymentSlip";
 
 type StoredItem = {
   item_name?: string;
@@ -126,8 +127,7 @@ export function OrderHistory() {
       const { error: upErr } = await supabase.storage.from("payment-slips").upload(path, file, { contentType: file.type || "image/jpeg" });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("payment-slips").getPublicUrl(path);
-      const { error: updErr } = await supabase.from("sub_orders").update({ payment_slip_url: pub.publicUrl }).eq("sub_id", sub_id);
-      if (updErr) throw updErr;
+      await attachPaymentSlipToOrder({ subId: sub_id, paymentSlipUrl: pub.publicUrl });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "แนบสลิปไม่สำเร็จ");

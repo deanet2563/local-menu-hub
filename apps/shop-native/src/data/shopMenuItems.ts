@@ -20,6 +20,13 @@ export type MenuCustomizeAssignment = {
   sort_order: number;
 };
 
+export type MenuCustomizeAssignmentInput = {
+  group_id: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+};
+
 export async function loadShopMenuItems(shopId: string): Promise<ShopMenuItem[]> {
   const { data, error } = await supabase
     .from('menu_items')
@@ -110,16 +117,26 @@ export async function loadMenuCustomizeAssignments(itemId: string): Promise<Menu
   return (data as MenuCustomizeAssignment[] | null) ?? [];
 }
 
-export async function replaceMenuCustomizeAssignments(itemId: string, groupIds: string[]): Promise<void> {
+export async function replaceMenuCustomizeAssignments(itemId: string, assignments: MenuCustomizeAssignmentInput[]): Promise<void> {
   const { error: deleteError } = await supabase.from('menu_item_customize_groups').delete().eq('item_id', itemId);
   if (deleteError) {
     logSupabaseError('replaceMenuCustomizeAssignments.delete', deleteError);
-    if (isMissingTableError(deleteError, 'menu_item_customize_groups') && groupIds.length === 0) return;
+    if (isMissingTableError(deleteError, 'menu_item_customize_groups') && assignments.length === 0) return;
     throw new Error(formatSupabaseError(deleteError, 'บันทึก Customize ของเมนูไม่สำเร็จ'), { cause: deleteError });
   }
-  if (groupIds.length === 0) return;
+  if (assignments.length === 0) return;
   const { error } = await supabase.from('menu_item_customize_groups').insert(
-    groupIds.map((groupId, index) => ({ item_id: itemId, group_id: groupId, is_required: false, min_select: 0, max_select: 1, sort_order: index })),
+    assignments.map((assignment, index) => {
+      const minSelect = assignment.is_required ? Math.max(1, assignment.min_select) : Math.max(0, assignment.min_select);
+      return {
+        item_id: itemId,
+        group_id: assignment.group_id,
+        is_required: assignment.is_required,
+        min_select: minSelect,
+        max_select: Math.max(1, minSelect, assignment.max_select),
+        sort_order: index,
+      };
+    }),
   );
   if (error) {
     logSupabaseError('replaceMenuCustomizeAssignments.insert', error);

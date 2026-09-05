@@ -22,10 +22,12 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
 
-/** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
+/** True for isolated non-production Customer previews. */
 export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+  const hostname = window.location.hostname;
+  return hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev"
+    || /^customer-e2e-[a-z0-9-]+\.local-menu-hub\.pages\.dev$/i.test(hostname);
 }
 
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */

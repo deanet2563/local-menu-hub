@@ -5,8 +5,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { getOwnedShopProfile } from '../../src/data/shopProfile';
 import { uploadMenuItemImage } from '../../src/data/shopAssets';
 import { loadShopCustomizeGroupsForMenu, loadShopMenuCategoriesForMenu, type ShopCustomizeGroup, type ShopMenuCategory } from '../../src/data/shopMenuConfig';
-import { loadMenuCustomizeAssignments, loadShopMenuItems, replaceMenuCustomizeAssignments, updateShopMenuItem, type ShopMenuItem } from '../../src/data/shopMenuItems';
+import { loadMenuCustomizeAssignments, loadShopMenuItems, replaceMenuCustomizeAssignments, updateShopMenuItem, type MenuCustomizeAssignmentInput, type ShopMenuItem } from '../../src/data/shopMenuItems';
 import { activeCustomizeGroupsForCategory } from '../../src/data/shopMenuConfigHelpers';
+
+type AssignmentDraft = Omit<MenuCustomizeAssignmentInput, 'group_id'>;
 
 export default function MenuEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,6 +17,7 @@ export default function MenuEditScreen() {
   const [categories, setCategories] = useState<ShopMenuCategory[]>([]);
   const [groups, setGroups] = useState<ShopCustomizeGroup[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, AssignmentDraft>>({});
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -51,7 +54,13 @@ export default function MenuEditScreen() {
       setAvailable(found.is_available);
       setCategories(activeCategories);
       setGroups(activeGroups);
-      setSelectedGroups(assignments.map((row) => row.group_id).filter((groupId) => validGroupIds.has(groupId)));
+      const validAssignments = assignments.filter((row) => validGroupIds.has(row.group_id));
+      setSelectedGroups(validAssignments.map((row) => row.group_id));
+      setAssignmentDrafts(Object.fromEntries(validAssignments.map((row) => [row.group_id, {
+        is_required: row.is_required,
+        min_select: row.min_select,
+        max_select: row.max_select,
+      }])));
       setSelectedImage(null);
       setRemoveImage(false);
     } catch (cause) {
@@ -68,11 +77,38 @@ export default function MenuEditScreen() {
   function chooseCategory(next: ShopMenuCategory) {
     const nextId = categoryId === next.category_id ? null : next.category_id;
     setCategoryId(nextId);
-    setSelectedGroups((current) => current.filter((id) => activeCustomizeGroupsForCategory(groups, nextId).some((group) => group.group_id === id)));
+    const allowed = new Set(activeCustomizeGroupsForCategory(groups, nextId).map((group) => group.group_id));
+    setSelectedGroups((current) => current.filter((id) => allowed.has(id)));
+    setAssignmentDrafts((current) => Object.fromEntries(Object.entries(current).filter(([groupId]) => allowed.has(groupId))));
   }
 
-  function toggleGroup(groupId: string) {
+  function defaultAssignment(group: ShopCustomizeGroup): AssignmentDraft {
+    const activeOptionCount = Math.max(1, group.shop_customize_options.filter((option) => option.is_active).length);
+    return { is_required: false, min_select: 0, max_select: Math.min(1, activeOptionCount) };
+  }
+
+  function toggleGroup(group: ShopCustomizeGroup) {
+    const groupId = group.group_id;
     setSelectedGroups((old) => old.includes(groupId) ? old.filter((value) => value !== groupId) : [...old, groupId]);
+    setAssignmentDrafts((old) => {
+      if (old[groupId]) return old;
+      return { ...old, [groupId]: defaultAssignment(group) };
+    });
+  }
+
+  function updateAssignment(group: ShopCustomizeGroup, patch: Partial<AssignmentDraft>) {
+    const groupId = group.group_id;
+    const activeOptionCount = Math.max(1, group.shop_customize_options.filter((option) => option.is_active).length);
+    setAssignmentDrafts((old) => {
+      const current = old[groupId] ?? defaultAssignment(group);
+      const nextRequired = patch.is_required ?? current.is_required;
+      const rawMin = patch.min_select ?? current.min_select;
+      const rawMax = patch.max_select ?? current.max_select;
+      const max_select = Math.max(1, Math.min(activeOptionCount, rawMax));
+      const minFloor = nextRequired ? 1 : 0;
+      const min_select = Math.max(minFloor, Math.min(max_select, rawMin));
+      return { ...old, [groupId]: { is_required: nextRequired, min_select, max_select } };
+    });
   }
 
   async function chooseImage() {
@@ -118,7 +154,17 @@ export default function MenuEditScreen() {
         is_available: available,
         ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
       });
-      await replaceMenuCustomizeAssignments(id, validSelectedGroups);
+      const assignments = validSelectedGroups.map((groupId) => {
+        const group = availableGroups.find((row) => row.group_id === groupId);
+        const draft = group ? (assignmentDrafts[groupId] ?? defaultAssignment(group)) : { is_required: false, min_select: 0, max_select: 1 };
+        return {
+          group_id: groupId,
+          is_required: draft.is_required,
+          min_select: draft.min_select,
+          max_select: Math.max(draft.min_select || 1, draft.max_select),
+        };
+      });
+      await replaceMenuCustomizeAssignments(id, assignments);
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'บันทึกเมนูไม่สำเร็จ');
@@ -162,10 +208,30 @@ export default function MenuEditScreen() {
       <Text style={styles.helper}>{selectedCategory ? `เลือกได้เฉพาะชุดตัวเลือกในหมวด ${selectedCategory.name}` : 'เลือกหมวดหมู่ก่อนเพื่อแสดงชุดตัวเลือกที่ใช้ได้'}</Text>
       <View style={styles.groupList}>{availableGroups.map((group) => {
         const selected = selectedGroups.includes(group.group_id);
-        return <Pressable key={group.group_id} onPress={() => toggleGroup(group.group_id)} style={[styles.groupCard, selected && styles.groupSelected]}>
-          <View style={styles.checkBox}>{selected ? <Text style={styles.check}>✓</Text> : null}</View>
-          <View style={{ flex: 1 }}><Text style={[styles.groupSection, selected && styles.selectedText]}>{selectedCategory?.name}</Text><Text style={[styles.groupName, selected && styles.selectedText]}>{group.name}</Text><Text style={[styles.groupOptions, selected && styles.selectedMuted]}>{group.shop_customize_options.filter((o) => o.is_active).map((o) => o.label).join(' · ') || 'ยังไม่มีตัวเลือก'}</Text></View>
-        </Pressable>;
+        const activeOptionCount = Math.max(1, group.shop_customize_options.filter((option) => option.is_active).length);
+        const draft = assignmentDrafts[group.group_id] ?? defaultAssignment(group);
+        return <View key={group.group_id} style={[styles.groupCard, selected && styles.groupSelected]}>
+          <Pressable onPress={() => toggleGroup(group)} style={styles.groupToggle}>
+            <View style={styles.checkBox}>{selected ? <Text style={styles.check}>✓</Text> : null}</View>
+            <View style={{ flex: 1 }}><Text style={[styles.groupSection, selected && styles.selectedText]}>{selectedCategory?.name}</Text><Text style={[styles.groupName, selected && styles.selectedText]}>{group.name}</Text><Text style={[styles.groupOptions, selected && styles.selectedMuted]}>{group.shop_customize_options.filter((o) => o.is_active).map((o) => o.label).join(' · ') || 'ยังไม่มีตัวเลือก'}</Text></View>
+          </Pressable>
+          {selected ? <View style={styles.assignmentPanel}>
+            <View style={styles.assignmentRow}><View style={{ flex: 1 }}><Text style={styles.assignmentTitle}>บังคับเลือก</Text><Text style={styles.assignmentNote}>ใช้สำหรับกลุ่มที่ลูกค้าต้องเลือกก่อนสั่ง</Text></View><Switch value={draft.is_required} onValueChange={(value) => updateAssignment(group, { is_required: value, min_select: value ? Math.max(1, draft.min_select) : 0 })} trackColor={{ true: '#8ED4BA' }} thumbColor={draft.is_required ? '#0F8A5F' : undefined} /></View>
+            <View style={styles.stepperRow}>
+              <Text style={styles.stepperLabel}>ขั้นต่ำ</Text>
+              <Pressable onPress={() => updateAssignment(group, { min_select: draft.min_select - 1 })} style={styles.stepButton}><Text style={styles.stepText}>−</Text></Pressable>
+              <Text style={styles.stepValue}>{draft.min_select}</Text>
+              <Pressable onPress={() => updateAssignment(group, { min_select: draft.min_select + 1 })} style={styles.stepButton}><Text style={styles.stepText}>+</Text></Pressable>
+            </View>
+            <View style={styles.stepperRow}>
+              <Text style={styles.stepperLabel}>สูงสุด</Text>
+              <Pressable onPress={() => updateAssignment(group, { max_select: draft.max_select - 1 })} style={styles.stepButton}><Text style={styles.stepText}>−</Text></Pressable>
+              <Text style={styles.stepValue}>{draft.max_select}</Text>
+              <Pressable onPress={() => updateAssignment(group, { max_select: draft.max_select + 1 })} style={styles.stepButton}><Text style={styles.stepText}>+</Text></Pressable>
+            </View>
+            <Text style={styles.assignmentNote}>กลุ่มนี้มีตัวเลือกที่เปิดใช้ {activeOptionCount} ตัวเลือก</Text>
+          </View> : null}
+        </View>;
       })}</View>
       {availableGroups.length === 0 ? <Text style={styles.helper}>ยังไม่มี Customize Group ที่ใช้กับหมวดนี้</Text> : null}
     </View>
@@ -181,6 +247,7 @@ const styles = StyleSheet.create({
   menuPreview: { marginTop: 8, width: 150, height: 150, borderRadius: 18, backgroundColor: '#EEF2EF' }, menuPreviewEmpty: { marginTop: 8, width: 150, height: 150, borderRadius: 18, backgroundColor: '#EEF2EF', alignItems: 'center', justifyContent: 'center' }, imageActions: { marginTop: 9, flexDirection: 'row', gap: 8 }, imageButton: { flex: 1, minHeight: 42, borderRadius: 13, backgroundColor: '#EAF7F1', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, imageButtonText: { color: '#0F7653', fontWeight: '900', fontSize: 12 }, removeImageButton: { minHeight: 42, borderRadius: 13, backgroundColor: '#FFF0EE', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 }, removeImageText: { color: '#A13A36', fontWeight: '900', fontSize: 12 },
   availableRow: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#EDF1EF', flexDirection: 'row', alignItems: 'center' }, rowTitle: { color: '#344A41', fontWeight: '900' }, rowNote: { marginTop: 3, color: '#87958E', fontSize: 11, lineHeight: 16 },
   chips: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, chip: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, backgroundColor: '#EDF2EF' }, chipSelected: { backgroundColor: '#0F8A5F' }, chipText: { color: '#52645C', fontWeight: '800', fontSize: 12 }, chipTextSelected: { color: '#fff' }, helper: { marginTop: 7, color: '#87958E', fontSize: 11, lineHeight: 17 },
-  groupList: { marginTop: 10, gap: 8 }, groupCard: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 16, backgroundColor: '#F6F9F7', borderWidth: 1, borderColor: '#E2E9E5' }, groupSelected: { backgroundColor: '#123E30', borderColor: '#123E30' }, checkBox: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: '#A7B5AE', alignItems: 'center', justifyContent: 'center' }, check: { color: '#65D3A9', fontWeight: '900' }, groupSection: { color: '#0F8A5F', fontSize: 10, fontWeight: '900' }, groupName: { marginTop: 2, color: '#12261E', fontWeight: '900' }, groupOptions: { marginTop: 3, color: '#7D8B84', fontSize: 11 }, selectedText: { color: '#fff' }, selectedMuted: { color: '#B9CCC3' },
+  groupList: { marginTop: 10, gap: 8 }, groupCard: { padding: 12, borderRadius: 16, backgroundColor: '#F6F9F7', borderWidth: 1, borderColor: '#E2E9E5' }, groupToggle: { flexDirection: 'row', gap: 10 }, groupSelected: { backgroundColor: '#123E30', borderColor: '#123E30' }, checkBox: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: '#A7B5AE', alignItems: 'center', justifyContent: 'center' }, check: { color: '#65D3A9', fontWeight: '900' }, groupSection: { color: '#0F8A5F', fontSize: 10, fontWeight: '900' }, groupName: { marginTop: 2, color: '#12261E', fontWeight: '900' }, groupOptions: { marginTop: 3, color: '#7D8B84', fontSize: 11 }, selectedText: { color: '#fff' }, selectedMuted: { color: '#B9CCC3' },
+  assignmentPanel: { marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: '#fff' }, assignmentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, assignmentTitle: { color: '#12261E', fontWeight: '900' }, assignmentNote: { marginTop: 3, color: '#7D8B84', fontSize: 11, lineHeight: 16 }, stepperRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }, stepperLabel: { flex: 1, color: '#344A41', fontWeight: '800', fontSize: 12 }, stepButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#EAF7F1', alignItems: 'center', justifyContent: 'center' }, stepText: { color: '#0F7653', fontWeight: '900', fontSize: 18 }, stepValue: { width: 28, textAlign: 'center', color: '#12261E', fontWeight: '900' },
   saveButton: { marginTop: 18, minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, saveText: { color: '#fff', fontWeight: '900', fontSize: 15 }, errorBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' }, error: { color: '#A13A36' }, disabled: { opacity: 0.5 }, pressed: { opacity: 0.72 },
 });
