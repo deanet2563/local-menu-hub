@@ -17,13 +17,8 @@ function extensionFromAsset(uri: string, mimeType?: string | null, fileName?: st
   return 'jpg';
 }
 
-export async function uploadShopAsset(input: {
-  shopId: string;
-  kind: ShopAssetKind;
-  uri: string;
-  mimeType?: string | null;
-  fileName?: string | null;
-}): Promise<string> {
+async function readNativeImage(input: { uri: string; mimeType?: string | null; fileName?: string | null }): Promise<{ bytes: ArrayBuffer; ext: string; contentType: string }> {
+  if (input.mimeType && !input.mimeType.startsWith('image/')) throw new Error('กรุณาเลือกรูปภาพเท่านั้น');
   const response = await fetch(input.uri);
   if (!response.ok) throw new Error('อ่านไฟล์รูปจากอุปกรณ์ไม่สำเร็จ');
   const bytes = await response.arrayBuffer();
@@ -32,6 +27,17 @@ export async function uploadShopAsset(input: {
 
   const ext = extensionFromAsset(input.uri, input.mimeType, input.fileName);
   const contentType = input.mimeType || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+  return { bytes, ext, contentType };
+}
+
+export async function uploadShopAsset(input: {
+  shopId: string;
+  kind: ShopAssetKind;
+  uri: string;
+  mimeType?: string | null;
+  fileName?: string | null;
+}): Promise<string> {
+  const { bytes, ext, contentType } = await readNativeImage(input);
   const folder = shopStorageFolder(input.shopId);
   const bucket = input.kind === 'qr' ? 'shop-qr-codes' : 'shop-assets';
   const path = `${folder}/${input.kind === 'qr' ? 'qr' : input.kind}.${ext}`;
@@ -48,4 +54,25 @@ export async function uploadShopAsset(input: {
   const { error: updateError } = await supabase.from('shops').update({ [column]: publicUrl }).eq('shop_id', input.shopId);
   if (updateError) throw updateError;
   return publicUrl;
+}
+
+export async function uploadMenuItemImage(input: {
+  shopId: string;
+  itemId: string;
+  uri: string;
+  mimeType?: string | null;
+  fileName?: string | null;
+}): Promise<string> {
+  const { bytes, ext, contentType } = await readNativeImage(input);
+  const folder = shopStorageFolder(input.shopId);
+  const path = `${folder}/menu-items/${input.itemId}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from('shop-assets').upload(path, bytes, {
+    contentType,
+    upsert: true,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from('shop-assets').getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
 }

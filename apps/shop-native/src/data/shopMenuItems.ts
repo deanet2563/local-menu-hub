@@ -81,7 +81,7 @@ export async function createShopMenuItem(input: {
   return itemId;
 }
 
-export async function updateShopMenuItem(itemId: string, patch: Partial<Pick<ShopMenuItem, 'name' | 'price' | 'category' | 'is_available'>>): Promise<void> {
+export async function updateShopMenuItem(itemId: string, patch: Partial<Pick<ShopMenuItem, 'name' | 'price' | 'category' | 'is_available' | 'image_url'>>): Promise<void> {
   const next = { ...patch } as Record<string, unknown>;
   if (typeof patch.name === 'string') {
     const trimmed = patch.name.trim();
