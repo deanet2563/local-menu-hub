@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isSessionFresh, loadRiderSession, type RiderSession } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
 import { listNearbyDeliveryJobs, type NearbyDeliveryJob } from '@/data/nearbyJobsRepository';
 import { getRiderProfile } from '@/data/riderRepository';
+import { startIncomingJobAlert, stopIncomingJobAlert } from '@/services/jobAlertSound';
 
 const RADII = [1, 2, 3, 5] as const;
 
@@ -26,6 +27,8 @@ export default function NearbyJobsScreen() {
   const [radiusIndex, setRadiusIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [incomingJobs, setIncomingJobs] = useState<NearbyDeliveryJob[]>([]);
+  const knownJobIds = useRef<Set<string> | null>(null);
 
   const radius = RADII[radiusIndex];
 
@@ -35,12 +38,35 @@ export default function NearbyJobsScreen() {
     try {
       const rows = await listNearbyDeliveryJobs(activeSession, requestedRadius);
       setJobs([...rows].sort((a, b) => requestTime(b) - requestTime(a)));
+      const currentIds = new Set(rows.map((row) => row.sub_id));
+      const previousIds = knownJobIds.current;
+      if (previousIds) {
+        const freshJobs = rows.filter((row) => !previousIds.has(row.sub_id));
+        if (freshJobs.length) {
+          setIncomingJobs(freshJobs);
+          void startIncomingJobAlert().catch(() => undefined);
+        }
+      }
+      knownJobIds.current = currentIds;
       if (!rows.length) setMessage(`ยังไม่มีงานในระยะ ${requestedRadius} กม.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    const interval = setInterval(() => void loadJobs(session), 10000);
+    return () => clearInterval(interval);
+  }, [session]);
+
+  useEffect(() => () => { void stopIncomingJobAlert(); }, []);
+
+  async function dismissIncomingJobs() {
+    setIncomingJobs([]);
+    await stopIncomingJobAlert();
   }
 
   useEffect(() => {
@@ -79,6 +105,18 @@ export default function NearbyJobsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Modal visible={incomingJobs.length > 0} transparent animationType="fade" onRequestClose={() => void dismissIncomingJobs()}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.alertCard}>
+            <Text style={styles.alertEyebrow}>New incoming job</Text>
+            <Text style={styles.alertTitle}>{incomingJobs.length === 1 ? 'New delivery job' : `${incomingJobs.length} new delivery jobs`}</Text>
+            <Text style={styles.alertBody}>{incomingJobs.map((job) => job.shop_name).join(' · ')}</Text>
+            <Pressable accessibilityRole="button" onPress={() => void dismissIncomingJobs()} style={styles.alertButton}>
+              <Text style={styles.alertButtonText}>View jobs</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>DELIVERY V3 · FIRST ACCEPT</Text>
@@ -176,4 +214,11 @@ const styles = StyleSheet.create({
   destination: { fontSize: 13, lineHeight: 19, color: '#475467' },
   detailButton: { alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F2F4F7' },
   detailButtonText: { fontWeight: '800', color: '#344054' },
+  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(16, 24, 40, 0.58)' },
+  alertCard: { width: '100%', maxWidth: 380, gap: 10, padding: 22, borderRadius: 20, backgroundColor: '#FFFFFF' },
+  alertEyebrow: { fontSize: 12, fontWeight: '800', color: '#067647' },
+  alertTitle: { fontSize: 22, fontWeight: '900', color: '#1D2939' },
+  alertBody: { fontSize: 14, lineHeight: 21, color: '#475467' },
+  alertButton: { alignItems: 'center', paddingVertical: 13, borderRadius: 12, backgroundColor: '#067647' },
+  alertButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
 });
