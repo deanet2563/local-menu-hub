@@ -2,6 +2,7 @@ import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
@@ -11,7 +12,7 @@ import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/delive
 // it never changes server-authoritative prices.
 // ============================================================
 
-const ORDER_URL = "https://mytree-worker.kompakorn-t.workers.dev/order";
+const ORDER_URL = `${MYTREE_WORKER_URL}/order`;
 
 export type OrderLinePayload = {
   lineId: string;

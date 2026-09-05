@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 // ============================================================
 // MyTree — Supabase clients
@@ -15,7 +16,7 @@ import { safeStoragePath } from "@/lib/storageKey";
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
-const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

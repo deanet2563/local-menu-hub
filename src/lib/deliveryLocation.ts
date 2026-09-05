@@ -1,11 +1,11 @@
 import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart } from "@/lib/cart";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
-const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
-const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
-const LOCATION_SEARCH_URL = `${WORKER_URL}/location/search`;
-const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;
+const LOCATION_RESOLVE_URL = `${MYTREE_WORKER_URL}/location/resolve`;
+const LOCATION_SEARCH_URL = `${MYTREE_WORKER_URL}/location/search`;
+const DELIVERY_QUOTE_URL = `${MYTREE_WORKER_URL}/delivery/quote`;
 export const DELIVERY_PLACE_SEARCH_MIN_LENGTH = 3;
 
 export type DeliveryLocationSource = "device_gps" | "google_maps_url" | "latlng" | "map_pin";

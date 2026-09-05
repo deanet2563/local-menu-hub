@@ -1,6 +1,5 @@
 import { getAccessToken } from "@/lib/supabase";
-
-const WORKER_BASE_URL = "https://mytree-worker.kompakorn-t.workers.dev";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 export async function attachPaymentSlipToOrder(input: {
   subId: string;
@@ -11,7 +10,7 @@ export async function attachPaymentSlipToOrder(input: {
     throw new Error("กรุณาเปิดผ่าน LIFF เพื่อแนบสลิป");
   }
 
-  const response = await fetch(`${WORKER_BASE_URL}/customer/payment-slip`, {
+  const response = await fetch(`${MYTREE_WORKER_URL}/customer/payment-slip`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
