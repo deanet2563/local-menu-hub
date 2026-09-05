@@ -5,14 +5,14 @@ on:
   pull_request:
     paths:
       - 'apps/shop-native/**'
-      - 'supabase/migrations/20260904*.sql'
+      - 'supabase/migrations/2026090*.sql'
       - '.github/workflows/shop-native-ci.yml'
   push:
     branches:
       - 'feature/shop-native-foundation'
     paths:
       - 'apps/shop-native/**'
-      - 'supabase/migrations/20260904*.sql'
+      - 'supabase/migrations/2026090*.sql'
       - '.github/workflows/shop-native-ci.yml'
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          files=(supabase/migrations/20260904*.sql)
+          files=(supabase/migrations/2026090*.sql)
           if grep -Ein 'shop_id[[:space:]]+uuid[^;]*references[[:space:]]+public\.shops' "${files[@]}"; then
             echo 'Shop Native migrations must use text shop_id because production shops.shop_id is text.'
             exit 1

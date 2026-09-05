@@ -10,6 +10,7 @@ export default function CategoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -29,11 +30,12 @@ export default function CategoriesScreen() {
 
   async function add() {
     if (!shopId || saving) return;
-    setSaving(true);
+    setSaving(true); setError(null); setSaved(null);
     try {
       await addShopMenuCategory(shopId, name);
       setName('');
       await load();
+      setSaved('เพิ่มหมวดหมู่สำเร็จแล้ว');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'เพิ่มหมวดหมู่ไม่สำเร็จ');
     } finally {
@@ -44,25 +46,26 @@ export default function CategoriesScreen() {
   function rename(item: ShopMenuCategory) {
     Alert.prompt?.('แก้ไขชื่อหมวดหมู่', undefined, async (value) => {
       if (!value?.trim()) return;
-      try { await renameShopMenuCategory(item.category_id, value); await load(); }
+      try { setError(null); setSaved(null); await renameShopMenuCategory(item.category_id, value); await load(); }
       catch (cause) { setError(cause instanceof Error ? cause.message : 'แก้ไขไม่สำเร็จ'); }
     }, 'plain-text', item.name);
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดหมวดหมู่…</Text></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดหมวดหมู่...</Text></View>;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>MENU STRUCTURE</Text>
     <Text style={styles.title}>จัดการหมวดหมู่</Text>
-    <Text style={styles.subtitle}>สร้างหมวดหลักของร้าน เช่น ซาลาเปา · เครื่องดื่ม · ขนมไทย แล้วใช้ซ้ำตอนเพิ่มเมนู</Text>
+    <Text style={styles.subtitle}>สร้างหมวดหลักของร้าน เช่น ซาลาเปา เครื่องดื่ม ขนมไทย แล้วใช้ซ้ำตอนเพิ่มเมนูและ Customize</Text>
 
     {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
+    {saved ? <View style={styles.successBox}><Text style={styles.success}>{saved}</Text></View> : null}
 
     <View style={styles.addCard}>
       <Text style={styles.cardTitle}>เพิ่มหมวดหมู่ใหม่</Text>
-      <TextInput value={name} onChangeText={setName} placeholder="เช่น ซาลาเปา" style={styles.input} />
+      <TextInput value={name} onChangeText={(value) => { setName(value); setSaved(null); }} placeholder="เช่น เครื่องดื่ม" style={styles.input} />
       <Pressable disabled={saving} onPress={() => void add()} style={({ pressed }) => [styles.primary, pressed && styles.pressed, saving && styles.disabled]}>
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>+ เพิ่มหมวดหมู่</Text>}
+        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>เพิ่มหมวดหมู่</Text>}
       </Pressable>
     </View>
 
@@ -91,7 +94,7 @@ const styles = StyleSheet.create({
   rowCard: { flexDirection: 'row', alignItems: 'center', marginBottom: 9, backgroundColor: '#fff', borderRadius: 18, padding: 13, borderWidth: 1, borderColor: '#E4EBE7' },
   sort: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF4F1' }, sortText: { color: '#527064', fontWeight: '900' },
   rowText: { flex: 1, marginLeft: 12 }, name: { color: '#12261E', fontSize: 15, fontWeight: '900' }, inactive: { color: '#98A39D', textDecorationLine: 'line-through' }, hint: { marginTop: 2, color: '#9AA59F', fontSize: 11 },
-  errorBox: { marginTop: 14, backgroundColor: '#FFF0EE', borderRadius: 14, padding: 12 }, error: { color: '#A13A36' },
+  errorBox: { marginTop: 14, backgroundColor: '#FFF0EE', borderRadius: 14, padding: 12 }, error: { color: '#A13A36' }, successBox: { marginTop: 14, backgroundColor: '#E8F7F1', borderRadius: 14, padding: 12 }, success: { color: '#0F7A55', fontWeight: '800' },
   empty: { backgroundColor: '#fff', borderRadius: 18, padding: 22, alignItems: 'center' }, emptyTitle: { color: '#12261E', fontWeight: '900' }, muted: { color: '#718078', marginTop: 5 },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.5 },
 });

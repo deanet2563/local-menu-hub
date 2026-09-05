@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { formatSupabaseError, isMissingColumnError, logSupabaseError } from './supabaseError';
+import { isCustomerDeliveryPricingSchemaMissing, migrationRequiredShopDeliverySettings } from './shopDeliverySettingsCompat';
 
 export type DeliveryPricingMode = 'distance' | 'flat' | 'free';
 
@@ -11,6 +13,7 @@ export type ShopDeliverySettings = {
   delivery_flat_fee: number;
   free_delivery_min_order: number | null;
   rider_request_enabled: boolean;
+  migration_required?: boolean;
 };
 
 type ShopDeliveryRow = {
@@ -30,7 +33,22 @@ export async function getShopDeliverySettings(shopId: string): Promise<ShopDeliv
     .select('shop_id,pickup_enabled,delivery_enabled,service_area_note,customer_delivery_pricing_mode,customer_delivery_flat_fee,customer_free_delivery_min_order,rider_request_enabled')
     .eq('shop_id', shopId)
     .single();
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('getShopDeliverySettings.primary', error);
+    if (isCustomerDeliveryPricingSchemaMissing(error)) {
+      const fallback = await supabase
+        .from('shops')
+        .select('shop_id,pickup_enabled,delivery_enabled,service_area_note')
+        .eq('shop_id', shopId)
+        .single();
+      if (fallback.error) {
+        logSupabaseError('getShopDeliverySettings.legacy', fallback.error);
+        throw new Error(formatSupabaseError(fallback.error, 'โหลดตั้งค่าการส่งไม่สำเร็จ'));
+      }
+      return migrationRequiredShopDeliverySettings(shopId, fallback.data as Partial<ShopDeliverySettings> | null);
+    }
+    throw new Error(formatSupabaseError(error, 'โหลดตั้งค่าการส่งไม่สำเร็จ'));
+  }
   const row = data as ShopDeliveryRow;
   return {
     shop_id: row.shop_id,
@@ -45,6 +63,9 @@ export async function getShopDeliverySettings(shopId: string): Promise<ShopDeliv
 }
 
 export async function updateShopDeliverySettings(shopId: string, input: Omit<ShopDeliverySettings, 'shop_id'>): Promise<void> {
+  if (input.migration_required) {
+    throw new Error('ต้องอัปเดตฐานข้อมูลค่าส่งลูกค้าก่อนบันทึกหน้านี้');
+  }
   if (input.delivery_flat_fee < 0) throw new Error('ค่าส่งต้องไม่ติดลบ');
   if (input.free_delivery_min_order !== null && input.free_delivery_min_order < 0) throw new Error('ยอดขั้นต่ำส่งฟรีต้องไม่ติดลบ');
   const { error } = await supabase.from('shops').update({
@@ -56,7 +77,13 @@ export async function updateShopDeliverySettings(shopId: string, input: Omit<Sho
     customer_free_delivery_min_order: input.free_delivery_min_order,
     rider_request_enabled: input.rider_request_enabled,
   }).eq('shop_id', shopId);
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('updateShopDeliverySettings', error);
+    if (isMissingColumnError(error, 'customer_delivery')) {
+      throw new Error(formatSupabaseError(error, 'ต้องอัปเดตฐานข้อมูลค่าส่งลูกค้าก่อนบันทึกหน้านี้'));
+    }
+    throw new Error(formatSupabaseError(error, 'บันทึกตั้งค่าการส่งไม่สำเร็จ'));
+  }
 }
 
 export function customerDeliveryFeePreview(settings: ShopDeliverySettings, subtotal: number, distanceFee = 0): number {

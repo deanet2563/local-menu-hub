@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { getOwnedShopSettings, updateShopSettings, type ShopHours, type ShopSettings } from '../src/data/shopSettings';
 
@@ -12,6 +13,7 @@ type Form = {
   name: string; phone: string; email: string; address: string; description: string;
   google_maps_url: string; website_url: string; facebook_url: string; instagram_url: string;
   tiktok_url: string; line_url: string; village: string; zone: string; soi: string;
+  lat: number | null; lng: number | null;
   pickup_enabled: boolean; delivery_enabled: boolean; service_area_note: string;
   payment_cash_enabled: boolean; payment_qr_enabled: boolean;
   business_hours: Record<string, { open: string; close: string; closed: boolean }>;
@@ -31,6 +33,7 @@ function makeForm(shop: ShopSettings): Form {
     description: shop.description ?? '', google_maps_url: shop.google_maps_url ?? '', website_url: shop.website_url ?? '',
     facebook_url: shop.facebook_url ?? '', instagram_url: shop.instagram_url ?? '', tiktok_url: shop.tiktok_url ?? '',
     line_url: shop.line_url ?? '', village: shop.village ?? '', zone: shop.zone ?? '', soi: shop.soi ?? '',
+    lat: shop.lat, lng: shop.lng,
     pickup_enabled: shop.pickup_enabled ?? true, delivery_enabled: shop.delivery_enabled ?? true,
     service_area_note: shop.service_area_note ?? '', payment_cash_enabled: shop.payment_cash_enabled ?? true,
     payment_qr_enabled: shop.payment_qr_enabled ?? false, business_hours: hours,
@@ -46,6 +49,7 @@ export default function ShopSettingsScreen() {
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [locationConfirmed, setLocationConfirmed] = useState(false);
@@ -56,7 +60,7 @@ export default function ShopSettingsScreen() {
       const data = await getOwnedShopSettings();
       setShop(data);
       setForm(data ? makeForm(data) : null);
-      setLocationConfirmed(!!data?.google_maps_url);
+      setLocationConfirmed(Boolean(data?.google_maps_url || (data?.lat != null && data?.lng != null)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'โหลดข้อมูลร้านไม่สำเร็จ');
     } finally {
@@ -66,7 +70,10 @@ export default function ShopSettingsScreen() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => current ? { ...current, [key]: value } : current);
+  const set = <K extends keyof Form>(key: K, value: Form[K]) => {
+    setSaved(false);
+    setForm((current) => current ? { ...current, [key]: value } : current);
+  };
 
   const qrReady = !!shop?.qr_code_url && !!form?.payment_qr_enabled;
   const contactPreview = useMemo(() => [form?.line_url, form?.facebook_url, form?.instagram_url, form?.tiktok_url].filter(Boolean).length, [form]);
@@ -86,7 +93,7 @@ export default function ShopSettingsScreen() {
         facebook_url: form.facebook_url.trim() || null, instagram_url: form.instagram_url.trim() || null,
         tiktok_url: form.tiktok_url.trim() || null, line_url: form.line_url.trim() || null,
         village: form.village.trim() || null, zone: form.zone.trim() || null, soi: form.soi.trim() || null,
-        lat: shop.lat, lng: shop.lng, pickup_enabled: form.pickup_enabled, delivery_enabled: form.delivery_enabled,
+        lat: form.lat, lng: form.lng, pickup_enabled: form.pickup_enabled, delivery_enabled: form.delivery_enabled,
         service_area_note: form.service_area_note.trim() || null, payment_cash_enabled: form.payment_cash_enabled,
         payment_qr_enabled: form.payment_qr_enabled, business_hours: hours,
       });
@@ -99,24 +106,51 @@ export default function ShopSettingsScreen() {
 
   function confirmLocation() {
     if (!form?.google_maps_url.trim()) return setError('ใส่ Google Maps link ก่อนยืนยัน Location');
-    setLocationConfirmed(true); setError(null);
+    setLocationConfirmed(true); setError(null); setSaved(false);
     Alert.alert('ยืนยัน Location แล้ว', 'ระบบจะบันทึก Google Maps link นี้เป็นตำแหน่งอ้างอิงของร้าน');
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดข้อมูลร้าน…</Text></View>;
+  async function useCurrentLocation() {
+    if (!form || locating) return;
+    setLocating(true); setError(null); setSaved(false);
+    try {
+      const currentPermission = await Location.getForegroundPermissionsAsync();
+      let status = currentPermission.status;
+      if (status !== Location.PermissionStatus.GRANTED) {
+        const requested = await Location.requestForegroundPermissionsAsync();
+        status = requested.status;
+      }
+      if (status !== Location.PermissionStatus.GRANTED) {
+        setError('ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง กรุณาเปิดสิทธิ์ตำแหน่งในมือถือแล้วลองอีกครั้ง');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setForm((current) => current ? {
+        ...current,
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      } : current);
+      setLocationConfirmed(true);
+    } catch (cause) {
+      console.error('[ShopSettings.useCurrentLocation]', cause);
+      setError(cause instanceof Error ? cause.message : 'ไม่สามารถระบุตำแหน่งปัจจุบันได้');
+    } finally { setLocating(false); }
+  }
+
+  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดข้อมูลร้าน...</Text></View>;
   if (!shop || !form) return <View style={styles.center}><Text style={styles.error}>{error || 'ไม่พบร้านของคุณ'}</Text></View>;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.hero}><Text style={styles.eyebrow}>SHOP PROFILE</Text><Text style={styles.title}>ตั้งค่าร้าน / Onboarding</Text><Text style={styles.muted}>ข้อมูลชุดนี้ใช้ทั้งใน Shop App และหน้าร้านฝั่งลูกค้า</Text></View>
 
     {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
-    {saved ? <View style={styles.successBox}><Text style={styles.success}>บันทึกข้อมูลร้านเรียบร้อยแล้ว</Text></View> : null}
+    {saved ? <View style={styles.successBox}><Text style={styles.success}>บันทึกข้อมูลสำเร็จแล้ว</Text></View> : null}
 
     <View style={styles.card}>
       <Text style={styles.cardTitle}>รูปหน้าร้าน</Text>
       {shop.cover_url ? <Image source={{ uri: shop.cover_url }} style={styles.cover} /> : <View style={styles.coverEmpty}><Text style={styles.muted}>ยังไม่มี Cover ร้าน</Text></View>}
-      <View style={styles.logoRow}>{shop.logo_url ? <Image source={{ uri: shop.logo_url }} style={styles.logo} /> : <View style={styles.logoEmpty}><Text>🌳</Text></View>}<View style={{ flex: 1 }}><Text style={styles.logoTitle}>Logo ร้าน</Text><Text style={styles.small}>Preview จากไฟล์ที่ร้านอัปโหลดไว้</Text></View></View>
-      <View style={styles.noteBox}><Text style={styles.small}>Native media picker ยังไม่ได้ติดตั้งใน build นี้ จึงแสดง Preview ของ Cover / Logo ที่มีอยู่ก่อน โดยปุ่มอัปโหลดจากมือถือจะต่อใน commit media upload ถัดไป</Text></View>
+      <View style={styles.logoRow}>{shop.logo_url ? <Image source={{ uri: shop.logo_url }} style={styles.logo} /> : <View style={styles.logoEmpty}><Text>MT</Text></View>}<View style={{ flex: 1 }}><Text style={styles.logoTitle}>Logo ร้าน</Text><Text style={styles.small}>Preview จากไฟล์ที่ร้านอัปโหลดไว้</Text></View></View>
+      <View style={styles.noteBox}><Text style={styles.small}>รูปและ QR จัดการได้จากหน้า รูปและ QR ร้าน</Text></View>
     </View>
 
     <View style={styles.card}><Text style={styles.cardTitle}>ข้อมูลพื้นฐาน</Text>
@@ -130,7 +164,9 @@ export default function ShopSettingsScreen() {
       <Field label="ที่อยู่ *" value={form.address} onChangeText={(v) => set('address', v)} />
       <View style={styles.row}><View style={styles.half}><Field label="หมู่บ้าน" value={form.village} onChangeText={(v) => set('village', v)} /></View><View style={styles.half}><Field label="โซน / ซอย" value={[form.zone, form.soi].filter(Boolean).join(' / ')} onChangeText={(v) => set('zone', v)} /></View></View>
       <Field label="Google Maps link" value={form.google_maps_url} onChangeText={(v) => { set('google_maps_url', v); setLocationConfirmed(false); }} placeholder="https://maps.app.goo.gl/..." />
-      <View style={styles.row}><Pressable onPress={confirmLocation} style={[styles.secondaryButton, locationConfirmed && styles.confirmedButton]}><Text style={[styles.secondaryText, locationConfirmed && styles.confirmedText]}>{locationConfirmed ? '✓ ยืนยัน Location แล้ว' : '📍 ยืนยัน Location'}</Text></Pressable>{form.google_maps_url ? <Pressable onPress={() => void Linking.openURL(form.google_maps_url)} style={styles.secondaryButton}><Text style={styles.secondaryText}>เปิดแผนที่</Text></Pressable> : null}</View>
+      <View style={styles.row}><Pressable onPress={confirmLocation} style={[styles.secondaryButton, locationConfirmed && styles.confirmedButton]}><Text style={[styles.secondaryText, locationConfirmed && styles.confirmedText]}>{locationConfirmed ? 'ยืนยัน Location แล้ว' : 'ยืนยัน Location'}</Text></Pressable>{form.google_maps_url ? <Pressable onPress={() => void Linking.openURL(form.google_maps_url)} style={styles.secondaryButton}><Text style={styles.secondaryText}>เปิดแผนที่</Text></Pressable> : null}</View>
+      <Pressable disabled={locating} onPress={() => void useCurrentLocation()} style={[styles.locationButton, locating && styles.disabled]}>{locating ? <ActivityIndicator color="#0F8A5F" /> : <Text style={styles.locationButtonText}>ใช้ตำแหน่งปัจจุบัน</Text>}</Pressable>
+      {form.lat != null && form.lng != null ? <Text style={styles.locationText}>ตำแหน่งร้าน: {form.lat.toFixed(6)}, {form.lng.toFixed(6)}</Text> : <Text style={styles.locationText}>ยังไม่มีพิกัดร้าน</Text>}
     </View>
 
     <View style={styles.card}><Text style={styles.cardTitle}>วันและเวลาเปิดร้าน</Text>
@@ -143,7 +179,7 @@ export default function ShopSettingsScreen() {
       <Field label="Instagram" value={form.instagram_url} onChangeText={(v) => set('instagram_url', v)} />
       <Field label="TikTok" value={form.tiktok_url} onChangeText={(v) => set('tiktok_url', v)} />
       <Field label="Website" value={form.website_url} onChangeText={(v) => set('website_url', v)} />
-      <View style={styles.previewBox}><Text style={styles.previewTitle}>Customer storefront preview</Text><Text style={styles.small}>{contactPreview ? `${contactPreview} ช่องทางจะถูกนำไปแสดงใน About us / Contact us` : 'ยังไม่มี Social/LINE ที่จะแสดงในหน้าร้าน'}</Text></View>
+      <View style={styles.previewBox}><Text style={styles.previewTitle}>Customer storefront preview</Text><Text style={styles.small}>{contactPreview ? `${contactPreview} ช่องทางจะแสดงใน About us / Contact us` : 'ยังไม่มี Social/LINE ที่จะแสดงในหน้าร้าน'}</Text></View>
     </View>
 
     <View style={styles.card}><Text style={styles.cardTitle}>รับสินค้า & การชำระเงิน</Text>
@@ -151,7 +187,7 @@ export default function ShopSettingsScreen() {
       <View style={styles.settingRow}><View><Text style={styles.settingTitle}>ร้านรองรับ Delivery</Text><Text style={styles.small}>รายละเอียดค่าส่งตั้งในหน้าการส่ง</Text></View><Switch value={form.delivery_enabled} onValueChange={(v) => set('delivery_enabled', v)} /></View>
       <View style={styles.settingRow}><View><Text style={styles.settingTitle}>รับเงินสด</Text></View><Switch value={form.payment_cash_enabled} onValueChange={(v) => set('payment_cash_enabled', v)} /></View>
       <View style={styles.settingRow}><View><Text style={styles.settingTitle}>รับ QR Transfer</Text></View><Switch value={form.payment_qr_enabled} onValueChange={(v) => set('payment_qr_enabled', v)} /></View>
-      {shop.qr_code_url ? <View style={styles.qrWrap}><Image source={{ uri: shop.qr_code_url }} style={styles.qr} /><Text style={styles.qrLabel}>{qrReady ? '✓ QR นี้จะแสดงให้ลูกค้าตอนชำระเงิน' : 'QR Preview — เปิด QR Transfer เพื่อใช้งาน'}</Text></View> : <View style={styles.coverEmpty}><Text style={styles.muted}>ยังไม่มี QR รับเงิน</Text></View>}
+      {shop.qr_code_url ? <View style={styles.qrWrap}><Image source={{ uri: shop.qr_code_url }} style={styles.qr} /><Text style={styles.qrLabel}>{qrReady ? 'QR นี้จะแสดงให้ลูกค้าตอนชำระเงิน' : 'QR Preview - เปิด QR Transfer เพื่อใช้งาน'}</Text></View> : <View style={styles.coverEmpty}><Text style={styles.muted}>ยังไม่มี QR รับเงิน</Text></View>}
     </View>
 
     <Pressable disabled={saving} onPress={() => void save()} style={[styles.saveButton, saving && { opacity: 0.5 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>บันทึกข้อมูลร้าน</Text>}</Pressable>
@@ -166,8 +202,9 @@ const styles = StyleSheet.create({
   field: { marginBottom: 12 }, label: { color: '#52645C', fontSize: 11, fontWeight: '800', marginBottom: 6 }, input: { minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: '#DDE5E0', backgroundColor: '#FAFBFA', paddingHorizontal: 12, color: '#12261E', fontSize: 14 }, textarea: { minHeight: 92, paddingTop: 12, textAlignVertical: 'top' },
   cover: { width: '100%', height: 150, borderRadius: 18, backgroundColor: '#EEF2EF' }, coverEmpty: { minHeight: 90, borderRadius: 18, backgroundColor: '#F0F3F1', alignItems: 'center', justifyContent: 'center', padding: 16 }, logoRow: { marginTop: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }, logo: { width: 68, height: 68, borderRadius: 18, backgroundColor: '#EEF2EF' }, logoEmpty: { width: 68, height: 68, borderRadius: 18, backgroundColor: '#EEF2EF', alignItems: 'center', justifyContent: 'center' }, logoTitle: { color: '#12261E', fontWeight: '900' }, noteBox: { marginTop: 12, borderRadius: 14, padding: 12, backgroundColor: '#FFF8E7' },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' }, half: { flex: 1 }, secondaryButton: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: '#EEF4F1', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, secondaryText: { color: '#31594A', fontWeight: '800', fontSize: 12 }, confirmedButton: { backgroundColor: '#DFF5EC' }, confirmedText: { color: '#0F8A5F' },
+  locationButton: { marginTop: 10, minHeight: 44, borderRadius: 14, backgroundColor: '#EAF7F2', borderWidth: 1, borderColor: '#B8E3D1', alignItems: 'center', justifyContent: 'center' }, locationButtonText: { color: '#0F7653', fontWeight: '900' }, locationText: { marginTop: 8, color: '#52645C', fontSize: 12, fontWeight: '700' },
   dayRow: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E7ECE9' }, dayName: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, dayLabel: { color: '#12261E', fontWeight: '900' }, timeRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }, timeInput: { flex: 1, minHeight: 40, borderRadius: 12, backgroundColor: '#F4F7F5', textAlign: 'center', color: '#12261E', fontWeight: '800' }, disabledInput: { opacity: 0.35 }, to: { color: '#718078', fontSize: 12 },
   previewBox: { borderRadius: 14, padding: 12, backgroundColor: '#F4F8F6' }, previewTitle: { color: '#31594A', fontWeight: '900', fontSize: 12, marginBottom: 4 }, settingRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E7ECE9' }, settingTitle: { color: '#12261E', fontWeight: '800', fontSize: 13 }, qrWrap: { marginTop: 14, alignItems: 'center' }, qr: { width: 210, height: 210, borderRadius: 18, backgroundColor: '#F0F3F1' }, qrLabel: { marginTop: 10, color: '#52645C', fontSize: 12, textAlign: 'center' },
   saveButton: { marginTop: 18, minHeight: 54, borderRadius: 18, backgroundColor: '#0F8A5F', alignItems: 'center', justifyContent: 'center' }, saveText: { color: '#fff', fontWeight: '900', fontSize: 15 }, backButton: { marginTop: 10, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, backText: { color: '#52645C', fontWeight: '800' },
-  errorBox: { borderRadius: 14, padding: 12, backgroundColor: '#FFF0EE' }, successBox: { borderRadius: 14, padding: 12, backgroundColor: '#E8F7F1' }, error: { color: '#A13A36', fontSize: 13 }, success: { color: '#0F7A55', fontSize: 13, fontWeight: '800' },
+  errorBox: { borderRadius: 14, padding: 12, backgroundColor: '#FFF0EE' }, successBox: { borderRadius: 14, padding: 12, backgroundColor: '#E8F7F1' }, error: { color: '#A13A36', fontSize: 13 }, success: { color: '#0F7A55', fontSize: 13, fontWeight: '800' }, disabled: { opacity: 0.5 },
 });

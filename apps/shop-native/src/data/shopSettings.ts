@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { formatSupabaseError, logSupabaseError } from './supabaseError';
 
 export type ShopHours = Record<string, { open?: string; close?: string; closed?: boolean }>;
 
@@ -39,18 +40,26 @@ export async function getOwnedShopSettings(): Promise<ShopSettings | null> {
   const { data: staff, error: staffError } = await supabase
     .from('shop_staff')
     .select('shop_id')
-    .eq('role', 'owner')
     .limit(1)
     .maybeSingle();
-  if (staffError) throw staffError;
+  if (staffError) {
+    logSupabaseError('getOwnedShopSettings.staff', staffError);
+    throw new Error(formatSupabaseError(staffError, 'โหลดสิทธิ์ร้านไม่สำเร็จ'));
+  }
   if (!staff?.shop_id) return null;
 
   const { data, error } = await supabase.from('shops').select(COLS).eq('shop_id', staff.shop_id).maybeSingle();
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('getOwnedShopSettings.shop', error);
+    throw new Error(formatSupabaseError(error, 'โหลดข้อมูลร้านไม่สำเร็จ'));
+  }
   return (data as ShopSettings | null) ?? null;
 }
 
 export async function updateShopSettings(shopId: string, patch: ShopSettingsPatch): Promise<void> {
   const { error } = await supabase.from('shops').update(patch).eq('shop_id', shopId);
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('updateShopSettings', error);
+    throw new Error(formatSupabaseError(error, 'บันทึกข้อมูลร้านไม่สำเร็จ'));
+  }
 }

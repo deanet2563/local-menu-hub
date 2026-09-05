@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { getOwnedShopProfile } from '../../src/data/shopProfile';
-import { loadShopCustomizeGroups, loadShopMenuCategories, type ShopCustomizeGroup, type ShopMenuCategory } from '../../src/data/shopMenuConfig';
+import { loadShopCustomizeGroupsForMenu, loadShopMenuCategoriesForMenu, type ShopCustomizeGroup, type ShopMenuCategory } from '../../src/data/shopMenuConfig';
 import { loadMenuCustomizeAssignments, loadShopMenuItems, replaceMenuCustomizeAssignments, updateShopMenuItem, type ShopMenuItem } from '../../src/data/shopMenuItems';
+import { activeCustomizeGroupsForCategory } from '../../src/data/shopMenuConfigHelpers';
 
 export default function MenuEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,7 +14,7 @@ export default function MenuEditScreen() {
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [available, setAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,26 +28,39 @@ export default function MenuEditScreen() {
       if (!shop) throw new Error('ไม่พบร้านของบัญชีนี้');
       const [items, categoryRows, groupRows, assignments] = await Promise.all([
         loadShopMenuItems(shop.shop_id),
-        loadShopMenuCategories(shop.shop_id),
-        loadShopCustomizeGroups(shop.shop_id),
+        loadShopMenuCategoriesForMenu(shop.shop_id),
+        loadShopCustomizeGroupsForMenu(shop.shop_id),
         loadMenuCustomizeAssignments(id),
       ]);
       const found = items.find((row) => row.item_id === id) ?? null;
       if (!found) throw new Error('ไม่พบเมนูนี้');
+      const activeCategories = categoryRows.filter((row) => row.is_active);
+      const matchedCategory = activeCategories.find((row) => row.name === found.category) ?? null;
+      const activeGroups = groupRows.filter((row) => row.is_active);
+      const validGroupIds = new Set(activeCustomizeGroupsForCategory(activeGroups, matchedCategory?.category_id ?? null).map((group) => group.group_id));
       setItem(found);
       setName(found.name);
       setPrice(String(Number(found.price)));
-      setCategory(found.category);
+      setCategoryId(matchedCategory?.category_id ?? null);
       setAvailable(found.is_available);
-      setCategories(categoryRows.filter((row) => row.is_active));
-      setGroups(groupRows.filter((row) => row.is_active));
-      setSelectedGroups(assignments.map((row) => row.group_id));
+      setCategories(activeCategories);
+      setGroups(activeGroups);
+      setSelectedGroups(assignments.map((row) => row.group_id).filter((groupId) => validGroupIds.has(groupId)));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'โหลดเมนูไม่สำเร็จ');
     } finally { setLoading(false); }
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const selectedCategory = useMemo(() => categories.find((row) => row.category_id === categoryId) ?? null, [categories, categoryId]);
+  const availableGroups = useMemo(() => activeCustomizeGroupsForCategory(groups, categoryId), [groups, categoryId]);
+
+  function chooseCategory(next: ShopMenuCategory) {
+    const nextId = categoryId === next.category_id ? null : next.category_id;
+    setCategoryId(nextId);
+    setSelectedGroups((current) => current.filter((id) => activeCustomizeGroupsForCategory(groups, nextId).some((group) => group.group_id === id)));
+  }
 
   function toggleGroup(groupId: string) {
     setSelectedGroups((old) => old.includes(groupId) ? old.filter((value) => value !== groupId) : [...old, groupId]);
@@ -55,17 +69,18 @@ export default function MenuEditScreen() {
   async function save() {
     if (!id || !item || saving) return;
     const nextPrice = Number(price);
+    const validSelectedGroups = selectedGroups.filter((groupId) => availableGroups.some((group) => group.group_id === groupId));
     setSaving(true); setError(null);
     try {
-      await updateShopMenuItem(id, { name, price: nextPrice, category, is_available: available });
-      await replaceMenuCustomizeAssignments(id, selectedGroups);
+      await updateShopMenuItem(id, { name, price: nextPrice, category: selectedCategory?.name ?? null, is_available: available });
+      await replaceMenuCustomizeAssignments(id, validSelectedGroups);
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'บันทึกเมนูไม่สำเร็จ');
     } finally { setSaving(false); }
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดเมนู…</Text></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color="#0F8A5F" /><Text style={styles.muted}>กำลังโหลดเมนู...</Text></View>;
   if (!item) return <View style={styles.center}><Text style={styles.error}>{error || 'ไม่พบเมนู'}</Text></View>;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -80,26 +95,26 @@ export default function MenuEditScreen() {
       <TextInput value={name} onChangeText={setName} style={styles.input} />
       <Text style={styles.label}>ราคา</Text>
       <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" style={styles.input} />
-      <View style={styles.availableRow}><View style={{ flex: 1 }}><Text style={styles.rowTitle}>เปิดขาย</Text><Text style={styles.rowNote}>ปิดแล้วสินค้ายังแสดงได้ แต่ต้องแสดง Tag สินค้าหมด/สั่งไม่ได้ใน Customer UI</Text></View><Switch value={available} onValueChange={setAvailable} trackColor={{ true: '#8ED4BA' }} thumbColor={available ? '#0F8A5F' : undefined} /></View>
+      <View style={styles.availableRow}><View style={{ flex: 1 }}><Text style={styles.rowTitle}>เปิดขาย</Text><Text style={styles.rowNote}>ปิดแล้วสินค้าแสดงเป็นหมด/สั่งไม่ได้ใน Customer UI</Text></View><Switch value={available} onValueChange={setAvailable} trackColor={{ true: '#8ED4BA' }} thumbColor={available ? '#0F8A5F' : undefined} /></View>
     </View>
 
     <View style={styles.card}>
       <Text style={styles.cardTitle}>หมวดหมู่</Text>
-      <View style={styles.chips}>{categories.map((row) => <Pressable key={row.category_id} onPress={() => setCategory(category === row.name ? null : row.name)} style={[styles.chip, category === row.name && styles.chipSelected]}><Text style={[styles.chipText, category === row.name && styles.chipTextSelected]}>{row.name}</Text></Pressable>)}</View>
+      <View style={styles.chips}>{categories.map((row) => <Pressable key={row.category_id} onPress={() => chooseCategory(row)} style={[styles.chip, categoryId === row.category_id && styles.chipSelected]}><Text style={[styles.chipText, categoryId === row.category_id && styles.chipTextSelected]}>{row.name}</Text></Pressable>)}</View>
       {categories.length === 0 ? <Text style={styles.helper}>ยังไม่มีหมวดหมู่ที่เปิดใช้งาน</Text> : null}
     </View>
 
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>All Customize Options</Text>
-      <Text style={styles.helper}>เลือกชุดจากคลังกลางของร้าน เมนูนี้จะใช้เฉพาะชุดที่เลือกไว้</Text>
-      <View style={styles.groupList}>{groups.map((group) => {
+      <Text style={styles.cardTitle}>Customize Options</Text>
+      <Text style={styles.helper}>{selectedCategory ? `เลือกได้เฉพาะชุดตัวเลือกในหมวด ${selectedCategory.name}` : 'เลือกหมวดหมู่ก่อนเพื่อแสดงชุดตัวเลือกที่ใช้ได้'}</Text>
+      <View style={styles.groupList}>{availableGroups.map((group) => {
         const selected = selectedGroups.includes(group.group_id);
         return <Pressable key={group.group_id} onPress={() => toggleGroup(group.group_id)} style={[styles.groupCard, selected && styles.groupSelected]}>
           <View style={styles.checkBox}>{selected ? <Text style={styles.check}>✓</Text> : null}</View>
-          <View style={{ flex: 1 }}><Text style={[styles.groupSection, selected && styles.selectedText]}>{group.section_name}</Text><Text style={[styles.groupName, selected && styles.selectedText]}>{group.name}</Text><Text style={[styles.groupOptions, selected && styles.selectedMuted]}>{group.shop_customize_options.filter((o) => o.is_active).map((o) => o.label).join(' · ') || 'ยังไม่มีตัวเลือก'}</Text></View>
+          <View style={{ flex: 1 }}><Text style={[styles.groupSection, selected && styles.selectedText]}>{selectedCategory?.name}</Text><Text style={[styles.groupName, selected && styles.selectedText]}>{group.name}</Text><Text style={[styles.groupOptions, selected && styles.selectedMuted]}>{group.shop_customize_options.filter((o) => o.is_active).map((o) => o.label).join(' · ') || 'ยังไม่มีตัวเลือก'}</Text></View>
         </Pressable>;
       })}</View>
-      {groups.length === 0 ? <Text style={styles.helper}>ยังไม่มี Customize Group ที่เปิดใช้งาน</Text> : null}
+      {availableGroups.length === 0 ? <Text style={styles.helper}>ยังไม่มี Customize Group ที่ใช้กับหมวดนี้</Text> : null}
     </View>
 
     <Pressable disabled={saving} onPress={() => void save()} style={({ pressed }) => [styles.saveButton, saving && styles.disabled, pressed && styles.pressed]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>บันทึกการแก้ไข</Text>}</Pressable>

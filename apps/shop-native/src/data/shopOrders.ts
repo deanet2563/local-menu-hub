@@ -36,7 +36,6 @@ export async function getOwnedShopId(): Promise<string | null> {
   const { data, error } = await supabase
     .from('shop_staff')
     .select('shop_id')
-    .eq('role', 'owner')
     .limit(1)
     .maybeSingle();
 

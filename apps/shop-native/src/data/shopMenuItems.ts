@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { formatSupabaseError, isMissingTableError, logSupabaseError } from './supabaseError';
 
 export type ShopMenuItem = {
   item_id: string;
@@ -26,7 +27,10 @@ export async function loadShopMenuItems(shopId: string): Promise<ShopMenuItem[]>
     .eq('shop_id', shopId)
     .order('category')
     .order('name');
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('loadShopMenuItems', error);
+    throw new Error(formatSupabaseError(error, 'โหลดเมนูไม่สำเร็จ'), { cause: error });
+  }
   return (data as ShopMenuItem[] | null) ?? [];
 }
 
@@ -52,7 +56,10 @@ export async function createShopMenuItem(input: {
     })
     .select('item_id')
     .single();
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('createShopMenuItem.insert', error);
+    throw new Error(formatSupabaseError(error, 'เพิ่มเมนูไม่สำเร็จ'), { cause: error });
+  }
 
   const itemId = (data as { item_id: string }).item_id;
   if (input.customizeGroupIds.length > 0) {
@@ -66,7 +73,10 @@ export async function createShopMenuItem(input: {
         sort_order: index,
       })),
     );
-    if (assignmentError) throw assignmentError;
+    if (assignmentError) {
+      logSupabaseError('createShopMenuItem.assignCustomizeGroups', assignmentError);
+      throw new Error(formatSupabaseError(assignmentError, 'เพิ่มเมนูแล้ว แต่ผูก Customize Group ไม่สำเร็จ'), { cause: assignmentError });
+    }
   }
   return itemId;
 }
@@ -80,7 +90,10 @@ export async function updateShopMenuItem(itemId: string, patch: Partial<Pick<Sho
   }
   if (patch.price !== undefined && (!Number.isFinite(patch.price) || patch.price <= 0)) throw new Error('ราคาต้องมากกว่า 0');
   const { error } = await supabase.from('menu_items').update(next).eq('item_id', itemId);
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('updateShopMenuItem', error);
+    throw new Error(formatSupabaseError(error, 'บันทึกเมนูไม่สำเร็จ'), { cause: error });
+  }
 }
 
 export async function loadMenuCustomizeAssignments(itemId: string): Promise<MenuCustomizeAssignment[]> {
@@ -89,16 +102,27 @@ export async function loadMenuCustomizeAssignments(itemId: string): Promise<Menu
     .select('item_id,group_id,is_required,min_select,max_select,sort_order')
     .eq('item_id', itemId)
     .order('sort_order');
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('loadMenuCustomizeAssignments', error);
+    if (isMissingTableError(error, 'menu_item_customize_groups')) return [];
+    throw new Error(formatSupabaseError(error, 'โหลด Customize ของเมนูไม่สำเร็จ'), { cause: error });
+  }
   return (data as MenuCustomizeAssignment[] | null) ?? [];
 }
 
 export async function replaceMenuCustomizeAssignments(itemId: string, groupIds: string[]): Promise<void> {
   const { error: deleteError } = await supabase.from('menu_item_customize_groups').delete().eq('item_id', itemId);
-  if (deleteError) throw deleteError;
+  if (deleteError) {
+    logSupabaseError('replaceMenuCustomizeAssignments.delete', deleteError);
+    if (isMissingTableError(deleteError, 'menu_item_customize_groups') && groupIds.length === 0) return;
+    throw new Error(formatSupabaseError(deleteError, 'บันทึก Customize ของเมนูไม่สำเร็จ'), { cause: deleteError });
+  }
   if (groupIds.length === 0) return;
   const { error } = await supabase.from('menu_item_customize_groups').insert(
     groupIds.map((groupId, index) => ({ item_id: itemId, group_id: groupId, is_required: false, min_select: 0, max_select: 1, sort_order: index })),
   );
-  if (error) throw error;
+  if (error) {
+    logSupabaseError('replaceMenuCustomizeAssignments.insert', error);
+    throw new Error(formatSupabaseError(error, 'บันทึก Customize ของเมนูไม่สำเร็จ'), { cause: error });
+  }
 }

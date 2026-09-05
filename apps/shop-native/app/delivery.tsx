@@ -40,12 +40,17 @@ export default function DeliverySettingsScreen() {
   useEffect(() => { void load(); }, [load]);
 
   function patch(next: Partial<ShopDeliverySettings>) {
+    if (settings?.migration_required) return;
     setSettings((current) => current ? ({ ...current, ...next }) : current);
     setSaved(false);
   }
 
   async function save() {
     if (!shopId || !settings || saving) return;
+    if (settings.migration_required) {
+      setError('ต้องอัปเดตฐานข้อมูลค่าส่งลูกค้าก่อนบันทึกหน้านี้');
+      return;
+    }
     const fee = Number(flatFee || '0');
     const freeMinimum = freeMin.trim() ? Number(freeMin) : null;
     if (!Number.isFinite(fee) || fee < 0) return setError('ค่าส่งไม่ถูกต้อง');
@@ -77,6 +82,7 @@ export default function DeliverySettingsScreen() {
   };
   const subtotal = Number(previewSubtotal || '0') || 0;
   const previewFee = customerDeliveryFeePreview(previewSettings, subtotal, 45);
+  const migrationRequired = settings.migration_required === true;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>DELIVERY SETTINGS</Text>
@@ -85,36 +91,37 @@ export default function DeliverySettingsScreen() {
 
     {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
     {saved ? <View style={styles.successBox}><Text style={styles.success}>บันทึกการตั้งค่าการส่งแล้ว</Text></View> : null}
+    {migrationRequired ? <View style={styles.warningBox}><Text style={styles.warning}>ต้องอัปเดตฐานข้อมูลค่าส่งลูกค้าก่อนบันทึกหน้านี้</Text></View> : null}
 
     <View style={styles.card}>
       <Text style={styles.cardTitle}>วิธีรับสินค้า</Text>
-      <Row title="ลูกค้ามารับที่ร้าน" note="แสดงตัวเลือก Pickup ใน Checkout" value={settings.pickup_enabled} onChange={(value) => patch({ pickup_enabled: value })} />
-      <Row title="จัดส่ง" note="เปิดตัวเลือก Delivery ใน Checkout" value={settings.delivery_enabled} onChange={(value) => patch({ delivery_enabled: value })} />
+      <Row title="ลูกค้ามารับที่ร้าน" note="แสดงตัวเลือก Pickup ใน Checkout" value={settings.pickup_enabled} disabled={migrationRequired} onChange={(value) => patch({ pickup_enabled: value })} />
+      <Row title="จัดส่ง" note="เปิดตัวเลือก Delivery ใน Checkout" value={settings.delivery_enabled} disabled={migrationRequired} onChange={(value) => patch({ delivery_enabled: value })} />
     </View>
 
     <View style={styles.card}>
       <Text style={styles.cardTitle}>ค่าส่งที่ลูกค้าเห็น</Text>
-      {MODES.map((mode) => <Pressable key={mode.value} onPress={() => patch({ delivery_pricing_mode: mode.value })} style={[styles.modeCard, settings.delivery_pricing_mode === mode.value && styles.modeSelected]}>
+      {MODES.map((mode) => <Pressable key={mode.value} disabled={migrationRequired} onPress={() => patch({ delivery_pricing_mode: mode.value })} style={[styles.modeCard, settings.delivery_pricing_mode === mode.value && styles.modeSelected, migrationRequired && styles.disabled]}>
         <View style={[styles.radio, settings.delivery_pricing_mode === mode.value && styles.radioSelected]} />
         <View style={{ flex: 1 }}><Text style={[styles.modeTitle, settings.delivery_pricing_mode === mode.value && styles.modeTitleSelected]}>{mode.title}</Text><Text style={[styles.modeNote, settings.delivery_pricing_mode === mode.value && styles.modeNoteSelected]}>{mode.note}</Text></View>
       </Pressable>)}
 
       {settings.delivery_pricing_mode === 'flat' ? <>
         <Text style={styles.label}>ค่าส่งของร้าน (บาท)</Text>
-        <TextInput value={flatFee} onChangeText={(value) => { setFlatFee(value); setSaved(false); }} keyboardType="numeric" style={styles.input} placeholder="เช่น 30" />
+        <TextInput value={flatFee} editable={!migrationRequired} onChangeText={(value) => { setFlatFee(value); setSaved(false); }} keyboardType="numeric" style={styles.input} placeholder="เช่น 30" />
       </> : null}
 
       {settings.delivery_pricing_mode !== 'free' ? <>
         <Text style={styles.label}>ส่งฟรีเมื่อยอดถึง (ไม่บังคับ)</Text>
-        <TextInput value={freeMin} onChangeText={(value) => { setFreeMin(value); setSaved(false); }} keyboardType="numeric" style={styles.input} placeholder="เช่น 300 · เว้นว่างถ้าไม่ใช้" />
+        <TextInput value={freeMin} editable={!migrationRequired} onChangeText={(value) => { setFreeMin(value); setSaved(false); }} keyboardType="numeric" style={styles.input} placeholder="เช่น 300 · เว้นว่างถ้าไม่ใช้" />
       </> : null}
     </View>
 
     <View style={styles.card}>
       <Text style={styles.cardTitle}>พื้นที่และ Rider</Text>
       <Text style={styles.label}>รายละเอียดพื้นที่ส่ง</Text>
-      <TextInput value={serviceArea} onChangeText={(value) => { setServiceArea(value); setSaved(false); }} style={[styles.input, styles.multiline]} multiline placeholder="เช่น ภายในหมู่บ้านสัมมากรและพื้นที่ใกล้เคียง" />
-      <Row title="อนุญาตเรียก MyTree Rider" note="หลังร้านยืนยันยอด + ออเดอร์เสร็จ จึงส่งคำขอ Rider ได้" value={settings.rider_request_enabled} onChange={(value) => patch({ rider_request_enabled: value })} />
+      <TextInput value={serviceArea} editable={!migrationRequired} onChangeText={(value) => { setServiceArea(value); setSaved(false); }} style={[styles.input, styles.multiline]} multiline placeholder="เช่น ภายในหมู่บ้านสัมมากรและพื้นที่ใกล้เคียง" />
+      <Row title="อนุญาตเรียก MyTree Rider" note="หลังร้านยืนยันยอด + ออเดอร์เสร็จ จึงส่งคำขอ Rider ได้" value={settings.rider_request_enabled} disabled={migrationRequired} onChange={(value) => patch({ rider_request_enabled: value })} />
 
       <View style={styles.tabs}><View style={[styles.tab, styles.tabActive]}><Text style={styles.tabActiveText}>Rider ที่ร้านติดต่อเอง</Text></View><View style={styles.tab}><Text style={styles.tabText}>Rider Directory</Text></View></View>
       <Text style={styles.tabHint}>โครงแท็บเก็บไว้ตาม Shop flow เดิม ส่วนการเรียกงานจริงจะใช้ Rider flow กลาง: Shop Request → First Accept → Auto Lock → Shop Notified</Text>
@@ -132,12 +139,12 @@ export default function DeliverySettingsScreen() {
       {settings.delivery_pricing_mode === 'distance' ? <Text style={styles.distanceNote}>ตัวอย่าง Preview ใช้ค่าส่งระยะทาง 45 บาท; Checkout จริงจะใช้ quote จากเส้นทางจริง</Text> : null}
     </View>
 
-    <Pressable disabled={saving} onPress={() => void save()} style={({ pressed }) => [styles.saveButton, pressed && styles.pressed, saving && styles.disabled]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>บันทึกการตั้งค่าการส่ง</Text>}</Pressable>
+    <Pressable disabled={saving || migrationRequired} onPress={() => void save()} style={({ pressed }) => [styles.saveButton, pressed && styles.pressed, (saving || migrationRequired) && styles.disabled]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>บันทึกการตั้งค่าการส่ง</Text>}</Pressable>
   </ScrollView>;
 }
 
-function Row({ title, note, value, onChange }: { title: string; note: string; value: boolean; onChange: (value: boolean) => void }) {
-  return <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowNote}>{note}</Text></View><Switch value={value} onValueChange={onChange} trackColor={{ true: '#8ED4BA' }} thumbColor={value ? '#0F8A5F' : undefined} /></View>;
+function Row({ title, note, value, disabled, onChange }: { title: string; note: string; value: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+  return <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowNote}>{note}</Text></View><Switch value={value} disabled={disabled} onValueChange={onChange} trackColor={{ true: '#8ED4BA' }} thumbColor={value ? '#0F8A5F' : undefined} /></View>;
 }
 
 const styles = StyleSheet.create({
@@ -150,5 +157,5 @@ const styles = StyleSheet.create({
   tabs: { marginTop: 14, flexDirection: 'row', gap: 8 }, tab: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#EFF3F1' }, tabActive: { backgroundColor: '#0F8A5F' }, tabText: { color: '#617169', fontSize: 11, fontWeight: '800' }, tabActiveText: { color: '#fff', fontSize: 11, fontWeight: '900' }, tabHint: { marginTop: 8, color: '#84928B', fontSize: 11, lineHeight: 17 },
   previewCard: { marginTop: 16, padding: 17, borderRadius: 22, backgroundColor: '#12261E' }, previewEyebrow: { color: '#65D3A9', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 }, previewTitle: { marginTop: 4, color: '#fff', fontSize: 20, fontWeight: '900' }, labelDark: { marginTop: 13, color: '#B7C8C0', fontSize: 11, fontWeight: '800' }, previewInput: { marginTop: 6, minHeight: 43, borderRadius: 12, paddingHorizontal: 12, backgroundColor: '#fff', color: '#12261E' }, totalRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' }, previewLabel: { color: '#BFCFC8' }, previewValue: { color: '#fff', fontWeight: '800' }, grandRow: { marginTop: 14, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#345447' }, grandLabel: { color: '#fff', fontWeight: '900', fontSize: 16 }, grandValue: { color: '#fff', fontWeight: '900', fontSize: 20 }, confirmMock: { marginTop: 16, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, confirmMockText: { color: '#fff', fontWeight: '900' }, distanceNote: { marginTop: 9, color: '#94AFA3', fontSize: 10, lineHeight: 15 },
   saveButton: { marginTop: 18, minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, saveText: { color: '#fff', fontWeight: '900', fontSize: 15 },
-  errorBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' }, error: { color: '#A13A36' }, successBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#EAF7F1' }, success: { color: '#0F7653' }, pressed: { opacity: 0.72 }, disabled: { opacity: 0.5 },
+  errorBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#FFF0EE' }, error: { color: '#A13A36' }, successBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#EAF7F1' }, success: { color: '#0F7653' }, warningBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#FFF8E6' }, warning: { color: '#8A5A00', fontWeight: '800' }, pressed: { opacity: 0.72 }, disabled: { opacity: 0.5 },
 });

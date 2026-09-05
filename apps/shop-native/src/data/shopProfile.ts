@@ -25,7 +25,6 @@ export async function getOwnedShopProfile(): Promise<OwnedShopProfile | null> {
   const { data: staff, error: staffError } = await supabase
     .from('shop_staff')
     .select('shop_id')
-    .eq('role', 'owner')
     .limit(1)
     .maybeSingle();
 
