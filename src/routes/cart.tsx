@@ -18,6 +18,8 @@ import {
   type ConfirmedDeliveryPoint,
   type DeliveryRouteQuote,
 } from "@/lib/deliveryLocation";
+import { e2eDiagnosticsEnabled, readLiffDiagnostics, type LiffDiagnosticSnapshot } from "@/lib/e2eDiagnostics";
+import { validateCartCustomizeRequirements } from "@/lib/cartCustomizeValidation";
 import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
 import { submitOrder } from "@/lib/order";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
@@ -40,6 +42,18 @@ type ShopCheckout = {
 
 type OrderTiming = "now" | "preorder";
 type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premises" | "locality" | "deliveryPoint", string>>;
+
+function isDeliveryOnlyCheckoutError(message: string | null): boolean {
+  if (!message) return false;
+  return [
+    "ค่าส่ง",
+    "เส้นทาง",
+    "จุดส่ง",
+    "ตำแหน่ง",
+    "Google Maps link",
+    "latitude, longitude",
+  ].some((part) => message.includes(part));
+}
 
 function toBangkokInput(iso: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -118,6 +132,7 @@ function CartCheckout() {
   const [slipSuccess, setSlipSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
+  const [liffDiagnostics, setLiffDiagnostics] = useState<LiffDiagnosticSnapshot | null>(null);
   const [done, setDone] = useState(false);
   const slipInputRef = useRef<HTMLInputElement | null>(null);
   const restoredDraftRef = useRef(false);
@@ -127,6 +142,7 @@ function CartCheckout() {
 
   const availability = useMemo(() => shop ? getShopAvailability(shop.is_open, shop.business_hours) : null, [shop]);
   const deliveryCharge = customerDeliveryChargeForCheckout(fulfillment, routeQuote);
+  const visibleError = fulfillment === "pickup" && isDeliveryOnlyCheckoutError(error) ? null : error;
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ key: string; name: string; isSet: boolean; items: typeof c.items; count: number; total: number }> = [];
@@ -172,6 +188,30 @@ function CartCheckout() {
       setTiming("now");
     }
   }, [shop, availability]);
+
+  useEffect(() => {
+    if (!e2eDiagnosticsEnabled()) return;
+    let active = true;
+    void readLiffDiagnostics().then((snapshot) => {
+      if (active) setLiffDiagnostics(snapshot);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (fulfillment !== "pickup") return;
+    quoteSeqRef.current += 1;
+    locationSeqRef.current += 1;
+    latestQuoteKeyRef.current = null;
+    setCandidatePoint(null);
+    setDeliveryPoint(null);
+    setRouteQuote(null);
+    setQuotingRoute(false);
+    setResolvingLocation(false);
+    setLocating(false);
+    setFieldErrors((current) => ({ ...current, deliveryPoint: undefined, premises: undefined, locality: undefined }));
+    setError((current) => isDeliveryOnlyCheckoutError(current) ? null : current);
+  }, [fulfillment]);
 
   function changeFulfillment(next: "delivery" | "pickup") {
     setFulfillment(next);
@@ -241,7 +281,7 @@ function CartCheckout() {
           restoredDraftRef.current = true;
           setCustomerName(draft.customerName);
           setCustomerPhone(draft.customerPhone);
-          setFulfillment(draft.fulfillment);
+          changeFulfillment(draft.fulfillment);
           setPayment(draft.payment);
           setTiming(draft.timing);
           setRequestedForLocal(draft.requestedForLocal);
@@ -442,6 +482,9 @@ function CartCheckout() {
     const requestedFor = timing === "preorder" ? bangkokInputToIso(requestedForLocal) : null;
     if (timing === "preorder" && !requestedFor) return setError("กรุณาเลือกวันและเวลารับ/ส่ง");
 
+    const cartCustomizeValidation = await validateCartCustomizeRequirements(c.items);
+    if (!cartCustomizeValidation.ok) return setError(cartCustomizeValidation.message);
+
     setSubmitting(true);
     setError(null);
     const cid = await getCurrentCustomerId();
@@ -543,7 +586,19 @@ function CartCheckout() {
       {completedPayment === "qr_transfer" && !completedSubId && (
         <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-700">สร้างออเดอร์แล้ว แต่ยังไม่พบเลขออเดอร์ย่อยสำหรับแนบสลิป กรุณาแนบสลิปจากประวัติออเดอร์</p>
       )}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {visibleError && <p className="text-sm text-red-500">{visibleError}</p>}
+
+      {liffDiagnostics && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-[11px] leading-5 text-amber-900">
+          <p>LIFF ID: {liffDiagnostics.liffId}</p>
+          <p>isLoggedIn: {String(liffDiagnostics.isLoggedIn)}</p>
+          <p>isInClient: {String(liffDiagnostics.isInClient)}</p>
+          <p>context: {liffDiagnostics.contextType ?? "null"}</p>
+          <p>host: {liffDiagnostics.host}</p>
+          <p>build: {liffDiagnostics.build}</p>
+          {liffDiagnostics.error && <p>error: {liffDiagnostics.error}</p>}
+        </div>
+      )}
       <Link to="/orders" className="text-orange-500 underline block mt-2">ดูสถานะออเดอร์</Link>
       <Link to="/" className="text-gray-400 underline block text-sm">กลับหน้าแรก</Link>
     </div>
@@ -686,7 +741,7 @@ function CartCheckout() {
             </div>
           ) : (
             <div className="space-y-3">
-              <DeliveryLocationPicker shopId={checkoutShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
+              <DeliveryLocationPicker shopId={checkoutShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} debug={e2eDiagnosticsEnabled()} />
               <button type="button" onClick={captureDeliveryPoint} disabled={locating || quotingRoute} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-800 disabled:opacity-50">{locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบัน"}</button>
               <div className="rounded-lg border border-gray-200 bg-white">
                 <button type="button" onClick={() => setFallbackExpanded((current) => !current)} className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-gray-800">

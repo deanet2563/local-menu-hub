@@ -7,6 +7,32 @@ import { loadItemOptionGroups, type OrderingOptionGroup } from "@/lib/ordering-c
 // would reject. Legacy option groups remain fully available.
 const REUSABLE_SHOP_CUSTOMIZE_ENABLED = import.meta.env.VITE_ENABLE_REUSABLE_SHOP_CUSTOMIZE === "true";
 
+type ReusableCustomizeLink = {
+  group_id: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+};
+
+type ReusableCustomizeGroupRow = {
+  group_id: string;
+  shop_id: string;
+  section_name: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+type ReusableCustomizeOptionRow = {
+  option_id: string;
+  group_id: string;
+  label: string;
+  price_delta: number;
+  sort_order: number;
+  is_active: boolean;
+};
+
 export async function loadCustomerItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
   const legacy = await loadItemOptionGroups(itemId).catch(() => [] as OrderingOptionGroup[]);
   if (legacy.length) return legacy;
@@ -19,7 +45,7 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
     .order("sort_order");
   if (linkError) throw linkError;
 
-  const typedLinks = (links as Array<{ group_id: string; is_required: boolean; min_select: number; max_select: number; sort_order: number }> | null) ?? [];
+  const typedLinks = (links as ReusableCustomizeLink[] | null) ?? [];
   if (!typedLinks.length) return [];
   const ids = typedLinks.map((row) => row.group_id);
 
@@ -39,11 +65,21 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
   if (groupError) throw groupError;
   if (optionError) throw optionError;
 
-  const groupRows = (groups as Array<{ group_id: string; shop_id: string; section_name: string; name: string; sort_order: number; is_active: boolean }> | null) ?? [];
-  const optionRows = (options as Array<{ option_id: string; group_id: string; label: string; price_delta: number; sort_order: number; is_active: boolean }> | null) ?? [];
-  const linkMap = new Map(typedLinks.map((row) => [row.group_id, row]));
+  return buildCustomerReusableOptionGroups({
+    links: typedLinks,
+    groups: (groups as ReusableCustomizeGroupRow[] | null) ?? [],
+    options: (options as ReusableCustomizeOptionRow[] | null) ?? [],
+  });
+}
 
-  return groupRows
+export function buildCustomerReusableOptionGroups(input: {
+  links: ReusableCustomizeLink[];
+  groups: ReusableCustomizeGroupRow[];
+  options: ReusableCustomizeOptionRow[];
+}): OrderingOptionGroup[] {
+  const linkMap = new Map(input.links.map((row) => [row.group_id, row]));
+
+  return input.groups
     .map((group): OrderingOptionGroup | null => {
       const link = linkMap.get(group.group_id);
       if (!link) return null;
@@ -57,7 +93,7 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
         is_required: link.is_required,
         is_active: group.is_active,
         sort_order: link.sort_order,
-        options: optionRows
+        options: input.options
           .filter((option) => option.group_id === group.group_id)
           .map((option) => ({
             option_id: option.option_id,

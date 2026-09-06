@@ -78,6 +78,7 @@ type MarkerLibraryState = "not_requested" | "loading" | "loaded" | "unavailable"
 declare global {
   interface Window {
     google?: GoogleMapsApi;
+    gm_authFailure?: () => void;
   }
 }
 
@@ -92,6 +93,7 @@ type Props = {
 const DEFAULT_CENTER = { lat: 13.777, lng: 100.674 };
 let mapsLoadPromise: Promise<GoogleMapsApi> | null = null;
 let markerLibraryLoadPromise: Promise<GoogleMarkerLibrary | null> | null = null;
+const mapsAuthFailureHandlers = new Set<() => void>();
 
 function getMapsApiKey(): string {
   return import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? "";
@@ -128,6 +130,17 @@ function loadGoogleMaps(): Promise<GoogleMapsApi> {
   });
 
   return mapsLoadPromise;
+}
+
+function subscribeMapsAuthFailure(handler: () => void): () => void {
+  mapsAuthFailureHandlers.add(handler);
+  window.gm_authFailure = () => {
+    for (const current of mapsAuthFailureHandlers) current();
+  };
+  return () => {
+    mapsAuthFailureHandlers.delete(handler);
+    if (mapsAuthFailureHandlers.size === 0) delete window.gm_authFailure;
+  };
 }
 
 async function loadGoogleMarkerLibrary(google: GoogleMapsApi): Promise<GoogleMarkerLibrary | null> {
@@ -291,6 +304,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     let disposed = false;
+    const unsubscribeAuthFailure = subscribeMapsAuthFailure(() => {
+      if (!disposed) {
+        setMapsError("Google Maps key ไม่อนุญาตโดเมนทดสอบนี้ กรุณาเพิ่ม hostname ของ E2E preview ใน HTTP referrer ของ Browser key");
+      }
+    });
     void loadGoogleMaps()
       .then((google) => {
         if (disposed || !mapElementRef.current || mapRef.current) return;
@@ -338,6 +356,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       });
     return () => {
       disposed = true;
+      unsubscribeAuthFailure();
       merchantRequestSeqRef.current += 1;
       cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());

@@ -91,7 +91,7 @@ export async function submitOrder(
     if (isOrderingPreview()) {
       return {
         ok: false,
-        error: "โหมดทดสอบหน้าเว็บยังไม่ได้เปิดผ่าน LIFF staging จึงยังไม่ส่งคำสั่งซื้อจริง",
+        error: "กรุณาเปิดลิงก์ทดสอบผ่าน LINE LIFF ในแอป LINE ก่อนส่งคำสั่งซื้อจริง",
       };
     }
     liff.login();
