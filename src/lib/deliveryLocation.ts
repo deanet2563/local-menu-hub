@@ -84,8 +84,8 @@ type QuoteBinding = {
 
 let latestQuoteBinding: QuoteBinding | null = null;
 
-function currentCartQuoteItems() {
-  return cart.getState().items.map((item) => ({
+function currentCartQuoteItems(shopId?: string) {
+  return cart.getState().items.filter((item) => !shopId || item.shopId === shopId).map((item) => ({
     lineId: item.lineId,
     kind: item.kind,
     itemId: item.itemId,
@@ -99,8 +99,8 @@ function currentCartQuoteItems() {
   }));
 }
 
-function currentCartQuoteSignature(): string {
-  return JSON.stringify(currentCartQuoteItems());
+function currentCartQuoteSignature(shopId?: string): string {
+  return JSON.stringify(currentCartQuoteItems(shopId));
 }
 
 export async function resolveDeliveryLocation(value: string, shopId?: string | null): Promise<ConfirmedDeliveryPoint> {
@@ -169,7 +169,7 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
   const idToken = liff.getIDToken();
   if (!idToken) throw new Error("ไม่พบ LINE idToken สำหรับคำนวณค่าส่ง");
 
-  const items = currentCartQuoteItems();
+  const items = currentCartQuoteItems(shopId);
   if (!items.length) throw new Error("ตะกร้าว่าง ไม่สามารถคำนวณค่าส่งได้");
   const cartSignature = JSON.stringify(items);
 
@@ -199,7 +199,7 @@ export function getDeliveryQuoteToken(shopId: string, lat: number | null, lng: n
   if (!binding || typeof lat !== "number" || typeof lng !== "number") return null;
   if (binding.shopId !== shopId) return null;
   if (Math.abs(binding.lat - lat) > 0.000001 || Math.abs(binding.lng - lng) > 0.000001) return null;
-  if (binding.cartSignature !== currentCartQuoteSignature()) return null;
+  if (binding.cartSignature !== currentCartQuoteSignature(shopId)) return null;
   return binding.token;
 }
 

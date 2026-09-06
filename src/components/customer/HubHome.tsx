@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase, isOrderingPreview } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
-
-// ============================================================
-// MyTree — Food-first hub. Public catalog browsing must not trigger LINE login.
-// Nearby shops are automatically refreshed on first load and after the app
-// returns to the foreground if the previous GPS fix is older than 2 minutes.
-// ============================================================
 
 type Shop = { shop_id: string; name: string; category: string | null; logo_url: string | null };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
 type LocationState = "idle" | "loading" | "ready" | "error";
-
 const LOCATION_REFRESH_MS = 2 * 60 * 1000;
+
+function ProductCard({ item, shopName }: { item: Item; shopName: string }) {
+  return <Link to="/shop/$shopId" params={{ shopId: item.shop_id }} className="w-40 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm active:scale-[.98]"><img src={item.image_url ?? ""} alt={item.name} loading="lazy" className="aspect-[4/3] w-full object-cover bg-slate-100" /><div className="p-3"><p className="truncate text-sm font-semibold text-slate-900">{item.name}</p><p className="mt-1 truncate text-xs text-slate-500">{shopName}</p><p className="mt-2 text-sm font-bold text-orange-600">฿{item.price}</p></div></Link>;
+}
+
+function CustomerNav({ count }: { count: number }) {
+  return <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur" aria-label="เมนูหลัก"><div className="mx-auto grid max-w-md grid-cols-5 text-center text-[11px] text-slate-500"><Link to="/" className="rounded-xl py-1.5 font-semibold text-orange-600"><span className="block text-lg leading-5">⌂</span>หน้าแรก</Link><Link to="/" className="rounded-xl py-1.5"><span className="block text-lg leading-5">⌕</span>ค้นหา</Link><Link to="/cart" className="relative rounded-xl py-1.5"><span className="block text-lg leading-5">▱</span>ตะกร้า{count > 0 && <span className="absolute left-1/2 top-0 ml-2 rounded-full bg-orange-500 px-1.5 text-[10px] text-white">{count}</span>}</Link><Link to="/orders" className="rounded-xl py-1.5"><span className="block text-lg leading-5">◷</span>ออเดอร์</Link><Link to="/account" className="rounded-xl py-1.5"><span className="block text-lg leading-5">◯</span>บัญชี</Link></div></nav>;
+}
 
 export function HubHome() {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -22,181 +23,25 @@ export function HubHome() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [openOnly, setOpenOnly] = useState(true);
   const [nearOrder, setNearOrder] = useState<string[] | null>(null);
   const [locationState, setLocationState] = useState<LocationState>("idle");
   const lastLocationAt = useRef(0);
   const locating = useRef(false);
   const c = useCart();
-  const staging = isOrderingPreview();
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: s }, { data: m }] = await Promise.all([
-        publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
-        publicSupabase
-          .from("menu_items")
-          .select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)")
-          .eq("is_available", true)
-          .eq("shops.is_open", true)
-          .eq("shops.is_approved", true)
-          .eq("shops.is_banned", false),
-      ]);
-      setShops((s as Shop[]) ?? []);
-      setItems((m as Item[]) ?? []);
-      setLoading(false);
-    })();
-  }, []);
+  useEffect(() => { (async () => { const [{ data: s }, { data: m }] = await Promise.all([publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false), publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)").eq("is_available", true).eq("shops.is_open", true).eq("shops.is_approved", true).eq("shops.is_banned", false)]); setShops((s as Shop[]) ?? []); setItems((m as Item[]) ?? []); setLoading(false); })(); }, []);
+  useEffect(() => { void refreshNearbyShops(); const onVisibilityChange = () => { if (document.visibilityState === "visible" && Date.now() - lastLocationAt.current >= LOCATION_REFRESH_MS) void refreshNearbyShops(); }; document.addEventListener("visibilitychange", onVisibilityChange); return () => document.removeEventListener("visibilitychange", onVisibilityChange); }, []);
+  async function refreshNearbyShops() { if (locating.current) return; locating.current = true; setLocationState("loading"); try { const loc = await getCurrentLocation(); const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng }); if (error) throw error; setNearOrder(data ? (data as { shop_id: string }[]).map((r) => r.shop_id) : null); lastLocationAt.current = Date.now(); setLocationState("ready"); } catch { setLocationState("error"); } finally { locating.current = false; } }
 
-  useEffect(() => {
-    void refreshNearbyShops();
+  const shopName = (id: string) => shops.find((shop) => shop.shop_id === id)?.name ?? "ร้าน MyTree";
+  const categories = useMemo(() => Array.from(new Set(items.map((item) => item.category).filter(Boolean))) as string[], [items]);
+  const orderedShops = useMemo(() => { const rank = nearOrder ? new Map(nearOrder.map((id, index) => [id, index])) : null; return [...shops].sort((a, b) => (rank?.get(a.shop_id) ?? 9999) - (rank?.get(b.shop_id) ?? 9999)); }, [nearOrder, shops]);
+  const visibleItems = useMemo(() => items.filter((item) => (!cat || item.category === cat) && (!q || item.name.includes(q) || shopName(item.shop_id).includes(q))), [cat, items, q, shops]);
+  const sections = useMemo(() => categories.slice(0, 5).map((category) => ({ category, items: (cat ? visibleItems : items).filter((item) => item.category === category).slice(0, 10) })).filter((section) => section.items.length > 0), [cat, categories, items, visibleItems]);
+  const filteredShops = openOnly ? orderedShops : shops;
+  if (loading) return <div className="min-h-screen bg-[#f7f7f3] p-5 text-sm text-slate-500">กำลังเตรียมร้านใกล้คุณ...</div>;
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastLocationAt.current < LOCATION_REFRESH_MS) return;
-      void refreshNearbyShops();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
-
-  const shopName = (id: string) => shops.find((x) => x.shop_id === id)?.name ?? "";
-  const cats = useMemo(
-    () => Array.from(new Set(items.map((i) => i.category).filter(Boolean))) as string[],
-    [items]
-  );
-  const filtered = items.filter(
-    (i) => (!cat || i.category === cat) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
-  );
-  const orderedShops = useMemo(() => {
-    if (!nearOrder) return shops;
-    const rank = new Map(nearOrder.map((shopId, index) => [shopId, index]));
-    return [...shops].sort((a, b) => {
-      const aRank = rank.get(a.shop_id) ?? Number.MAX_SAFE_INTEGER;
-      const bRank = rank.get(b.shop_id) ?? Number.MAX_SAFE_INTEGER;
-      return aRank - bRank;
-    });
-  }, [shops, nearOrder]);
-
-  async function refreshNearbyShops() {
-    if (locating.current) return;
-    locating.current = true;
-    setLocationState("loading");
-    try {
-      const loc = await getCurrentLocation();
-      const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
-      if (error) throw error;
-      if (data) setNearOrder((data as { shop_id: string }[]).map((r) => r.shop_id));
-      lastLocationAt.current = Date.now();
-      setLocationState("ready");
-    } catch {
-      setLocationState("error");
-    } finally {
-      locating.current = false;
-    }
-  }
-
-  if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
-
-  return (
-    <div className="pb-24">
-      <div className="p-4 space-y-3">
-        <h1 className="text-xl font-bold">MyTree 🌳</h1>
-
-        {staging && (
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 space-y-2">
-            <div>
-              <p className="text-sm font-semibold text-blue-800">🧪 Staging Tools</p>
-              <p className="text-xs text-blue-600">ใช้สำหรับทดสอบฝั่งร้าน โดยไม่กระทบ Rich Menu production</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Link to="/sweet/menu" className="rounded-xl bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white">
-                จัดการรายการ
-              </Link>
-              <Link to="/sweet/shop" className="rounded-xl bg-white px-3 py-2 text-center text-sm font-medium text-blue-700 border border-blue-200">
-                จัดการร้านค้า
-              </Link>
-            </div>
-          </div>
-        )}
-
-        <input
-          className="w-full rounded-lg border border-gray-200 p-2 text-sm"
-          placeholder="ค้นหาอาหาร หรือร้าน"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-gray-700">ร้านใกล้คุณ</p>
-            {locationState === "ready" && <p className="text-[11px] text-green-600">เรียงตามตำแหน่งปัจจุบันแล้ว</p>}
-            {locationState === "error" && <p className="text-[11px] text-gray-400">เปิดสิทธิ์ตำแหน่งเพื่อเรียงร้านที่ใกล้ที่สุด</p>}
-          </div>
-          <button
-            type="button"
-            onClick={() => void refreshNearbyShops()}
-            disabled={locationState === "loading"}
-            className="shrink-0 text-xs text-orange-500 disabled:opacity-50"
-          >
-            {locationState === "loading" ? "📍 กำลังค้นหา..." : "📍 อัปเดตตำแหน่ง"}
-          </button>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {orderedShops.map((s) => (
-            <Link key={s.shop_id} to="/shop/$shopId" params={{ shopId: s.shop_id }} className="shrink-0 w-20 text-center">
-              <img src={s.logo_url ?? ""} alt={s.name} className="w-16 h-16 rounded-full object-cover mx-auto bg-gray-100" />
-              <p className="text-xs mt-1 truncate">{s.name}</p>
-            </Link>
-          ))}
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setCat(null)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs ${!cat ? "bg-orange-500 text-white" : "bg-gray-100"}`}
-          >
-            ทั้งหมด
-          </button>
-          {cats.map((cc) => (
-            <button
-              key={cc}
-              onClick={() => setCat(cc)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs ${cat === cc ? "bg-orange-500 text-white" : "bg-gray-100"}`}
-            >
-              {cc}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 px-4">
-        {filtered.map((i) => (
-          <Link
-            key={i.item_id}
-            to="/shop/$shopId"
-            params={{ shopId: i.shop_id }}
-            className="rounded-xl overflow-hidden border border-gray-100"
-          >
-            <img src={i.image_url ?? ""} alt={i.name} className="w-full aspect-square object-cover bg-gray-100" />
-            <div className="p-2">
-              <p className="text-sm font-medium truncate">{i.name}</p>
-              <p className="text-xs text-gray-400 truncate">{shopName(i.shop_id)}</p>
-              <p className="text-sm text-orange-600 mt-0.5">฿{i.price}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {cartCount(c) > 0 && (
-        <Link
-          to="/cart"
-          className="fixed left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"
-        >
-          <span>ตะกร้า ({cartCount(c)})</span>
-          <span>฿{cartTotal(c)}</span>
-        </Link>
-      )}
-    </div>
-  );
+  return <div className="min-h-screen bg-[#f7f7f3] pb-24 text-slate-900"><header className="mx-auto max-w-md px-4 pb-3 pt-5"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-orange-600">MyTree</p><h1 className="mt-1 text-2xl font-bold tracking-tight">วันนี้อยากค้นพบอะไร</h1></div><Link to="/account" className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-xl" aria-label="บัญชี">◯</Link></div><div className="mt-4 flex gap-2"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><span className="text-lg text-slate-400">⌕</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาร้านหรือเมนู" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label><button type="button" onClick={() => setShowFilters(true)} className="rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold shadow-sm">ตัวกรอง</button></div></header><main className="mx-auto max-w-md space-y-7"><section className="px-4"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold">ร้านใกล้คุณ</h2><p className="mt-1 text-xs text-slate-500">{locationState === "ready" ? "เรียงตามตำแหน่งปัจจุบัน" : "เลือกดูร้านในชุมชนของคุณ"}</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="text-xs font-semibold text-orange-600 disabled:opacity-50">{locationState === "loading" ? "กำลังค้นหา" : "อัปเดตตำแหน่ง"}</button></div><div className="mt-3 flex gap-3 overflow-x-auto pb-1">{filteredShops.slice(0, 8).map((shop) => <Link key={shop.shop_id} to="/shop/$shopId" params={{ shopId: shop.shop_id }} className="w-20 shrink-0 text-center"><img src={shop.logo_url ?? ""} alt={shop.name} loading="lazy" className="mx-auto h-16 w-16 rounded-2xl object-cover bg-slate-200" /><p className="mt-2 truncate text-xs font-medium">{shop.name}</p></Link>)}</div></section><section><div className="flex items-end justify-between px-4"><div><h2 className="text-lg font-bold">กำลังฮิตใกล้คุณ</h2><p className="mt-1 text-xs text-slate-500">เมนูจากหมวดที่มีให้บริการตอนนี้</p></div><span className="text-xs text-slate-400">{sections.length} หมวด</span></div>{sections.map((section) => <div key={section.category} className="mt-4"><div className="mb-2 flex items-center justify-between px-4"><h3 className="text-sm font-bold">{section.category}</h3><button type="button" onClick={() => setCat(section.category)} className="text-xs font-semibold text-orange-600">ดูทั้งหมด</button></div><div className="flex gap-3 overflow-x-auto px-4 pb-1">{section.items.map((item) => <ProductCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} />)}</div></div>)}</section><section className="px-4"><div className="flex items-end justify-between"><div><h2 className="text-lg font-bold">เลือกตามหมวด</h2><p className="mt-1 text-xs text-slate-500">ค้นพบของดีจากร้านหลายประเภท</p></div><button type="button" onClick={() => setCat(null)} className="text-xs font-semibold text-orange-600">ล้าง</button></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1"><button type="button" onClick={() => setCat(null)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${!cat ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>ทั้งหมด</button>{categories.map((category) => <button type="button" key={category} onClick={() => setCat(category)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${cat === category ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{category}</button>)}</div></section><section className="px-4"><h2 className="text-lg font-bold">เมนูทั้งหมด</h2><div className="mt-3 grid grid-cols-2 gap-3">{visibleItems.slice(0, 12).map((item) => <ProductCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} />)}</div></section></main>{c.items.length > 0 && <Link to="/cart" className="fixed bottom-[76px] left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl"><span>ตะกร้า {cartCount(c)} รายการจาก {new Set(c.items.map((item) => item.shopId)).size} ร้าน</span><span>฿{cartTotal(c)}</span></Link>}<CustomerNav count={cartCount(c)} />{showFilters && <div className="fixed inset-0 z-50 bg-slate-900/30 p-4" role="dialog" aria-modal="true" onClick={() => setShowFilters(false)}><section className="mx-auto mt-auto max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between"><h2 className="text-lg font-bold">ตัวกรอง</h2><button type="button" onClick={() => setShowFilters(false)} className="text-2xl text-slate-400" aria-label="ปิด">×</button></div><label className="mt-5 flex items-center justify-between border-b border-slate-100 py-3 text-sm"><span>แสดงเฉพาะร้านที่เปิดอยู่</span><input type="checkbox" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)} className="h-5 w-5 accent-orange-500" /></label><button type="button" onClick={() => setShowFilters(false)} className="mt-5 w-full rounded-2xl bg-orange-500 py-3 text-sm font-bold text-white">ดูผลลัพธ์</button></section></div>}</div>;
 }

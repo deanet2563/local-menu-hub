@@ -77,7 +77,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
     };
     let result: ReturnType<typeof cart.add> = "ok";
     for (let n = 0; n < input.qty; n += 1) {
-      result = cart.add(payload);
+      result = cart.add(payload, { allowMultipleShops: true });
       if (result === "different_shop") break;
     }
     if (result === "different_shop") {

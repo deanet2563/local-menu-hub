@@ -134,9 +134,10 @@ function restore(): CartState {
       .filter((i) => i && i.shopId && i.itemId && i.qty > 0)
       .map((i) => ({ ...i, setId: i.setId ?? null, setName: i.setName ?? null }));
     const firstItem = items[0];
-    const shopId = firstItem ? (parsed.state.shopId ?? firstItem.shopId) : null;
-    const sameShop = shopId ? items.filter((i) => i.shopId === shopId) : [];
-    return { shopId: sameShop.length ? shopId : null, items: sameShop };
+    const preferredShop = parsed.state.shopId && items.some((i) => i.shopId === parsed.state.shopId)
+      ? parsed.state.shopId
+      : firstItem?.shopId ?? null;
+    return { shopId: preferredShop, items };
   } catch { return EMPTY; }
 }
 
@@ -151,16 +152,16 @@ function persist(next: CartState) {
 function set(next: CartState) { state = next; persist(next); listeners.forEach((l) => l()); }
 
 export const cart = {
-  add(item: AddCartItem, opts?: { force?: boolean }): "ok" | "different_shop" {
+  add(item: AddCartItem, opts?: { force?: boolean; allowMultipleShops?: boolean }): "ok" | "different_shop" {
     const switchingShop = !!state.shopId && state.shopId !== item.shopId;
-    if (switchingShop && !opts?.force) return "different_shop";
-    let items = switchingShop ? [] : state.items;
+    if (switchingShop && !opts?.force && !opts?.allowMultipleShops) return "different_shop";
+    let items = switchingShop && opts?.force ? [] : state.items;
     const signature = stableLineSignature(item);
     const existing = items.find((i) => stableLineSignature(i) === signature);
     items = existing
       ? items.map((i) => i.lineId === existing.lineId ? { ...i, qty: i.qty + 1 } : i)
       : [...items, normalizeItem(item)];
-    set({ shopId: item.shopId, items });
+    set({ shopId: state.shopId ?? item.shopId, items });
     return "ok";
   },
   setQty(lineOrItemId: string, qty: number) {
@@ -171,7 +172,16 @@ export const cart = {
         return match ? { ...i, qty } : i;
       })
       .filter((i) => i.qty > 0);
-    set({ shopId: items.length ? state.shopId : null, items });
+    const shopId = items.some((i) => i.shopId === state.shopId) ? state.shopId : items[0]?.shopId ?? null;
+    set({ shopId, items });
+  },
+  selectShop(shopId: string) {
+    if (state.items.some((item) => item.shopId === shopId)) set({ ...state, shopId });
+  },
+  clearShop(shopId: string) {
+    const items = state.items.filter((item) => item.shopId !== shopId);
+    const nextShopId = items.some((item) => item.shopId === state.shopId) ? state.shopId : items[0]?.shopId ?? null;
+    set({ shopId: nextShopId, items });
   },
   remove(lineId: string) {
     const items = state.items.filter((i) => i.lineId !== lineId);
@@ -192,6 +202,11 @@ export const cart = {
 };
 
 export function useCart(): CartState { return useSyncExternalStore(cart.subscribe, cart.getState, cart.getState); }
+export function groupCartItemsByShop(items: CartItem[]): Map<string, CartItem[]> {
+  const grouped = new Map<string, CartItem[]>();
+  for (const item of items) grouped.set(item.shopId, [...(grouped.get(item.shopId) ?? []), item]);
+  return grouped;
+}
 export const cartLineUnitPrice = (i: CartItem) => i.price + i.options.reduce((sum, o) => sum + o.priceDelta, 0);
 export const cartLineTotal = (i: CartItem) => cartLineUnitPrice(i) * i.qty;
 export const cartCount = (s: CartState) => s.items.reduce((n, i) => n + i.qty, 0);

@@ -102,6 +102,7 @@ function pointFromDraft(destination: NonNullable<CheckoutDraft["destination"]>):
 function CartCheckout() {
   const c = useCart();
   const checkoutShopId = c.shopId ?? c.items[0]?.shopId ?? null;
+  const checkoutItems = useMemo(() => c.items.filter((item) => item.shopId === checkoutShopId), [c.items, checkoutShopId]);
   const [shop, setShop] = useState<ShopCheckout | null>(null);
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
   const [payment, setPayment] = useState<"cash" | "qr_transfer">("cash");
@@ -148,9 +149,9 @@ function CartCheckout() {
   const visibleError = fulfillment === "pickup" && isDeliveryOnlyCheckoutError(error) ? null : error;
 
   const groupedItems = useMemo(() => {
-    const groups: Array<{ key: string; name: string; isSet: boolean; items: typeof c.items; count: number; total: number }> = [];
+    const groups: Array<{ key: string; name: string; isSet: boolean; items: typeof checkoutItems; count: number; total: number }> = [];
     const index = new Map<string, number>();
-    for (const item of c.items) {
+    for (const item of checkoutItems) {
       const key = item.setId ? `set:${item.setId}` : "general";
       let groupIndex = index.get(key);
       if (groupIndex === undefined) {
@@ -165,7 +166,12 @@ function CartCheckout() {
       group.total += cartLineTotal(item);
     }
     return [...groups.filter((g) => g.isSet), ...groups.filter((g) => !g.isSet)];
-  }, [c.items]);
+  }, [checkoutItems]);
+
+  const cartShopChoices = useMemo(() => {
+    const ids = [...new Set(c.items.map((item) => item.shopId))];
+    return ids.map((id) => ({ id, name: id === checkoutShopId && shop?.name ? shop.name : id }));
+  }, [c.items, checkoutShopId, shop?.name]);
 
   useEffect(() => {
     (async () => {
@@ -485,7 +491,7 @@ function CartCheckout() {
     const requestedFor = timing === "preorder" ? bangkokInputToIso(requestedForLocal) : null;
     if (timing === "preorder" && !requestedFor) return setError("กรุณาเลือกวันและเวลารับ/ส่ง");
 
-    const cartCustomizeValidation = await validateCartCustomizeRequirements(c.items);
+    const cartCustomizeValidation = await validateCartCustomizeRequirements(checkoutItems);
     if (!cartCustomizeValidation.ok) return setError(cartCustomizeValidation.message);
 
     setSubmitting(true);
@@ -496,7 +502,7 @@ function CartCheckout() {
 
     const res = await submitOrder({
       shopId: checkoutShopId,
-      items: c.items.map((i) => ({
+      items: checkoutItems.map((i) => ({
         lineId: i.lineId,
         kind: i.kind,
         itemId: i.itemId,
@@ -542,7 +548,7 @@ function CartCheckout() {
     clearCheckoutDraft(customerId, checkoutShopId);
     setCompletedSubId(res.sub_id ?? null);
     setCompletedPayment(payment);
-    cart.clear();
+    cart.clearShop(checkoutShopId);
     setDone(true);
   }
 
@@ -610,7 +616,7 @@ function CartCheckout() {
     </div>
   );
 
-  if (c.items.length === 0) return (
+  if (checkoutItems.length === 0) return (
     <div className="p-6 text-center text-sm text-gray-400">
       ตะกร้าว่าง
       <Link to="/" className="text-orange-500 underline block mt-2">เลือกอาหาร</Link>
@@ -639,6 +645,20 @@ function CartCheckout() {
           <p className="font-medium">ร้านปิดตามเวลาทำการ</p>
           {availability.detail && <p className="text-xs mt-1">{availability.detail}</p>}
         </div>
+      )}
+
+      {cartShopChoices.length > 1 && (
+        <section className="rounded-lg border border-orange-100 bg-orange-50/50 p-3 space-y-2">
+          <p className="text-sm font-semibold text-orange-900">เลือกหน้าร้านที่จะชำระเงิน</p>
+          <div className="flex gap-2 overflow-x-auto">
+            {cartShopChoices.map((choice) => (
+              <button type="button" key={choice.id} onClick={() => cart.selectShop(choice.id)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs ${choice.id === checkoutShopId ? "border-orange-500 bg-orange-500 text-white" : "border-orange-200 bg-white text-gray-700"}`}>
+                {choice.name}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-orange-800">แต่ละร้านจะสร้างออเดอร์และตั้งค่ารับ/ส่งแยกกัน</p>
+        </section>
       )}
 
       <div className="space-y-4 border-b border-gray-100 pb-4">
@@ -841,7 +861,7 @@ function CartCheckout() {
       <div className="fixed left-4 right-4 bottom-4 z-20">
         <button onClick={confirm} disabled={submitting || (fulfillment === "delivery" && quotingRoute) || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
           <span className="min-w-0">{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
-          <span className="shrink-0">{fulfillment === "delivery" && deliveryCharge > 0 ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${deliveryCharge.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
+          <span className="shrink-0">{fulfillment === "delivery" && deliveryCharge > 0 ? `สินค้า ฿${cartTotal({ ...c, items: checkoutItems })} · ส่ง ฿${deliveryCharge.toFixed(2)}` : `฿${cartTotal({ ...c, items: checkoutItems })}`}</span>
         </button>
       </div>
     </div>
