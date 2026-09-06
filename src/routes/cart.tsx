@@ -52,6 +52,8 @@ function isDeliveryOnlyCheckoutError(message: string | null): boolean {
     "ตำแหน่ง",
     "Google Maps link",
     "latitude, longitude",
+    "LIFF",
+    "staging",
   ].some((part) => message.includes(part));
 }
 
@@ -131,6 +133,7 @@ function CartCheckout() {
   const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null);
   const [slipSuccess, setSlipSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [orderErrorCode, setOrderErrorCode] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [liffDiagnostics, setLiffDiagnostics] = useState<LiffDiagnosticSnapshot | null>(null);
   const [done, setDone] = useState(false);
@@ -487,6 +490,7 @@ function CartCheckout() {
 
     setSubmitting(true);
     setError(null);
+    setOrderErrorCode(null);
     const cid = await getCurrentCustomerId();
     if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
 
@@ -514,6 +518,7 @@ function CartCheckout() {
     });
 
     setSubmitting(false);
+    if (!res.ok) setOrderErrorCode(res.errorCode ?? null);
     if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
     if (customerId && fulfillment === "delivery" && deliveryPoint) {
       const nextAddresses = upsertUsedDeliveryAddress(deliveryAddresses, {
@@ -587,6 +592,7 @@ function CartCheckout() {
         <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-700">สร้างออเดอร์แล้ว แต่ยังไม่พบเลขออเดอร์ย่อยสำหรับแนบสลิป กรุณาแนบสลิปจากประวัติออเดอร์</p>
       )}
       {visibleError && <p className="text-sm text-red-500">{visibleError}</p>}
+      {e2eDiagnosticsEnabled() && orderErrorCode && <p className="font-mono text-[11px] text-gray-500" data-testid="order-error-code">order_error_code: {orderErrorCode}</p>}
 
       {liffDiagnostics && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-[11px] leading-5 text-amber-900">
@@ -830,7 +836,7 @@ function CartCheckout() {
       </div>
 
       <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="หมายเหตุถึงร้าน (ไม่บังคับ)" value={note} onChange={(e) => setNote(e.target.value)} />
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {visibleError && <p className="text-sm text-red-500">{visibleError}</p>}
 
       <div className="fixed left-4 right-4 bottom-4 z-20">
         <button onClick={confirm} disabled={submitting || (fulfillment === "delivery" && quotingRoute) || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">

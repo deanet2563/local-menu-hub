@@ -35,8 +35,7 @@ type ReusableCustomizeOptionRow = {
 
 export async function loadCustomerItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
   const legacy = await loadItemOptionGroups(itemId).catch(() => [] as OrderingOptionGroup[]);
-  if (legacy.length) return legacy;
-  if (!REUSABLE_SHOP_CUSTOMIZE_ENABLED) return [];
+  if (!REUSABLE_SHOP_CUSTOMIZE_ENABLED) return legacy;
 
   const { data: links, error: linkError } = await publicSupabase
     .from("menu_item_customize_groups")
@@ -46,7 +45,7 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
   if (linkError) throw linkError;
 
   const typedLinks = (links as ReusableCustomizeLink[] | null) ?? [];
-  if (!typedLinks.length) return [];
+  if (!typedLinks.length) return legacy;
   const ids = typedLinks.map((row) => row.group_id);
 
   const [{ data: groups, error: groupError }, { data: options, error: optionError }] = await Promise.all([
@@ -65,11 +64,12 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
   if (groupError) throw groupError;
   if (optionError) throw optionError;
 
-  return buildCustomerReusableOptionGroups({
+  const reusable = buildCustomerReusableOptionGroups({
     links: typedLinks,
     groups: (groups as ReusableCustomizeGroupRow[] | null) ?? [],
     options: (options as ReusableCustomizeOptionRow[] | null) ?? [],
   });
+  return mergeCustomerOptionGroups(legacy, reusable);
 }
 
 export function buildCustomerReusableOptionGroups(input: {
@@ -108,4 +108,13 @@ export function buildCustomerReusableOptionGroups(input: {
     })
     .filter((group): group is OrderingOptionGroup => Boolean(group))
     .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+export function mergeCustomerOptionGroups(
+  legacy: OrderingOptionGroup[],
+  reusable: OrderingOptionGroup[],
+): OrderingOptionGroup[] {
+  const merged = new Map<string, OrderingOptionGroup>();
+  for (const group of [...legacy, ...reusable]) merged.set(group.option_group_id, group);
+  return [...merged.values()].sort((a, b) => a.sort_order - b.sort_order);
 }

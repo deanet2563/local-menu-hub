@@ -42,6 +42,29 @@ export type OrderPayload = {
   requestedFor?: string | null;
 };
 
+export type OrderSubmitResult = {
+  ok: boolean;
+  order_id?: string;
+  sub_id?: string;
+  error?: string;
+  errorCode?: string;
+};
+
+export function customerOrderErrorMessage(error: string | undefined, errorCode?: string): string {
+  switch (errorCode ?? error) {
+    case "fn_create_order_v3_priced_failed":
+      return "ร้านยังไม่พร้อมรับคำสั่งซื้อรูปแบบนี้ กรุณาลองใหม่อีกครั้ง";
+    case "invalid_customize_selection":
+      return "ตัวเลือกสินค้าไม่ครบหรือไม่ถูกต้อง กรุณากลับไปแก้ไขรายการ";
+    case "pickup_disabled":
+      return "ร้านนี้ไม่เปิดบริการรับเอง";
+    case "delivery_quote_invalid":
+      return "ข้อมูลค่าส่งหมดอายุ กรุณาคำนวณค่าส่งใหม่";
+    default:
+      return error ?? "ส่งคำสั่งซื้อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+  }
+}
+
 function withSetMetadata(order: OrderPayload): OrderPayload {
   const byLine = new Map(cart.getState().items.map((i) => [i.lineId, i]));
   return {
@@ -80,7 +103,7 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
 
 export async function submitOrder(
   order: OrderPayload
-): Promise<{ ok: boolean; order_id?: string; sub_id?: string; error?: string }> {
+): Promise<OrderSubmitResult> {
   const quotedOrder = withDeliveryQuoteToken(order);
   const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
   if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
@@ -108,8 +131,8 @@ export async function submitOrder(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, order: enrichedOrder }),
     });
-    const data = (await res.json()) as { ok?: boolean; order_id?: string; sub_id?: string; error?: string };
-    if (!res.ok) return { ok: false, error: data.error ?? `error ${res.status}` };
+    const data = (await res.json()) as { ok?: boolean; order_id?: string; sub_id?: string; error?: string; error_code?: string };
+    if (!res.ok) return { ok: false, error: customerOrderErrorMessage(data.error, data.error_code), errorCode: data.error_code ?? data.error ?? `http_${res.status}` };
     return { ok: true, order_id: data.order_id, sub_id: data.sub_id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
