@@ -264,6 +264,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
   const debugEnabled = debug;
   const [mapsError, setMapsError] = useState<string | null>(null);
+  const [mapsRuntimeError, setMapsRuntimeError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [markerLibraryState, setMarkerLibraryState] = useState<MarkerLibraryState>("not_requested");
   const [advancedMarkerAvailable, setAdvancedMarkerAvailable] = useState(false);
@@ -304,7 +305,25 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     let disposed = false;
+    const captureRuntimeError = (value: string) => {
+      if (!debugEnabled || import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS !== "true") return;
+      setMapsRuntimeError(value.slice(0, 300));
+    };
+    const onWindowError = (event: ErrorEvent) => captureRuntimeError(`window.error: ${event.message}`);
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => captureRuntimeError(`unhandledrejection: ${String(event.reason)}`);
+    window.addEventListener("error", onWindowError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    const originalConsoleError = console.error;
+    if (debugEnabled && import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS === "true") {
+      console.error = (...args: unknown[]) => {
+        const text = args.map((arg) => String(arg)).join(" ");
+        const match = text.match(/Google Maps JavaScript API error:\s*([A-Za-z0-9_]+)/);
+        if (match) captureRuntimeError(`Google Maps JavaScript API error: ${match[1]}`);
+        originalConsoleError(...args);
+      };
+    }
     const unsubscribeAuthFailure = subscribeMapsAuthFailure(() => {
+      captureRuntimeError("gm_authFailure");
       if (!disposed) {
         setMapsError("Google Maps key ไม่อนุญาตโดเมนทดสอบนี้ กรุณาเพิ่ม hostname ของ E2E preview ใน HTTP referrer ของ Browser key");
       }
@@ -351,12 +370,16 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
           }
         });
       })
-      .catch(() => {
+      .catch((error) => {
+        captureRuntimeError(`loader: ${error instanceof Error ? error.message : String(error)}`);
         if (!disposed) setMapsError("เปิดแผนที่ในแอปไม่ได้ตอนนี้ ยังใช้ GPS หรือ Google Maps link ได้");
       });
     return () => {
       disposed = true;
       unsubscribeAuthFailure();
+      window.removeEventListener("error", onWindowError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      console.error = originalConsoleError;
       merchantRequestSeqRef.current += 1;
       cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());
@@ -696,6 +719,10 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
               <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
               <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
+              <p>hostname: {window.location.hostname}</p>
+              <p>referrer: {document.referrer || "none"}</p>
+              <p>keySuffix: {getMapsApiKey() ? getMapsApiKey().slice(-6) : "missing"}</p>
+              <p>runtimeError: {mapsRuntimeError ?? "none"}</p>
             </div>
           )}
           {(merchantLoading || merchantError || cartShopStatus || mapConfigStatus) && (

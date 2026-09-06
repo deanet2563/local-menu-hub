@@ -38,8 +38,25 @@ export type OrderPayload = {
   locationAccuracyM?: number | null;
   submittedMapUrl?: string | null;
   deliveryQuoteToken?: string | null;
+  customerDeliveryCharge?: number;
   note: string | null;
   requestedFor?: string | null;
+};
+
+export type OrderSubmitDiagnostics = {
+  endpoint: string;
+  method: "POST";
+  status: number;
+  responseBody: string;
+  fulfillment: OrderPayload["fulfillment"];
+  shopId: string;
+  itemCount: number;
+  configurationCount: number;
+  deliveryCharge: number;
+  quoteTokenPresent: boolean;
+  liffLoggedIn: boolean;
+  liffInClient: boolean;
+  hasIdToken: boolean;
 };
 
 export type OrderSubmitResult = {
@@ -48,6 +65,7 @@ export type OrderSubmitResult = {
   sub_id?: string;
   error?: string;
   errorCode?: string;
+  diagnostics?: OrderSubmitDiagnostics;
 };
 
 export function customerOrderErrorMessage(error: string | undefined, errorCode?: string): string {
@@ -131,9 +149,26 @@ export async function submitOrder(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, order: enrichedOrder }),
     });
-    const data = (await res.json()) as { ok?: boolean; order_id?: string; sub_id?: string; error?: string; error_code?: string };
-    if (!res.ok) return { ok: false, error: customerOrderErrorMessage(data.error, data.error_code), errorCode: data.error_code ?? data.error ?? `http_${res.status}` };
-    return { ok: true, order_id: data.order_id, sub_id: data.sub_id };
+    const responseBody = await res.text();
+    let data: { ok?: boolean; order_id?: string; sub_id?: string; error?: string; error_code?: string } = {};
+    try { data = JSON.parse(responseBody) as typeof data; } catch { /* surfaced in E2E diagnostics */ }
+    const diagnostics = import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS === "true" ? {
+      endpoint: ORDER_URL,
+      method: "POST" as const,
+      status: res.status,
+      responseBody,
+      fulfillment: enrichedOrder.fulfillment,
+      shopId: enrichedOrder.shopId,
+      itemCount: enrichedOrder.items.length,
+      configurationCount: enrichedOrder.items.reduce((count, item) => count + item.options.length + item.bundleSelections.length, 0),
+      deliveryCharge: enrichedOrder.fulfillment === "pickup" ? 0 : Number(enrichedOrder.customerDeliveryCharge ?? 0),
+      quoteTokenPresent: Boolean(enrichedOrder.deliveryQuoteToken),
+      liffLoggedIn: liff.isLoggedIn(),
+      liffInClient: liff.isInClient(),
+      hasIdToken: Boolean(idToken),
+    } : undefined;
+    if (!res.ok) return { ok: false, error: customerOrderErrorMessage(data.error, data.error_code), errorCode: data.error_code ?? data.error ?? `http_${res.status}`, diagnostics };
+    return { ok: true, order_id: data.order_id, sub_id: data.sub_id, diagnostics };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }

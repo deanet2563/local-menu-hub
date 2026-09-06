@@ -21,7 +21,7 @@ import {
 import { e2eDiagnosticsEnabled, readLiffDiagnostics, type LiffDiagnosticSnapshot } from "@/lib/e2eDiagnostics";
 import { validateCartCustomizeRequirements } from "@/lib/cartCustomizeValidation";
 import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
-import { submitOrder } from "@/lib/order";
+import { submitOrder, type OrderSubmitDiagnostics } from "@/lib/order";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
@@ -135,6 +135,7 @@ function CartCheckout() {
   const [slipSuccess, setSlipSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [orderErrorCode, setOrderErrorCode] = useState<string | null>(null);
+  const [orderDiagnostics, setOrderDiagnostics] = useState<OrderSubmitDiagnostics | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [liffDiagnostics, setLiffDiagnostics] = useState<LiffDiagnosticSnapshot | null>(null);
   const [done, setDone] = useState(false);
@@ -497,6 +498,7 @@ function CartCheckout() {
     setSubmitting(true);
     setError(null);
     setOrderErrorCode(null);
+    setOrderDiagnostics(null);
     const cid = await getCurrentCustomerId();
     if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
 
@@ -519,11 +521,13 @@ function CartCheckout() {
       locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
       locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
       submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
+      customerDeliveryCharge: deliveryCharge,
       note: note.trim() || null,
       requestedFor,
     });
 
     setSubmitting(false);
+    if (res.diagnostics) setOrderDiagnostics(res.diagnostics);
     if (!res.ok) setOrderErrorCode(res.errorCode ?? null);
     if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
     if (customerId && fulfillment === "delivery" && deliveryPoint) {
@@ -599,6 +603,12 @@ function CartCheckout() {
       )}
       {visibleError && <p className="text-sm text-red-500">{visibleError}</p>}
       {e2eDiagnosticsEnabled() && orderErrorCode && <p className="font-mono text-[11px] text-gray-500" data-testid="order-error-code">order_error_code: {orderErrorCode}</p>}
+      {e2eDiagnosticsEnabled() && orderDiagnostics && (
+        <details className="rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-[10px] leading-4 text-gray-600">
+          <summary>order request diagnostics</summary>
+          <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(orderDiagnostics, null, 2)}</pre>
+        </details>
+      )}
 
       {liffDiagnostics && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-[11px] leading-5 text-amber-900">

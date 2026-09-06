@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { OrderingBundle } from "@/lib/ordering-config";
 import type { CartBundleSelection, CartOptionSelection } from "@/lib/cart";
+import { validateCustomizeSelections } from "@/lib/customizeValidation";
 
 export function BundleConfigurator({
   bundle,
@@ -93,6 +94,12 @@ export function BundleConfigurator({
     });
     if (invalidBundleGroup) {
       setError(`กรุณาเลือก “${invalidBundleGroup.name}” ให้ครบ ${invalidBundleGroup.min_units}${invalidBundleGroup.max_units !== invalidBundleGroup.min_units ? `-${invalidBundleGroup.max_units}` : ""} ชิ้น`);
+      return;
+    }
+
+    const optionValidation = validateCustomizeSelections(bundle.optionGroups, selectedOptions);
+    if (!optionValidation.ok) {
+      setError(optionValidation.message);
       return;
     }
 
