@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/lib/supabase";
+import { getAccessToken, supabase } from "@/lib/supabase";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 export async function attachPaymentSlipToOrder(input: {
@@ -26,4 +26,21 @@ export async function attachPaymentSlipToOrder(input: {
   if (!response.ok) {
     throw new Error(data.error ?? `payment slip update failed: ${response.status}`);
   }
+}
+
+export async function uploadAndAttachPaymentSlipToOrder(input: {
+  subId: string;
+  file: File;
+}): Promise<string> {
+  const ext = input.file.name.split(".").pop()?.toLowerCase();
+  const safeExt = ext && /^(jpg|jpeg|png|webp|gif)$/.test(ext) ? ext : "jpg";
+  const path = `${input.subId}/${Date.now()}.${safeExt}`;
+  const { error: uploadError } = await supabase.storage
+    .from("payment-slips")
+    .upload(path, input.file, { contentType: input.file.type || "image/jpeg" });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from("payment-slips").getPublicUrl(path);
+  await attachPaymentSlipToOrder({ subId: input.subId, paymentSlipUrl: data.publicUrl });
+  return data.publicUrl;
 }

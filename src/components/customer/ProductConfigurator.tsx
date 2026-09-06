@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { OrderingOptionGroup } from "@/lib/ordering-config";
 import { loadCustomerItemOptionGroups } from "@/lib/customer-item-options";
 import type { CartOptionSelection } from "@/lib/cart";
+import { minRequiredForGroup, validateCustomizeSelections } from "@/lib/customizeValidation";
 
 export type ConfigurableProduct = {
   itemId: string;
@@ -92,15 +93,11 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
     });
   }
 
-  const invalidGroup = groups.find((g) => {
-    const count = selectedCount(selected, g.option_group_id);
-    const min = g.is_required ? Math.max(1, g.min_select) : g.min_select;
-    return count < min || count > g.max_select;
-  });
+  const validation = validateCustomizeSelections(groups, selected);
 
   function confirm() {
-    if (invalidGroup) {
-      setError(`กรุณาเลือก “${invalidGroup.name}” ให้ครบตามที่กำหนด`);
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
     onConfirm({ product, qty, options: selections, note: note.trim() || null });
@@ -123,8 +120,9 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
           {loading && <p className="text-sm text-gray-400">กำลังโหลดตัวเลือก...</p>}
 
           {!loading && groups.map((group) => {
-            const min = group.is_required ? Math.max(1, group.min_select) : group.min_select;
+            const min = minRequiredForGroup(group);
             const count = selectedCount(selected, group.option_group_id);
+            const groupInvalid = !validation.ok && validation.groupId === group.option_group_id;
             return (
               <section key={group.option_group_id} className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
@@ -132,7 +130,7 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
                     <p className="text-sm font-semibold text-gray-800">{group.name}</p>
                     {group.description && <p className="text-xs text-gray-400">{group.description}</p>}
                   </div>
-                  <span className={`text-[11px] rounded-full px-2 py-0.5 ${count >= min ? "bg-gray-100 text-gray-500" : "bg-red-50 text-red-600"}`}>
+                  <span className={`text-[11px] rounded-full px-2 py-0.5 ${count >= min && count <= group.max_select ? "bg-gray-100 text-gray-500" : "bg-red-50 text-red-600"}`}>
                     {min > 0 ? `เลือก ${min}${group.max_select !== min ? `-${group.max_select}` : ""}` : `เลือกได้ถึง ${group.max_select}`}
                   </span>
                 </div>
@@ -158,6 +156,7 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
                     );
                   })}
                 </div>
+                {groupInvalid && <p className="text-xs font-medium text-red-600">{validation.message}</p>}
               </section>
             );
           })}
@@ -189,8 +188,8 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
         <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
           <button
             onClick={confirm}
-            disabled={loading}
-            className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex items-center justify-between font-medium disabled:opacity-50"
+            disabled={loading || !validation.ok}
+            className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex items-center justify-between font-medium disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span>เพิ่มลงตะกร้า</span>
             <span>฿{unitTotal * qty}</span>
