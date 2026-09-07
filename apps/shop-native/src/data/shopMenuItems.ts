@@ -27,6 +27,25 @@ export type MenuCustomizeAssignmentInput = {
   max_select: number;
 };
 
+export function normalizeMenuCustomizeAssignment(assignment: MenuCustomizeAssignmentInput, sortOrder: number) {
+  const minSelect = assignment.is_required ? Math.max(1, assignment.min_select) : Math.max(0, assignment.min_select);
+  return {
+    group_id: assignment.group_id,
+    is_required: assignment.is_required,
+    min_select: minSelect,
+    max_select: Math.max(1, minSelect, assignment.max_select),
+    sort_order: sortOrder,
+  };
+}
+
+function assignmentMatchesInput(row: MenuCustomizeAssignment, expected: ReturnType<typeof normalizeMenuCustomizeAssignment>): boolean {
+  return row.group_id === expected.group_id
+    && row.is_required === expected.is_required
+    && row.min_select === expected.min_select
+    && row.max_select === expected.max_select
+    && row.sort_order === expected.sort_order;
+}
+
 export async function loadShopMenuItems(shopId: string): Promise<ShopMenuItem[]> {
   const { data, error } = await supabase
     .from('menu_items')
@@ -124,20 +143,21 @@ export async function replaceMenuCustomizeAssignments(itemId: string, assignment
     if (isMissingTableError(deleteError, 'menu_item_customize_groups') && assignments.length === 0) return;
     throw new Error(formatSupabaseError(deleteError, 'บันทึก Customize ของเมนูไม่สำเร็จ'), { cause: deleteError });
   }
-  if (assignments.length === 0) return;
-  const { error } = await supabase.from('menu_item_customize_groups').insert(
-    assignments.map((assignment, index) => {
-      const minSelect = assignment.is_required ? Math.max(1, assignment.min_select) : Math.max(0, assignment.min_select);
-      return {
-        item_id: itemId,
-        group_id: assignment.group_id,
-        is_required: assignment.is_required,
-        min_select: minSelect,
-        max_select: Math.max(1, minSelect, assignment.max_select),
-        sort_order: index,
-      };
-    }),
-  );
+  const expected = assignments.map(normalizeMenuCustomizeAssignment);
+  if (assignments.length === 0) {
+    const reloaded = await loadMenuCustomizeAssignments(itemId);
+    if (reloaded.length !== 0) throw new Error('บันทึก Customize ไม่สำเร็จ: ยังพบรายการเดิมในฐานข้อมูล');
+    return;
+  }
+  const { data, error } = await supabase.from('menu_item_customize_groups').insert(
+    expected.map((assignment) => ({ item_id: itemId, ...assignment })),
+  ).select('item_id,group_id,is_required,min_select,max_select,sort_order');
+  if (!error) {
+    const persisted = (data as MenuCustomizeAssignment[] | null) ?? [];
+    if (persisted.length !== expected.length || expected.some((row) => !persisted.some((saved) => assignmentMatchesInput(saved, row)))) {
+      throw new Error('บันทึก Customize ไม่สำเร็จ: ฐานข้อมูลไม่ยืนยันค่าที่บันทึก');
+    }
+  }
   if (error) {
     logSupabaseError('replaceMenuCustomizeAssignments.insert', error);
     throw new Error(formatSupabaseError(error, 'บันทึก Customize ของเมนูไม่สำเร็จ'), { cause: error });

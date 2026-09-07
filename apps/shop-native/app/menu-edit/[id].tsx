@@ -165,6 +165,7 @@ export default function MenuEditScreen() {
         };
       });
       await replaceMenuCustomizeAssignments(id, assignments);
+      await load();
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'บันทึกเมนูไม่สำเร็จ');
