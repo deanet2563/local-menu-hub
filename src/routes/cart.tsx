@@ -867,6 +867,13 @@ function CartCheckout() {
 
       <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="หมายเหตุถึงร้าน (ไม่บังคับ)" value={note} onChange={(e) => setNote(e.target.value)} />
       {visibleError && <p className="text-sm text-red-500">{visibleError}</p>}
+      {e2eDiagnosticsEnabled() && orderErrorCode && <p className="font-mono text-[11px] text-gray-500" data-testid="order-error-code">order_error_code: {orderErrorCode}</p>}
+      {e2eDiagnosticsEnabled() && orderDiagnostics && (
+        <details className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-[10px] leading-4 text-amber-950">
+          <summary>รายละเอียดการส่งออเดอร์สำหรับ E2E</summary>
+          <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(orderDiagnostics, null, 2)}</pre>
+        </details>
+      )}
 
       <div className="fixed left-4 right-4 bottom-4 z-20">
         <button onClick={confirm} disabled={submitting || (fulfillment === "delivery" && quotingRoute) || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
