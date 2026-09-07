@@ -59,6 +59,35 @@ For any non-trivial source change:
 9. Merge only after CI is GREEN.
 10. For native auth/push/location/delivery changes, complete real-device gates before declaring the slice GREEN.
 
+## Production parity rule
+
+Working production behavior is the behavioral source of truth for an existing MyTree feature unless the current Bible or an explicitly approved product decision changes that behavior.
+
+Before redesigning, modernizing, refactoring, or reimplementing any existing MyTree feature, Codex must inspect the currently working production implementation first and use this priority order:
+
+`Reuse existing production logic -> Adapt it to the new architecture/UI -> Rewrite only when technically necessary`
+
+In particular, do not rewrite stable production behavior for LIFF bootstrap/auth, Google Maps/location, Cart, Checkout, Customize/options, Customer identity/auth, or Order Flow without first documenting why reuse or adaptation is insufficient.
+
+When applying a new UX/UI design:
+
+- preserve proven production behavior by default;
+- reuse working production state transitions, validation rules, payload construction, loader/bootstrap logic, and error-handling patterns where compatible;
+- change presentation/components/layout freely when required by the approved design, but do not silently replace stable business behavior;
+- layer new architecture only where needed, such as reusable category-based Customize, multi-store cart, delivery-pricing separation, Rider V3, or new ranking/discovery features;
+- compare production and new behavior explicitly when a regression is suspected;
+- prefer a production-parity audit before patching a reimplemented feature repeatedly.
+
+For any existing production feature being modernized, include a short parity check in the implementation plan or PR notes covering:
+
+- current production behavior;
+- what is reused as-is;
+- what is adapted;
+- what must be replaced and why;
+- real-device or E2E evidence that the approved behavior is preserved.
+
+A redesign is not considered complete if the new UI looks correct but regresses proven production behavior.
+
 ## Database and concurrency rules
 
 - Backend/server truth is authoritative.
