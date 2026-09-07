@@ -28,6 +28,7 @@ export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
   const hostname = window.location.hostname;
   return hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev"
+    || hostname === "customer-e2e.local-menu-hub.pages.dev"
     || /^customer-e2e-[a-z0-9-]+\.local-menu-hub\.pages\.dev$/i.test(hostname);
 }
 

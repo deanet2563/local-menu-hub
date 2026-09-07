@@ -43,8 +43,10 @@ const customizedCartLine = {
 
 const zeroSelected = validateCartLineCustomizeSelections(staleCartLine, [softnessGroup]);
 const exactlyOneSelected = validateCartLineCustomizeSelections(customizedCartLine, [softnessGroup]);
+const bundleChildMissing = validateCartLineCustomizeSelections({ ...staleCartLine, itemName: "bundle child" }, [softnessGroup]);
 
 export const cartCustomizeValidationCompileChecks = {
   zeroSelectedRejected: zeroSelected.ok === false,
   exactlyOneAccepted: exactlyOneSelected.ok === true,
+  bundleChildRejected: bundleChildMissing.ok === false,
 };

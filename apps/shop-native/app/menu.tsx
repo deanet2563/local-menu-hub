@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { getOwnedShopProfile } from '../src/data/shopProfile';
 import { uploadMenuItemImage } from '../src/data/shopAssets';
 import { loadShopCustomizeGroupsForMenu, loadShopMenuCategoriesForMenu, type ShopCustomizeGroup, type ShopMenuCategory } from '../src/data/shopMenuConfig';
-import { createShopMenuItem, loadShopMenuItems, updateShopMenuItem, type ShopMenuItem } from '../src/data/shopMenuItems';
+import { createShopMenuItem, loadShopMenuItems, updateShopMenuItem, type MenuCustomizeAssignmentInput, type ShopMenuItem } from '../src/data/shopMenuItems';
 import { activeCustomizeGroupsForCategory } from '../src/data/shopMenuConfigHelpers';
 
 export default function MenuScreen() {
@@ -17,6 +17,7 @@ export default function MenuScreen() {
   const [price, setPrice] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, Omit<MenuCustomizeAssignmentInput, 'group_id'>>>({});
   const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -61,10 +62,22 @@ export default function MenuScreen() {
     const nextId = categoryId === next.category_id ? null : next.category_id;
     setCategoryId(nextId);
     setSelectedGroups((current) => current.filter((id) => activeCustomizeGroupsForCategory(groups, nextId).some((group) => group.group_id === id)));
+    setAssignmentDrafts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => activeCustomizeGroupsForCategory(groups, nextId).some((group) => group.group_id === id))));
   }
 
   function toggleGroup(groupId: string) {
     setSelectedGroups((old) => old.includes(groupId) ? old.filter((id) => id !== groupId) : [...old, groupId]);
+    setAssignmentDrafts((old) => old[groupId] ? old : { ...old, [groupId]: { is_required: false, min_select: 0, max_select: 1 } });
+  }
+
+  function updateAssignment(groupId: string, patch: Partial<Omit<MenuCustomizeAssignmentInput, 'group_id'>>) {
+    setAssignmentDrafts((current) => {
+      const existing = current[groupId] ?? { is_required: false, min_select: 0, max_select: 1 };
+      const isRequired = patch.is_required ?? existing.is_required;
+      const maxSelect = Math.max(1, patch.max_select ?? existing.max_select);
+      const minSelect = Math.max(isRequired ? 1 : 0, Math.min(maxSelect, patch.min_select ?? existing.min_select));
+      return { ...current, [groupId]: { is_required: isRequired, min_select: minSelect, max_select: Math.max(maxSelect, minSelect) } };
+    });
   }
 
   async function chooseImage() {
@@ -94,6 +107,7 @@ export default function MenuScreen() {
         price: Number(price),
         category: selectedCategory?.name ?? null,
         customizeGroupIds: selectedGroups,
+        customizeAssignments: selectedGroups.map((group_id) => ({ group_id, ...(assignmentDrafts[group_id] ?? { is_required: false, min_select: 0, max_select: 1 }) })),
       });
       if (selectedImage) {
         const imageUrl = await uploadMenuItemImage({
@@ -109,6 +123,7 @@ export default function MenuScreen() {
       setPrice('');
       setCategoryId(null);
       setSelectedGroups([]);
+      setAssignmentDrafts({});
       setSelectedImage(null);
       setShowAdd(false);
       await load();
@@ -149,6 +164,17 @@ export default function MenuScreen() {
         <Text style={[styles.groupName, selectedGroups.includes(group.group_id) && styles.groupTextSelected]}>{group.name}</Text>
         <Text style={[styles.groupOptions, selectedGroups.includes(group.group_id) && styles.groupTextSelected]} numberOfLines={1}>{group.shop_customize_options.filter((o) => o.is_active).map((o) => o.label).join(' · ') || 'ยังไม่มี Option'}</Text>
       </Pressable>)}</View>
+      {selectedGroups.map((groupId) => {
+        const group = availableGroups.find((row) => row.group_id === groupId);
+        const draft = assignmentDrafts[groupId] ?? { is_required: false, min_select: 0, max_select: 1 };
+        if (!group) return null;
+        return <View key={groupId} style={styles.assignmentCard}>
+          <Text style={styles.assignmentTitle}>{group.name}</Text>
+          <View style={styles.assignmentRow}><Text style={styles.assignmentLabel}>บังคับเลือก</Text><Switch value={draft.is_required} onValueChange={(value) => updateAssignment(groupId, { is_required: value })} /></View>
+          <View style={styles.assignmentRow}><Text style={styles.assignmentLabel}>{draft.max_select === 1 ? 'เลือกได้ 1 ข้อ' : 'เลือกได้หลายข้อ'}</Text><Switch value={draft.max_select > 1} onValueChange={(value) => updateAssignment(groupId, { max_select: value ? Math.max(2, draft.max_select) : 1, min_select: value ? draft.min_select : Math.min(1, draft.min_select) })} /></View>
+          {draft.max_select > 1 ? <View style={styles.assignmentRow}><Text style={styles.assignmentLabel}>ขั้นต่ำ {draft.min_select} · สูงสุด {draft.max_select}</Text><View style={styles.stepper}><Pressable onPress={() => updateAssignment(groupId, { min_select: draft.min_select - 1 })} style={styles.stepButton}><Text>-</Text></Pressable><Text>{draft.min_select}-{draft.max_select}</Text><Pressable onPress={() => updateAssignment(groupId, { max_select: draft.max_select + 1 })} style={styles.stepButton}><Text>+</Text></Pressable></View></View> : null}
+        </View>;
+      })}
 
       <Pressable disabled={saving} onPress={() => void add()} style={({ pressed }) => [styles.saveButton, pressed && styles.pressed, saving && styles.disabled]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>บันทึกเมนู</Text>}</Pressable>
     </View> : null}
@@ -171,7 +197,7 @@ const styles = StyleSheet.create({
   formCard: { marginTop: 18, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, cardTitle: { color: '#12261E', fontWeight: '900', fontSize: 17 }, input: { marginTop: 10, minHeight: 47, borderWidth: 1, borderColor: '#DCE5E0', borderRadius: 14, paddingHorizontal: 13, backgroundColor: '#FAFCFB' },
   label: { marginTop: 16, color: '#344A41', fontWeight: '900', fontSize: 13 }, helper: { marginTop: 4, color: '#8A9891', fontSize: 11, lineHeight: 16 }, chips: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, chip: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, backgroundColor: '#EDF2EF' }, chipSelected: { backgroundColor: '#0F8A5F' }, chipText: { color: '#52645C', fontWeight: '800', fontSize: 12 }, chipTextSelected: { color: '#fff' },
   menuPreview: { marginTop: 8, width: 132, height: 132, borderRadius: 16, backgroundColor: '#EEF2EF' }, menuPreviewEmpty: { marginTop: 8, width: 132, height: 132, borderRadius: 16, backgroundColor: '#EEF2EF', alignItems: 'center', justifyContent: 'center' }, imageActions: { marginTop: 9, flexDirection: 'row', gap: 8 }, imageButton: { flex: 1, minHeight: 42, borderRadius: 13, backgroundColor: '#EAF7F1', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, imageButtonText: { color: '#0F7653', fontWeight: '900', fontSize: 12 }, removeImageButton: { minHeight: 42, borderRadius: 13, backgroundColor: '#FFF0EE', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 }, removeImageText: { color: '#A13A36', fontWeight: '900', fontSize: 12 },
-  groupList: { marginTop: 9, gap: 8 }, groupChip: { padding: 12, borderRadius: 16, backgroundColor: '#F5F8F6', borderWidth: 1, borderColor: '#E1E8E4' }, groupChipSelected: { backgroundColor: '#123E30', borderColor: '#123E30' }, groupSection: { color: '#0F8A5F', fontWeight: '900', fontSize: 10 }, groupName: { marginTop: 3, color: '#12261E', fontWeight: '900' }, groupOptions: { marginTop: 3, color: '#7C8A83', fontSize: 11 }, groupTextSelected: { color: '#fff' },
+  groupList: { marginTop: 9, gap: 8 }, groupChip: { padding: 12, borderRadius: 16, backgroundColor: '#F5F8F6', borderWidth: 1, borderColor: '#E1E8E4' }, groupChipSelected: { backgroundColor: '#123E30', borderColor: '#123E30' }, groupSection: { color: '#0F8A5F', fontWeight: '900', fontSize: 10 }, groupName: { marginTop: 3, color: '#12261E', fontWeight: '900' }, groupOptions: { marginTop: 3, color: '#7C8A83', fontSize: 11 }, groupTextSelected: { color: '#fff' }, assignmentCard: { marginTop: 8, padding: 12, borderRadius: 14, backgroundColor: '#F8FBF9', borderWidth: 1, borderColor: '#DCE8E1' }, assignmentTitle: { color: '#12261E', fontWeight: '900' }, assignmentRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, assignmentLabel: { color: '#52645C', fontSize: 12 }, stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 }, stepButton: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF3EE' },
   saveButton: { marginTop: 16, minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F8A5F' }, saveText: { color: '#fff', fontWeight: '900' },
   categoryBlock: { marginTop: 22 }, categoryTitle: { marginBottom: 9, color: '#12261E', fontWeight: '900', fontSize: 18 }, itemCard: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8, padding: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4EBE7' }, thumbnail: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#EEF2EF' }, thumbnailEmpty: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#EEF2EF', alignItems: 'center', justifyContent: 'center' }, thumbText: { color: '#9AA59F', fontSize: 11, fontWeight: '800' }, itemName: { color: '#12261E', fontWeight: '900', fontSize: 15 }, itemMeta: { marginTop: 4, color: '#7D8B84', fontSize: 12 }, editHint: { marginTop: 4, color: '#0F8A5F', fontSize: 10, fontWeight: '800' }, itemRight: { marginLeft: 10, alignItems: 'center', gap: 3 }, chevron: { color: '#A0ADA6', fontSize: 22 }, inactive: { color: '#9AA59F', textDecorationLine: 'line-through' },
   empty: { marginTop: 18, alignItems: 'center', padding: 22, borderRadius: 18, backgroundColor: '#fff' }, emptyTitle: { color: '#12261E', fontWeight: '900' }, muted: { color: '#718078', marginTop: 5 },

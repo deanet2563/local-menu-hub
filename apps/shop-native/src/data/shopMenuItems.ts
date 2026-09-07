@@ -66,6 +66,7 @@ export async function createShopMenuItem(input: {
   price: number;
   category: string | null;
   customizeGroupIds: string[];
+  customizeAssignments?: MenuCustomizeAssignmentInput[];
 }): Promise<string> {
   const name = input.name.trim();
   if (!name) throw new Error('กรุณากรอกชื่อเมนู');
@@ -89,19 +90,23 @@ export async function createShopMenuItem(input: {
 
   const itemId = (data as { item_id: string }).item_id;
   if (input.customizeGroupIds.length > 0) {
-    const { error: assignmentError } = await supabase.from('menu_item_customize_groups').insert(
-      input.customizeGroupIds.map((groupId, index) => ({
+    const assignments = input.customizeAssignments?.length
+      ? input.customizeAssignments
+      : input.customizeGroupIds.map((group_id) => ({ group_id, is_required: false, min_select: 0, max_select: 1 }));
+    const { data: assignmentData, error: assignmentError } = await supabase.from('menu_item_customize_groups').insert(
+      assignments.map((assignment, index) => ({
         item_id: itemId,
-        group_id: groupId,
-        is_required: false,
-        min_select: 0,
-        max_select: 1,
-        sort_order: index,
+        ...normalizeMenuCustomizeAssignment(assignment, index),
       })),
-    );
+    ).select('item_id,group_id,is_required,min_select,max_select,sort_order');
     if (assignmentError) {
       logSupabaseError('createShopMenuItem.assignCustomizeGroups', assignmentError);
       throw new Error(formatSupabaseError(assignmentError, 'เพิ่มเมนูแล้ว แต่ผูก Customize Group ไม่สำเร็จ'), { cause: assignmentError });
+    }
+    const expected = assignments.map((assignment, index) => normalizeMenuCustomizeAssignment(assignment, index));
+    const persisted = (assignmentData as MenuCustomizeAssignment[] | null) ?? [];
+    if (persisted.length !== expected.length || expected.some((row) => !persisted.some((saved) => assignmentMatchesInput(saved, row)))) {
+      throw new Error('Customize assignment was not confirmed by the database');
     }
   }
   return itemId;
