@@ -31,6 +31,7 @@ type ReusableCustomizeOptionRow = {
   price_delta: number;
   sort_order: number;
   is_active: boolean;
+  is_default: boolean;
 };
 
 export async function loadCustomerItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
@@ -56,7 +57,7 @@ export async function loadCustomerItemOptionGroups(itemId: string): Promise<Orde
       .eq("is_active", true),
     publicSupabase
       .from("shop_customize_options")
-      .select("option_id,group_id,label,price_delta,sort_order,is_active")
+      .select("option_id,group_id,label,price_delta,sort_order,is_active,is_default")
       .in("group_id", ids)
       .eq("is_active", true)
       .order("sort_order"),
@@ -100,7 +101,7 @@ export function buildCustomerReusableOptionGroups(input: {
             option_group_id: option.group_id,
             name: option.label,
             price_delta: Number(option.price_delta) || 0,
-            is_default: false,
+            is_default: option.is_default,
             is_active: option.is_active,
             sort_order: option.sort_order,
           })),
