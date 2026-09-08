@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase } from "@/lib/supabase";
+import liff from "@line/liff";
+import { LIFF_ID, publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
+import { buildStagingDiagnosticSnapshot, isStagingDiagnosticsHost } from "@/lib/stagingDiagnostics";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 type Shop = { shop_id: string; name: string; category: string | null; logo_url: string | null };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
@@ -15,6 +18,18 @@ function ProductCard({ item, shopName }: { item: Item; shopName: string }) {
 
 function CustomerNav({ count }: { count: number }) {
   return <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur" aria-label="เมนูหลัก"><div className="mx-auto grid max-w-md grid-cols-5 text-center text-[11px] text-slate-500"><Link to="/" className="rounded-xl py-1.5 font-semibold text-orange-600"><span className="block text-lg leading-5">⌂</span>หน้าแรก</Link><Link to="/" className="rounded-xl py-1.5"><span className="block text-lg leading-5">⌕</span>ค้นหา</Link><Link to="/cart" className="relative rounded-xl py-1.5"><span className="block text-lg leading-5">▱</span>ตะกร้า{count > 0 && <span className="absolute left-1/2 top-0 ml-2 rounded-full bg-orange-500 px-1.5 text-[10px] text-white">{count}</span>}</Link><Link to="/orders" className="rounded-xl py-1.5"><span className="block text-lg leading-5">◷</span>ออเดอร์</Link><Link to="/account" className="rounded-xl py-1.5"><span className="block text-lg leading-5">◯</span>บัญชี</Link></div></nav>;
+}
+
+function mountStagingDiagnosticsPanel(snapshot: NonNullable<ReturnType<typeof buildStagingDiagnosticSnapshot>>): () => void {
+  const existing = document.querySelector('[data-testid="staging-home-diagnostics"]');
+  existing?.remove();
+  const boolText = (value: boolean | null) => value === null ? "unknown" : value ? "true" : "false";
+  const panel = document.createElement("section");
+  panel.dataset.testid = "staging-home-diagnostics";
+  panel.className = "sticky top-0 z-[60] border-b border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-slate-900 shadow-sm";
+  panel.innerHTML = `<div class="mx-auto grid max-w-md grid-cols-1 gap-1 sm:grid-cols-2"><span>LIFF ID: ${snapshot.liffId}</span><span>isInClient: ${boolText(snapshot.isInClient)}</span><span>isLoggedIn: ${boolText(snapshot.isLoggedIn)}</span><span>Supabase: ${snapshot.supabaseRef} (${snapshot.supabaseHost})</span><span class="sm:col-span-2">Worker: ${snapshot.workerHost}</span></div>`;
+  document.body.prepend(panel);
+  return () => panel.remove();
 }
 
 export function HubHome() {
@@ -30,6 +45,29 @@ export function HubHome() {
   const lastLocationAt = useRef(0);
   const locating = useRef(false);
   const c = useCart();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hostname = window.location.hostname;
+    if (!isStagingDiagnosticsHost(hostname)) return;
+    const readLiffFlag = (reader: () => boolean): boolean | null => {
+      try {
+        return reader();
+      } catch {
+        return null;
+      }
+    };
+    const snapshot = buildStagingDiagnosticSnapshot({
+      hostname,
+      liffId: LIFF_ID,
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+      workerUrl: MYTREE_WORKER_URL,
+      isInClient: readLiffFlag(() => liff.isInClient()),
+      isLoggedIn: readLiffFlag(() => liff.isLoggedIn()),
+    });
+    if (!snapshot) return;
+    return mountStagingDiagnosticsPanel(snapshot);
+  }, []);
 
   useEffect(() => { (async () => { const [{ data: s }, { data: m }] = await Promise.all([publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false), publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)").eq("is_available", true).eq("shops.is_open", true).eq("shops.is_approved", true).eq("shops.is_banned", false)]); setShops((s as Shop[]) ?? []); setItems((m as Item[]) ?? []); setLoading(false); })(); }, []);
   useEffect(() => { void refreshNearbyShops(); const onVisibilityChange = () => { if (document.visibilityState === "visible" && Date.now() - lastLocationAt.current >= LOCATION_REFRESH_MS) void refreshNearbyShops(); }; document.addEventListener("visibilitychange", onVisibilityChange); return () => document.removeEventListener("visibilitychange", onVisibilityChange); }, []);
