@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import liff from "@line/liff";
-import { LIFF_ID, publicSupabase } from "@/lib/supabase";
+import { initLiff, LIFF_ID, publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
 import { buildStagingDiagnosticSnapshot, isStagingDiagnosticsHost } from "@/lib/stagingDiagnostics";
@@ -50,6 +50,8 @@ export function HubHome() {
     if (typeof window === "undefined") return;
     const hostname = window.location.hostname;
     if (!isStagingDiagnosticsHost(hostname)) return;
+    let mounted = true;
+    let unmountPanel: (() => void) | null = null;
     const readLiffFlag = (reader: () => boolean): boolean | null => {
       try {
         return reader();
@@ -57,16 +59,25 @@ export function HubHome() {
         return null;
       }
     };
-    const snapshot = buildStagingDiagnosticSnapshot({
-      hostname,
-      liffId: LIFF_ID,
-      supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
-      workerUrl: MYTREE_WORKER_URL,
-      isInClient: readLiffFlag(() => liff.isInClient()),
-      isLoggedIn: readLiffFlag(() => liff.isLoggedIn()),
-    });
-    if (!snapshot) return;
-    return mountStagingDiagnosticsPanel(snapshot);
+    const renderPanel = () => {
+      const snapshot = buildStagingDiagnosticSnapshot({
+        hostname,
+        liffId: LIFF_ID,
+        supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+        workerUrl: MYTREE_WORKER_URL,
+        isInClient: readLiffFlag(() => liff.isInClient()),
+        isLoggedIn: readLiffFlag(() => liff.isLoggedIn()),
+      });
+      if (!snapshot || !mounted) return;
+      unmountPanel?.();
+      unmountPanel = mountStagingDiagnosticsPanel(snapshot);
+    };
+    renderPanel();
+    void initLiff().finally(renderPanel);
+    return () => {
+      mounted = false;
+      unmountPanel?.();
+    };
   }, []);
 
   useEffect(() => { (async () => { const [{ data: s }, { data: m }] = await Promise.all([publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false), publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)").eq("is_available", true).eq("shops.is_open", true).eq("shops.is_approved", true).eq("shops.is_banned", false)]); setShops((s as Shop[]) ?? []); setItems((m as Item[]) ?? []); setLoading(false); })(); }, []);

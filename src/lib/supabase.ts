@@ -99,13 +99,20 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
   }
 
   emit("customer_identity_read_started");
+  const brokerUrl = new URL(AUTH_BROKER);
+  emit("auth_broker_request_started", `${brokerUrl.host}${brokerUrl.pathname}`);
   const res = await fetch(AUTH_BROKER, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
   });
+  emit("auth_broker_response_status", String(res.status));
   emit("customer_identity_read_resolved", String(res.status));
-  if (!res.ok) throw new Error(`auth broker error: ${res.status}`);
+  if (!res.ok) {
+    const safeBody = sanitizeBrokerErrorBody(await res.text());
+    if (safeBody) emit("auth_broker_response_body", safeBody);
+    throw new Error(`auth broker error: ${res.status}${safeBody ? ` ${safeBody}` : ""}`);
+  }
   const data = (await res.json()) as { access_token: string; expires_in: number };
 
   cached = { token: data.access_token, exp: now + data.expires_in };
@@ -175,3 +182,10 @@ authenticatedSupabase.storage.from = ((bucketId: string) => {
 }) as typeof authenticatedSupabase.storage.from;
 
 export const supabase = authenticatedSupabase;
+
+export function sanitizeBrokerErrorBody(value: string): string {
+  return value
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}/gi, "[uuid]")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[jwt]")
+    .slice(0, 240);
+}
