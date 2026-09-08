@@ -34,3 +34,21 @@ volumes. It never uses `--linked` and never contacts Production Supabase.
 Storage API, Logflare, pg-meta, and Studio are excluded because they are not
 required by this database rehearsal and are unhealthy or slow to become ready
 in the current Windows Docker environment.
+
+## Data-rich rehearsal
+
+`seed_customize_data.sql` is an ASCII, local-only fixture. It creates two shops,
+category normalization variants, uncategorized items, required and optional
+legacy groups, category-spanning groups, active/inactive groups and options,
+multiple defaults, non-zero price deltas, an existing canonical semantic
+collision, and a cross-shop ownership conflict.
+
+The harness first proves that the conflict fixture is blocked with the named
+codes `canonical_category_ambiguous`, `canonical_group_semantic_collision`,
+and `legacy_group_shop_mismatch`. It then removes only those intentional
+conflict rows for the valid-data parity pass. The checked-in backfill and
+rollback files still end in `ROLLBACK`; the harness creates disposable
+commit variants inside the temporary local project only so row removal and
+pre-existing-row preservation can be observed. Edge Runtime is excluded from
+this database-only rehearsal because it is not needed and may require an
+external Deno fetch.

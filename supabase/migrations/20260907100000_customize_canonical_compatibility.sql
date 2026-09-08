@@ -43,6 +43,7 @@ comment on column public.menu_items.category_id is
 create table if not exists public.customize_canonical_migration_map (
   mapping_id uuid primary key default gen_random_uuid(),
   shop_id text not null references public.shops(shop_id) on delete cascade,
+  canonical_created boolean not null default true,
   legacy_entity_type text not null check (legacy_entity_type in (
     'category_text', 'group', 'option', 'item_assignment'
   )),
@@ -62,6 +63,9 @@ create table if not exists public.customize_canonical_migration_map (
   unique (legacy_entity_type, legacy_key, canonical_entity_type, clone_key),
   unique (canonical_entity_type, canonical_key)
 );
+
+alter table public.customize_canonical_migration_map
+  add column if not exists canonical_created boolean not null default true;
 
 create index if not exists idx_customize_canonical_map_shop
   on public.customize_canonical_migration_map(shop_id, canonical_entity_type);

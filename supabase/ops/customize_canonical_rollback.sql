@@ -28,6 +28,7 @@ where exists (
   select 1
   from public.customize_canonical_migration_map m
   where m.canonical_entity_type = 'item_assignment'
+    and m.canonical_created
     and m.canonical_key = a.item_id::text || ':' || a.group_id::text
 );
 
@@ -36,6 +37,7 @@ where exists (
   select 1
   from public.customize_canonical_migration_map m
   where m.canonical_entity_type = 'option'
+    and m.canonical_created
     and m.canonical_id = o.option_id
 );
 
@@ -44,6 +46,7 @@ where exists (
   select 1
   from public.customize_canonical_migration_map m
   where m.canonical_entity_type = 'group'
+    and m.canonical_created
     and m.canonical_id = g.group_id
 );
 
@@ -62,6 +65,7 @@ where exists (
   from public.customize_canonical_migration_map m
   where m.canonical_entity_type = 'category'
     and m.canonical_id = c.category_id
+    and m.canonical_created
 );
 
 delete from public.customize_canonical_migration_map;

@@ -27,6 +27,30 @@ where i.shop_id <> g.shop_id
 on conflict (entity_type, legacy_key, conflict_code) do update
 set details = excluded.details, resolved_at = null;
 
+-- Case/whitespace-normalized canonical category lookup must be unambiguous.
+-- Block duplicate pre-existing rows instead of choosing one nondeterministically.
+insert into public.customize_canonical_migration_conflicts (
+  shop_id, entity_type, legacy_key, conflict_code, details
+)
+select
+  m.shop_id,
+  'category_text',
+  coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__'),
+  'canonical_category_ambiguous',
+  jsonb_build_object(
+    'normalized_name', coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__'),
+    'canonical_category_ids', jsonb_agg(c.category_id order by c.category_id)
+  )
+from public.menu_items m
+join public.shop_menu_categories c
+  on c.shop_id = m.shop_id
+ and lower(trim(c.name)) = lower(trim(coalesce(nullif(trim(m.category), ''), 'ทั่วไป')))
+where m.shop_id is not null
+group by m.shop_id, coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__')
+having count(distinct c.category_id) > 1
+on conflict (entity_type, legacy_key, conflict_code) do update
+set details = excluded.details, resolved_at = null;
+
 -- 1. Build category plans from the legacy text category. The fallback category
 -- preserves rows with no category instead of silently dropping them.
 create temp table _canonical_category_plan (
@@ -34,16 +58,18 @@ create temp table _canonical_category_plan (
   legacy_key text not null,
   category_name text not null,
   canonical_id uuid not null default gen_random_uuid(),
+  canonical_created boolean not null default true,
   primary key (shop_id, legacy_key)
 ) on commit drop;
 
 insert into _canonical_category_plan (shop_id, legacy_key, category_name)
-select distinct
+select
   m.shop_id,
   coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__'),
-  coalesce(nullif(trim(m.category), ''), 'ทั่วไป')
+  coalesce(min(nullif(trim(m.category), '')), 'ทั่วไป')
 from public.menu_items m
-where m.shop_id is not null;
+where m.shop_id is not null
+group by m.shop_id, coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__');
 
 -- Reuse an existing canonical category only by its verified shop/name key,
 -- never by assuming that legacy and canonical IDs match.
@@ -52,6 +78,58 @@ set canonical_id = c.category_id
 from public.shop_menu_categories c
 where c.shop_id = p.shop_id
   and lower(trim(c.name)) = lower(trim(p.category_name));
+
+update _canonical_category_plan p
+set canonical_created = false
+where exists (
+  select 1 from public.shop_menu_categories c
+  where c.category_id = p.canonical_id
+);
+
+-- A canonical row with the same semantic key must be reconciled explicitly;
+-- never allow a generated group insert to fail on a unique-name constraint.
+insert into public.customize_canonical_migration_conflicts (
+  shop_id, entity_type, legacy_key, conflict_code, details
+)
+select distinct
+  g.shop_id,
+  'group',
+  g.option_group_id::text,
+  'canonical_group_semantic_collision',
+  jsonb_build_object(
+    'category_id', p.canonical_id,
+    'section_name', c.name,
+    'group_name', g.name,
+    'canonical_group_id', x.group_id
+  )
+from public.menu_option_groups g
+join public.menu_item_option_groups l on l.option_group_id = g.option_group_id
+join public.menu_items i on i.item_id = l.item_id and i.shop_id = g.shop_id
+join _canonical_category_plan p
+  on p.shop_id = i.shop_id
+ and p.legacy_key = coalesce(nullif(lower(trim(i.category)), ''), '__uncategorized__')
+join public.shop_menu_categories c on c.category_id = p.canonical_id
+join public.shop_customize_groups x
+  on x.shop_id = g.shop_id
+ and x.category_id = p.canonical_id
+ and x.section_name = c.name
+ and x.name = g.name
+on conflict (entity_type, legacy_key, conflict_code) do update
+set details = excluded.details, resolved_at = null;
+
+do $$
+declare
+  conflict_count integer;
+  conflict_codes text;
+begin
+  select count(*), string_agg(distinct conflict_code, ', ' order by conflict_code)
+    into conflict_count, conflict_codes
+  from public.customize_canonical_migration_conflicts
+  where blocking and resolved_at is null;
+  if conflict_count > 0 then
+    raise exception 'canonical Customize backfill blocked by % unresolved conflicts (%): %', conflict_count, conflict_codes, 'resolve conflict rows before backfill';
+  end if;
+end $$;
 
 insert into public.shop_menu_categories (category_id, shop_id, name, sort_order, is_active)
 select
@@ -73,12 +151,13 @@ where p.shop_id = m.shop_id
   and p.legacy_key = coalesce(nullif(lower(trim(m.category)), ''), '__uncategorized__');
 
 insert into public.customize_canonical_migration_map (
-  shop_id, legacy_entity_type, legacy_key,
+  shop_id, canonical_created, legacy_entity_type, legacy_key,
   canonical_entity_type, canonical_key, canonical_id,
   clone_key, mapping_reason, legacy_fingerprint, canonical_fingerprint
 )
 select
   p.shop_id,
+  p.canonical_created,
   'category_text',
   p.legacy_key,
   'category',
@@ -159,12 +238,13 @@ where not exists (
 );
 
 insert into public.customize_canonical_migration_map (
-  shop_id, legacy_entity_type, legacy_key,
+  shop_id, canonical_created, legacy_entity_type, legacy_key,
   canonical_entity_type, canonical_key, canonical_id,
   clone_key, mapping_reason, legacy_fingerprint, canonical_fingerprint
 )
 select
   g.shop_id,
+  true,
   'group',
   g.option_group_id::text,
   'group',
@@ -217,12 +297,13 @@ where not exists (
 );
 
 insert into public.customize_canonical_migration_map (
-  shop_id, legacy_entity_type, legacy_key,
+  shop_id, canonical_created, legacy_entity_type, legacy_key,
   canonical_entity_type, canonical_key, canonical_id,
   clone_key, mapping_reason, legacy_fingerprint, canonical_fingerprint
 )
 select
   g.shop_id,
+  true,
   'option',
   o.option_id::text,
   'option',
@@ -262,12 +343,13 @@ where not exists (
 );
 
 insert into public.customize_canonical_migration_map (
-  shop_id, legacy_entity_type, legacy_key,
+  shop_id, canonical_created, legacy_entity_type, legacy_key,
   canonical_entity_type, canonical_key, canonical_id,
   clone_key, mapping_reason, legacy_fingerprint, canonical_fingerprint
 )
 select
   i.shop_id,
+  true,
   'item_assignment',
   l.item_id::text || ':' || l.option_group_id::text,
   'item_assignment',
