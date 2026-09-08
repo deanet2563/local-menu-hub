@@ -15,16 +15,18 @@ import {
   googleMapsPreviewUrl,
   quoteDeliveryRoute,
   resolveDeliveryLocation,
+  getDeliveryQuoteToken,
   type ConfirmedDeliveryPoint,
   type DeliveryRouteQuote,
 } from "@/lib/deliveryLocation";
 import { e2eDiagnosticsEnabled, readLiffDiagnostics, type LiffDiagnosticSnapshot } from "@/lib/e2eDiagnostics";
 import { validateCartCustomizeRequirements } from "@/lib/cartCustomizeValidation";
 import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
-import { submitOrder, type OrderSubmitDiagnostics } from "@/lib/order";
+import { submitOrder, type OrderSubmitDiagnostics, type OrderSubmitTimelineEvent } from "@/lib/order";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 export const Route = createFileRoute("/cart")({ component: CartCheckout });
 
@@ -42,6 +44,24 @@ type ShopCheckout = {
 
 type OrderTiming = "now" | "preorder";
 type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premises" | "locality" | "deliveryPoint", string>>;
+type SubmitTimelineDiagnostics = {
+  workerHost: string;
+  deliveryMethod: "delivery" | "pickup";
+  shopId: string;
+  itemCount: number;
+  idTokenExists: "unknown" | "yes" | "no";
+  quoteTokenExists: "yes" | "no";
+  events: OrderSubmitTimelineEvent[];
+};
+
+function stagingSubmitTimelineEnabled(): boolean {
+  if (!e2eDiagnosticsEnabled()) return false;
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname;
+  return hostname === "customer-staging.local-menu-hub.pages.dev"
+    || hostname === "customer-e2e.local-menu-hub.pages.dev"
+    || /^customer-e2e-[a-z0-9-]+\.local-menu-hub\.pages\.dev$/i.test(hostname);
+}
 
 function isDeliveryOnlyCheckoutError(message: string | null): boolean {
   if (!message) return false;
@@ -136,6 +156,7 @@ function CartCheckout() {
   const [error, setError] = useState<string | null>(null);
   const [orderErrorCode, setOrderErrorCode] = useState<string | null>(null);
   const [orderDiagnostics, setOrderDiagnostics] = useState<OrderSubmitDiagnostics | null>(null);
+  const [submitTimeline, setSubmitTimeline] = useState<SubmitTimelineDiagnostics | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [liffDiagnostics, setLiffDiagnostics] = useState<LiffDiagnosticSnapshot | null>(null);
   const [done, setDone] = useState(false);
@@ -492,15 +513,50 @@ function CartCheckout() {
     const requestedFor = timing === "preorder" ? bangkokInputToIso(requestedForLocal) : null;
     if (timing === "preorder" && !requestedFor) return setError("กรุณาเลือกวันและเวลารับ/ส่ง");
 
+    const timelineEnabled = stagingSubmitTimelineEnabled();
+    const timelineStartedAt = Date.now();
+    const timelineEvent = (step: OrderSubmitTimelineEvent["step"], detail?: string): OrderSubmitTimelineEvent => ({
+      step,
+      at: new Date().toISOString(),
+      elapsedMs: Date.now() - timelineStartedAt,
+      detail,
+    });
+    const recordTimeline = (step: OrderSubmitTimelineEvent["step"], detail?: string) => {
+      if (!timelineEnabled) return;
+      const event = timelineEvent(step, detail);
+      setSubmitTimeline((current) => {
+        if (!current) return current;
+        const idTokenExists = step === "id_token_received" ? detail === "no" ? "no" : "yes" : current.idTokenExists;
+        return { ...current, idTokenExists, events: [...current.events, event] };
+      });
+    };
+    if (timelineEnabled) {
+      const workerHost = new URL(MYTREE_WORKER_URL).hostname;
+      const quoteTokenExists = fulfillment === "delivery" && Boolean(getDeliveryQuoteToken(checkoutShopId, deliveryPoint?.lat ?? null, deliveryPoint?.lng ?? null)) ? "yes" : "no";
+      setSubmitTimeline({
+        workerHost,
+        deliveryMethod: fulfillment,
+        shopId: checkoutShopId,
+        itemCount: checkoutItems.length,
+        idTokenExists: "unknown",
+        quoteTokenExists,
+        events: [timelineEvent("submit_clicked")],
+      });
+    }
+
+    recordTimeline("customize_validation_started");
     const cartCustomizeValidation = await validateCartCustomizeRequirements(checkoutItems);
+    recordTimeline("customize_validation_resolved");
     if (!cartCustomizeValidation.ok) return setError(cartCustomizeValidation.message);
 
     setSubmitting(true);
     setError(null);
     setOrderErrorCode(null);
     setOrderDiagnostics(null);
+    recordTimeline("customer_profile_started");
     const cid = await getCurrentCustomerId();
     if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
+    recordTimeline("customer_profile_resolved");
 
     const res = await submitOrder({
       shopId: checkoutShopId,
@@ -524,11 +580,17 @@ function CartCheckout() {
       customerDeliveryCharge: deliveryCharge,
       note: note.trim() || null,
       requestedFor,
+    }, {
+      timeoutMs: 20_000,
+      onTimelineStep: (event) => recordTimeline(event.step, event.detail),
     });
 
+    recordTimeline("submit_order_returned", res.ok ? "ok" : "not_ok");
     setSubmitting(false);
+    recordTimeline("finally_reached");
     if (res.diagnostics) setOrderDiagnostics(res.diagnostics);
     if (!res.ok) setOrderErrorCode(res.errorCode ?? null);
+    if (!res.ok && res.errorCode === "fetch_timeout") return setError("หมดเวลารอ staging /order กรุณาดู submit timeline แล้วแจ้งขั้นตอนล่าสุด");
     if (!res.ok) return setError(res.error ?? "สั่งไม่สำเร็จ");
     if (customerId && fulfillment === "delivery" && deliveryPoint) {
       const nextAddresses = upsertUsedDeliveryAddress(deliveryAddresses, {
@@ -553,6 +615,7 @@ function CartCheckout() {
     setCompletedSubId(res.sub_id ?? null);
     setCompletedPayment(payment);
     cart.clearShop(checkoutShopId);
+    recordTimeline("navigation_started");
     setDone(true);
   }
 
@@ -875,6 +938,25 @@ function CartCheckout() {
           <summary>รายละเอียดการส่งออเดอร์สำหรับ E2E</summary>
           <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(orderDiagnostics, null, 2)}</pre>
         </details>
+      )}
+
+      {submitTimeline && (
+        <section data-testid="staging-submit-timeline" className="rounded-lg border border-amber-300 bg-amber-50 p-3 font-mono text-[10px] leading-4 text-amber-950">
+          <p className="text-[11px] font-bold">staging submit timeline</p>
+          <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <p>Worker: {submitTimeline.workerHost}</p>
+            <p>delivery_method: {submitTimeline.deliveryMethod}</p>
+            <p>shop_id: {submitTimeline.shopId}</p>
+            <p>item_count: {submitTimeline.itemCount}</p>
+            <p>idToken exists: {submitTimeline.idTokenExists}</p>
+            <p>quote token exists: {submitTimeline.quoteTokenExists}</p>
+          </div>
+          <ol className="mt-2 space-y-1">
+            {submitTimeline.events.map((event, index) => (
+              <li key={`${event.step}-${index}`}>{event.elapsedMs}ms {event.step}{event.detail ? `: ${event.detail}` : ""}</li>
+            ))}
+          </ol>
+        </section>
       )}
 
       <div className="fixed left-4 right-4 bottom-4 z-20">

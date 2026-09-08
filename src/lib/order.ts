@@ -59,6 +59,34 @@ export type OrderSubmitDiagnostics = {
   hasIdToken: boolean;
 };
 
+export type OrderSubmitTimelineStep =
+  | "submit_clicked"
+  | "customize_validation_started"
+  | "customize_validation_resolved"
+  | "customer_profile_started"
+  | "customer_profile_resolved"
+  | "id_token_requested"
+  | "id_token_received"
+  | "request_payload_built"
+  | "fetch_started"
+  | "fetch_resolved"
+  | "fetch_rejected"
+  | "fetch_timeout"
+  | "response_status"
+  | "response_body_received"
+  | "response_json_parsed"
+  | "order_id_received"
+  | "submit_order_returned"
+  | "navigation_started"
+  | "finally_reached";
+
+export type OrderSubmitTimelineEvent = {
+  step: OrderSubmitTimelineStep;
+  at: string;
+  elapsedMs: number;
+  detail?: string;
+};
+
 export type OrderSubmitResult = {
   ok: boolean;
   order_id?: string;
@@ -66,6 +94,11 @@ export type OrderSubmitResult = {
   error?: string;
   errorCode?: string;
   diagnostics?: OrderSubmitDiagnostics;
+};
+
+export type OrderSubmitOptions = {
+  timeoutMs?: number;
+  onTimelineStep?: (event: OrderSubmitTimelineEvent) => void;
 };
 
 export function customerOrderErrorMessage(error: string | undefined, errorCode?: string): string {
@@ -120,12 +153,18 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
 }
 
 export async function submitOrder(
-  order: OrderPayload
+  order: OrderPayload,
+  options: OrderSubmitOptions = {},
 ): Promise<OrderSubmitResult> {
+  const startedAt = Date.now();
+  const emit = (step: OrderSubmitTimelineStep, detail?: string) => {
+    options.onTimelineStep?.({ step, at: new Date().toISOString(), elapsedMs: Date.now() - startedAt, detail });
+  };
   const quotedOrder = withDeliveryQuoteToken(order);
   const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
   if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
 
+  emit("id_token_requested");
   await initLiff();
 
   if (!liff.isLoggedIn()) {
@@ -140,18 +179,34 @@ export async function submitOrder(
   }
 
   const idToken = liff.getIDToken();
+  if (!idToken) emit("id_token_received", "no");
   if (!idToken) return { ok: false, error: "ไม่พบ LINE idToken" };
 
+  emit("id_token_received", "yes");
+
+  let timeoutId: number | null = null;
   try {
     const enrichedOrder = withSetMetadata(quotedOrder);
+    emit("request_payload_built");
+    const controller = new AbortController();
+    timeoutId = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000);
+    emit("fetch_started");
     const res = await fetch(ORDER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, order: enrichedOrder }),
+      signal: controller.signal,
     });
+    window.clearTimeout(timeoutId);
+    emit("fetch_resolved");
+    emit("response_status", String(res.status));
     const responseBody = await res.text();
+    emit("response_body_received");
     let data: { ok?: boolean; order_id?: string; sub_id?: string; error?: string; error_code?: string } = {};
-    try { data = JSON.parse(responseBody) as typeof data; } catch { /* surfaced in E2E diagnostics */ }
+    try {
+      data = JSON.parse(responseBody) as typeof data;
+      emit("response_json_parsed");
+    } catch { /* surfaced in E2E diagnostics */ }
     const diagnostics = import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS === "true" ? {
       endpoint: ORDER_URL,
       method: "POST" as const,
@@ -168,8 +223,15 @@ export async function submitOrder(
       hasIdToken: Boolean(idToken),
     } : undefined;
     if (!res.ok) return { ok: false, error: customerOrderErrorMessage(data.error, data.error_code), errorCode: data.error_code ?? data.error ?? `http_${res.status}`, diagnostics };
+    emit("order_id_received", data.sub_id ?? data.order_id ?? "missing");
     return { ok: true, order_id: data.order_id, sub_id: data.sub_id, diagnostics };
   } catch (e) {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    if (e instanceof DOMException && e.name === "AbortError") {
+      emit("fetch_timeout");
+      return { ok: false, error: "Staging /order request timed out. Check the submit timeline for the last settled step.", errorCode: "fetch_timeout" };
+    }
+    emit("fetch_rejected", e instanceof Error ? e.message : "network error");
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
 }
