@@ -1,4 +1,4 @@
-﻿-- MyTree menu item archiving
+-- MyTree menu item archiving
 -- Preserve historical order_items references instead of hard deleting menu items.
 
 alter table public.menu_items
