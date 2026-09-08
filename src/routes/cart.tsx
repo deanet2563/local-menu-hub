@@ -615,6 +615,8 @@ function CartCheckout() {
           <p>LIFF ID: {liffDiagnostics.liffId}</p>
           <p>isLoggedIn: {String(liffDiagnostics.isLoggedIn)}</p>
           <p>isInClient: {String(liffDiagnostics.isInClient)}</p>
+          <p>Supabase: {liffDiagnostics.supabaseRef} ({liffDiagnostics.supabaseHost})</p>
+          <p>Worker: {liffDiagnostics.workerHost}</p>
           <p>context: {liffDiagnostics.contextType ?? "null"}</p>
           <p>host: {liffDiagnostics.host}</p>
           <p>build: {liffDiagnostics.build}</p>

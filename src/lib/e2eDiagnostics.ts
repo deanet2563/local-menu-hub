@@ -1,11 +1,15 @@
 import liff from "@line/liff";
 import { initLiff, LIFF_ID } from "@/lib/supabase";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 export type LiffDiagnosticSnapshot = {
   liffId: string;
   isLoggedIn: boolean | null;
   isInClient: boolean | null;
   contextType: string | null;
+  supabaseHost: string;
+  supabaseRef: string;
+  workerHost: string;
   userAgent: string;
   host: string;
   build: string;
@@ -17,8 +21,13 @@ export function e2eDiagnosticsEnabled(): boolean {
 }
 
 export async function readLiffDiagnostics(): Promise<LiffDiagnosticSnapshot> {
+  const supabaseUrl = new URL(import.meta.env.VITE_SUPABASE_URL);
+  const workerUrl = new URL(MYTREE_WORKER_URL);
   const base = {
     liffId: LIFF_ID,
+    supabaseHost: supabaseUrl.hostname,
+    supabaseRef: supabaseUrl.hostname.split(".")[0] ?? "",
+    workerHost: workerUrl.hostname,
     userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
     host: typeof window === "undefined" ? "" : window.location.hostname,
     build: import.meta.env.VITE_COMMIT_SHA || import.meta.env.VITE_BUILD_ID || "unknown",
