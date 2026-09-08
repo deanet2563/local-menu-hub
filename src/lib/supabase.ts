@@ -3,6 +3,7 @@ import liff from "@line/liff";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
+import { makeCustomerProfileTimelineEvent, type CustomerProfileTimelineEvent, type CustomerProfileTimelineStep } from "@/lib/customerProfileDiagnostics";
 
 // ============================================================
 // MyTree — Supabase clients
@@ -22,6 +23,17 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
+
+type CustomerProfileTraceOptions = {
+  onTimelineStep?: (event: CustomerProfileTimelineEvent) => void;
+};
+
+function customerProfileTraceEmitter(options?: CustomerProfileTraceOptions) {
+  const startedAt = Date.now();
+  return (step: CustomerProfileTimelineStep, detail?: string) => {
+    options?.onTimelineStep?.(makeCustomerProfileTimelineEvent(step, startedAt, undefined, detail));
+  };
+}
 
 /** True for isolated non-production Customer previews. */
 export function isOrderingPreview(): boolean {
@@ -54,13 +66,24 @@ export function initLiff(): Promise<void> {
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
-export async function getAccessToken(): Promise<string> {
+export async function getAccessToken(options?: CustomerProfileTraceOptions): Promise<string> {
+  const emit = customerProfileTraceEmitter(options);
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
+  emit("liff_ready_wait_started");
   await initLiff();
-  if (!liff.isLoggedIn()) {
+  emit("liff_ready_wait_resolved");
+  const loggedIn = liff.isLoggedIn();
+  emit("liff_is_logged_in", loggedIn ? "yes" : "no");
+  try {
+    const context = liff.getContext();
+    emit("liff_context_read", context?.type ?? "null");
+  } catch (cause) {
+    emit("liff_context_read", cause instanceof Error ? cause.message : "error");
+  }
+  if (!loggedIn) {
     // Raw preview browsing intentionally works outside LINE. Authenticated
     // actions are allowed only after the same preview is launched through its
     // configured staging LIFF URL.
@@ -75,11 +98,13 @@ export async function getAccessToken(): Promise<string> {
     throw new Error("no LINE idToken");
   }
 
+  emit("customer_identity_read_started");
   const res = await fetch(AUTH_BROKER, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
   });
+  emit("customer_identity_read_resolved", String(res.status));
   if (!res.ok) throw new Error(`auth broker error: ${res.status}`);
   const data = (await res.json()) as { access_token: string; expires_in: number };
 
@@ -88,15 +113,37 @@ export async function getAccessToken(): Promise<string> {
 }
 
 /** The current MyTree customer_id (from the LINE-issued token), or null. */
-export async function getCurrentCustomerId(): Promise<string | null> {
-  const token = await getAccessToken();
-  if (!token) return null;
+export async function getCurrentCustomerId(options?: CustomerProfileTraceOptions): Promise<string | null> {
+  const emit = customerProfileTraceEmitter(options);
+  emit("customer_profile_function_entered");
+  const token = await getAccessToken(options);
+  if (!token) {
+    emit("customer_profile_missing", "no_token");
+    emit("customer_profile_function_returned");
+    return null;
+  }
   try {
+    emit("customer_identity_read_started", "jwt_payload");
     const part = token.split(".")[1];
-    if (!part) return null;
+    if (!part) {
+      emit("customer_identity_read_resolved", "missing_payload");
+      emit("customer_profile_missing", "missing_payload");
+      emit("customer_profile_function_returned");
+      return null;
+    }
     const payload = JSON.parse(atob(part));
+    emit("customer_identity_read_resolved", "jwt_payload");
+    if (!payload.customer_id) {
+      emit("customer_profile_missing", "missing_customer_id");
+      emit("customer_profile_function_returned");
+      return null;
+    }
+    emit("customer_profile_found");
+    emit("customer_profile_function_returned");
     return payload.customer_id ?? null;
   } catch {
+    emit("customer_profile_error");
+    emit("customer_profile_function_returned");
     return null;
   }
 }

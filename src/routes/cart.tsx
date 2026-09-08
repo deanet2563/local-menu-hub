@@ -23,6 +23,7 @@ import { e2eDiagnosticsEnabled, readLiffDiagnostics, type LiffDiagnosticSnapshot
 import { validateCartCustomizeRequirements } from "@/lib/cartCustomizeValidation";
 import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
 import { submitOrder, type OrderSubmitDiagnostics, type OrderSubmitTimelineEvent } from "@/lib/order";
+import { customerProfileTimeoutMessage, type CustomerProfileTimelineEvent } from "@/lib/customerProfileDiagnostics";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
@@ -44,6 +45,13 @@ type ShopCheckout = {
 
 type OrderTiming = "now" | "preorder";
 type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premises" | "locality" | "deliveryPoint", string>>;
+type SubmitTimelineStep = OrderSubmitTimelineEvent["step"] | CustomerProfileTimelineEvent["step"];
+type SubmitTimelineEvent = {
+  step: SubmitTimelineStep;
+  at: string;
+  elapsedMs: number;
+  detail?: string;
+};
 type SubmitTimelineDiagnostics = {
   workerHost: string;
   deliveryMethod: "delivery" | "pickup";
@@ -51,7 +59,7 @@ type SubmitTimelineDiagnostics = {
   itemCount: number;
   idTokenExists: "unknown" | "yes" | "no";
   quoteTokenExists: "yes" | "no";
-  events: OrderSubmitTimelineEvent[];
+  events: SubmitTimelineEvent[];
 };
 
 function stagingSubmitTimelineEnabled(): boolean {
@@ -515,13 +523,13 @@ function CartCheckout() {
 
     const timelineEnabled = stagingSubmitTimelineEnabled();
     const timelineStartedAt = Date.now();
-    const timelineEvent = (step: OrderSubmitTimelineEvent["step"], detail?: string): OrderSubmitTimelineEvent => ({
+    const timelineEvent = (step: SubmitTimelineEvent["step"], detail?: string): SubmitTimelineEvent => ({
       step,
       at: new Date().toISOString(),
       elapsedMs: Date.now() - timelineStartedAt,
       detail,
     });
-    const recordTimeline = (step: OrderSubmitTimelineEvent["step"], detail?: string) => {
+    const recordTimeline = (step: SubmitTimelineEvent["step"], detail?: string) => {
       if (!timelineEnabled) return;
       const event = timelineEvent(step, detail);
       setSubmitTimeline((current) => {
@@ -554,9 +562,58 @@ function CartCheckout() {
     setOrderErrorCode(null);
     setOrderDiagnostics(null);
     recordTimeline("customer_profile_started");
-    const cid = await getCurrentCustomerId();
-    if (cid) await supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid);
-    recordTimeline("customer_profile_resolved");
+    let cid: string | null = null;
+    try {
+      let acceptProfileEvents = true;
+      let customerProfileTimeoutId: number | null = null;
+      const customerProfilePromise = getCurrentCustomerId({
+        onTimelineStep: (event) => {
+          if (acceptProfileEvents) recordTimeline(event.step, event.detail);
+        },
+      });
+      const profileResult = timelineEnabled ? await Promise.race([
+        customerProfilePromise,
+        new Promise<"customer_profile_timeout">((resolve) => {
+          customerProfileTimeoutId = window.setTimeout(() => resolve("customer_profile_timeout"), 15_000);
+        }),
+      ]) : await customerProfilePromise;
+      acceptProfileEvents = false;
+      if (customerProfileTimeoutId !== null) window.clearTimeout(customerProfileTimeoutId);
+      if (profileResult === "customer_profile_timeout") {
+        recordTimeline("customer_profile_timeout");
+        setOrderErrorCode("customer_profile_timeout");
+        setSubmitting(false);
+        recordTimeline("finally_reached");
+        return setError(customerProfileTimeoutMessage());
+      }
+      cid = profileResult;
+      if (cid) {
+        recordTimeline("supabase_customer_query_started");
+        let customerUpdateTimeoutId: number | null = null;
+        const customerUpdatePromise = supabase.from("customers").update({ name: customerName.trim(), phone: customerPhone.trim() }).eq("id", cid).then(() => "ok" as const);
+        const customerUpdateResult = timelineEnabled ? await Promise.race([
+          customerUpdatePromise,
+          new Promise<"customer_profile_timeout">((resolve) => {
+            customerUpdateTimeoutId = window.setTimeout(() => resolve("customer_profile_timeout"), 15_000);
+          }),
+        ]) : await customerUpdatePromise;
+        if (customerUpdateTimeoutId !== null) window.clearTimeout(customerUpdateTimeoutId);
+        if (customerUpdateResult === "customer_profile_timeout") {
+          recordTimeline("customer_profile_timeout", "supabase_customer_query");
+          setOrderErrorCode("customer_profile_timeout");
+          setSubmitting(false);
+          recordTimeline("finally_reached");
+          return setError(customerProfileTimeoutMessage());
+        }
+        recordTimeline("supabase_customer_query_resolved");
+      }
+      recordTimeline("customer_profile_resolved");
+    } catch (cause) {
+      recordTimeline("customer_profile_error", cause instanceof Error ? cause.message : "error");
+      setSubmitting(false);
+      recordTimeline("finally_reached");
+      return setError("ตรวจข้อมูลลูกค้าไม่สำเร็จ กรุณาดู customer profile timeline");
+    }
 
     const res = await submitOrder({
       shopId: checkoutShopId,
