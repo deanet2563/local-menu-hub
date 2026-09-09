@@ -17,9 +17,22 @@ import { browserSessionStorage, loadMyTreeSession, saveMyTreeSession } from "@/l
 // ============================================================
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
-export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
-const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const STAGING_HOST = "customer-staging.local-menu-hub.pages.dev";
+const STAGING_LIFF_ID = "2010936243-hG7sC3Wd";
+const STAGING_WORKER_URL = "https://mytree-worker-staging.kompakorn-t.workers.dev";
+const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
+
+function isCustomerStagingHost(): boolean {
+  return typeof window !== "undefined" && window.location.hostname === STAGING_HOST;
+}
+
+export const LIFF_ID = isCustomerStagingHost()
+  ? STAGING_LIFF_ID
+  : import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
+const AUTH_BROKER = `${isCustomerStagingHost() ? STAGING_WORKER_URL : MYTREE_WORKER_URL}/auth/line`;
+export const MYTREE_SUPABASE_URL = isCustomerStagingHost()
+  ? STAGING_SUPABASE_URL
+  : import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: Promise<void> | null = null;
@@ -45,13 +58,12 @@ export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
   const hostname = window.location.hostname;
   return hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev"
-    || hostname === "customer-staging.local-menu-hub.pages.dev"
     || hostname === "customer-e2e.local-menu-hub.pages.dev"
     || /^customer-e2e-[a-z0-9-]+\.local-menu-hub\.pages\.dev$/i.test(hostname);
 }
 
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
-export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const publicSupabase = createClient(MYTREE_SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
@@ -241,7 +253,7 @@ export async function getCurrentCustomerId(options?: CustomerProfileTraceOptions
   return session.customerId;
 }
 
-const authenticatedSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const authenticatedSupabase = createClient(MYTREE_SUPABASE_URL, SUPABASE_ANON_KEY, {
   accessToken: async () => (await getAccessToken()) || null,
 });
 

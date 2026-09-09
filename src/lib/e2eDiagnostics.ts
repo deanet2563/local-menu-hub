@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff, LIFF_ID } from "@/lib/supabase";
+import { initLiff, LIFF_ID, MYTREE_SUPABASE_URL } from "@/lib/supabase";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 export type LiffDiagnosticSnapshot = {
@@ -21,7 +21,7 @@ export function e2eDiagnosticsEnabled(): boolean {
 }
 
 export async function readLiffDiagnostics(): Promise<LiffDiagnosticSnapshot> {
-  const supabaseUrl = new URL(import.meta.env.VITE_SUPABASE_URL);
+  const supabaseUrl = new URL(MYTREE_SUPABASE_URL);
   const workerUrl = new URL(MYTREE_WORKER_URL);
   const base = {
     liffId: LIFF_ID,

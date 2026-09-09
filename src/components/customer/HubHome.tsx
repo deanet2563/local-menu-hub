@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import liff from "@line/liff";
-import { ensureMyTreeSession, initLiff, LIFF_ID, publicSupabase } from "@/lib/supabase";
+import { ensureMyTreeSession, initLiff, LIFF_ID, MYTREE_SUPABASE_URL, publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
 import { buildStagingDiagnosticSnapshot, isStagingDiagnosticsHost } from "@/lib/stagingDiagnostics";
@@ -64,7 +64,7 @@ export function HubHome() {
       const snapshot = buildStagingDiagnosticSnapshot({
         hostname,
         liffId: LIFF_ID,
-        supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+        supabaseUrl: MYTREE_SUPABASE_URL,
         workerUrl: MYTREE_WORKER_URL,
         isInClient: readLiffFlag(() => liff.isInClient()),
         isLoggedIn: readLiffFlag(() => liff.isLoggedIn()),
