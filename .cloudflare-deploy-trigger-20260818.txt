@@ -2,3 +2,4 @@ Trigger Cloudflare Pages after GitHub reconnection.
 Expected production branch includes shop order card date/time + short Job ID and Rider-interest sound alert.
 2026-09-09: redeploy external read-only MyTree AI Office at /ai-office (no LINE/LIFF dependency).
 2026-09-09T12:34+07:00: publish standalone static AI Office at /ai-office/ outside the React/LIFF bundle.
+2026-09-09T12:49+07:00: publish MyTree AI Office V2 premium responsive motion UI.
