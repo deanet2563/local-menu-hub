@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import liff from "@line/liff";
-import { initLiff, LIFF_ID, publicSupabase } from "@/lib/supabase";
+import { ensureMyTreeSession, initLiff, LIFF_ID, publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart, cartCount, cartTotal } from "@/lib/cart";
 import { buildStagingDiagnosticSnapshot, isStagingDiagnosticsHost } from "@/lib/stagingDiagnostics";
@@ -27,7 +27,7 @@ function mountStagingDiagnosticsPanel(snapshot: NonNullable<ReturnType<typeof bu
   const panel = document.createElement("section");
   panel.dataset.testid = "staging-home-diagnostics";
   panel.className = "sticky top-0 z-[60] border-b border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-slate-900 shadow-sm";
-  panel.innerHTML = `<div class="mx-auto grid max-w-md grid-cols-1 gap-1 sm:grid-cols-2"><span>LIFF ID: ${snapshot.liffId}</span><span>Build: ${snapshot.buildSha}</span><span>isInClient: ${boolText(snapshot.isInClient)}</span><span>isLoggedIn: ${boolText(snapshot.isLoggedIn)}</span><span>Supabase: ${snapshot.supabaseRef} (${snapshot.supabaseHost})</span><span class="sm:col-span-2">Worker: ${snapshot.workerHost}</span></div>`;
+  panel.innerHTML = `<div class="mx-auto grid max-w-md grid-cols-1 gap-1 sm:grid-cols-2"><span>LIFF ID: ${snapshot.liffId}</span><span>Build: ${snapshot.buildSha}</span><span>isInClient: ${boolText(snapshot.isInClient)}</span><span>isLoggedIn: ${boolText(snapshot.isLoggedIn)}</span><span>MyTree session: ${boolText(snapshot.myTreeSessionReady)}</span><span>Supabase: ${snapshot.supabaseRef} (${snapshot.supabaseHost})</span><span class="sm:col-span-2">Worker: ${snapshot.workerHost}</span></div>`;
   document.body.prepend(panel);
   return () => panel.remove();
 }
@@ -52,6 +52,7 @@ export function HubHome() {
     if (!isStagingDiagnosticsHost(hostname)) return;
     let mounted = true;
     let unmountPanel: (() => void) | null = null;
+    let myTreeSessionReady: boolean | null = null;
     const readLiffFlag = (reader: () => boolean): boolean | null => {
       try {
         return reader();
@@ -68,6 +69,7 @@ export function HubHome() {
         isInClient: readLiffFlag(() => liff.isInClient()),
         isLoggedIn: readLiffFlag(() => liff.isLoggedIn()),
         buildSha: import.meta.env.VITE_CUSTOMER_BUILD_SHA,
+        myTreeSessionReady,
       });
       if (!snapshot || !mounted) return;
       unmountPanel?.();
@@ -75,6 +77,13 @@ export function HubHome() {
     };
     renderPanel();
     void initLiff().finally(renderPanel);
+    void ensureMyTreeSession().then((session) => {
+      myTreeSessionReady = session.status === "ready";
+      renderPanel();
+    }).catch(() => {
+      myTreeSessionReady = false;
+      renderPanel();
+    });
     return () => {
       mounted = false;
       unmountPanel?.();

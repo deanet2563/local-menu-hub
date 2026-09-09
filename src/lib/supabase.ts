@@ -29,6 +29,10 @@ type CustomerProfileTraceOptions = {
   onTimelineStep?: (event: CustomerProfileTimelineEvent) => void;
 };
 
+export type MyTreeAuthState =
+  | { status: "ready"; accessToken: string; customerId: string; accessExp: number; refreshToken?: string; refreshExp?: number }
+  | { status: "external_browser" | "line_not_logged_in" | "missing_id_token" | "missing_customer_id"; accessToken?: undefined; customerId?: undefined };
+
 function customerProfileTraceEmitter(options?: CustomerProfileTraceOptions) {
   const startedAt = Date.now();
   return (step: CustomerProfileTimelineStep, detail?: string) => {
@@ -67,25 +71,23 @@ export function initLiff(): Promise<void> {
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
-export async function getAccessToken(options?: CustomerProfileTraceOptions): Promise<string> {
+export async function ensureMyTreeSession(options?: CustomerProfileTraceOptions): Promise<MyTreeAuthState> {
   const emit = customerProfileTraceEmitter(options);
-  if (isPreviewCheckoutMapAuthBypassActive()) return "";
-  const now = Math.floor(Date.now() / 1000);
-  if (cached && cached.exp - 60 > now) return cached.token;
-  const stored = loadMyTreeSession(browserSessionStorage(), now);
-  if (stored) {
-    cached = { token: stored.accessToken, exp: stored.accessExp };
-    emit("mytree_access_token_stored", "yes");
-    emit("refresh_session_credential_stored", stored.refreshToken ? "yes" : "no");
-    emit("authenticated_supabase_client_ready", "yes");
-    return stored.accessToken;
+  emit("auth_bootstrap_started");
+  if (isPreviewCheckoutMapAuthBypassActive()) {
+    emit("auth_bootstrap_returned", "external_browser");
+    return { status: "external_browser" };
   }
-  emit("mytree_access_token_stored", "no");
-  emit("refresh_session_credential_stored", "no");
-
+  const now = Math.floor(Date.now() / 1000);
   emit("liff_ready_wait_started");
   await initLiff();
   emit("liff_ready_wait_resolved");
+  const inClient = liff.isInClient();
+  emit("liff_in_client", inClient ? "yes" : "no");
+  if (!inClient) {
+    emit("auth_bootstrap_returned", "external_browser");
+    return { status: "external_browser" };
+  }
   const loggedIn = liff.isLoggedIn();
   emit("liff_is_logged_in", loggedIn ? "yes" : "no");
   try {
@@ -98,14 +100,58 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
     // Raw preview browsing intentionally works outside LINE. Authenticated
     // actions are allowed only after the same preview is launched through its
     // configured staging LIFF URL.
-    if (isOrderingPreview()) return "";
+    if (isOrderingPreview()) {
+      emit("auth_bootstrap_returned", "line_not_logged_in");
+      return { status: "line_not_logged_in" };
+    }
     liff.login();
-    return "";
+    emit("auth_bootstrap_returned", "line_not_logged_in");
+    return { status: "line_not_logged_in" };
   }
 
+  if (cached && cached.exp - 60 > now) {
+    const customerId = customerIdFromToken(cached.token);
+    if (customerId) {
+      emit("mytree_access_token_stored", "yes");
+      emit("authenticated_supabase_client_ready", "yes");
+      emit("customer_id_resolved", "yes");
+      emit("auth_bootstrap_returned", "ready");
+      return { status: "ready", accessToken: cached.token, accessExp: cached.exp, customerId };
+    }
+  }
+  const stored = loadMyTreeSession(browserSessionStorage(), now);
+  if (stored) {
+    const customerId = customerIdFromToken(stored.accessToken);
+    if (!customerId) {
+      emit("customer_profile_missing", "missing_customer_id");
+      emit("auth_bootstrap_returned", "missing_customer_id");
+      return { status: "missing_customer_id" };
+    }
+    cached = { token: stored.accessToken, exp: stored.accessExp };
+    emit("mytree_access_token_stored", "yes");
+    emit("refresh_session_credential_stored", stored.refreshToken ? "yes" : "no");
+    emit("authenticated_supabase_client_ready", "yes");
+    emit("customer_id_resolved", "yes");
+    emit("auth_bootstrap_returned", "ready");
+    return {
+      status: "ready",
+      accessToken: stored.accessToken,
+      accessExp: stored.accessExp,
+      refreshToken: stored.refreshToken,
+      refreshExp: stored.refreshExp,
+      customerId,
+    };
+  }
+  emit("mytree_access_token_stored", "no");
+  emit("refresh_session_credential_stored", "no");
+
   const idToken = liff.getIDToken();
+  emit("id_token_available", idToken ? "yes" : "no");
   if (!idToken) {
-    if (isOrderingPreview()) return "";
+    if (isOrderingPreview()) {
+      emit("auth_bootstrap_returned", "missing_id_token");
+      return { status: "missing_id_token" };
+    }
     throw new Error("no LINE idToken");
   }
 
@@ -157,44 +203,42 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
   emit("mytree_access_token_stored", data.access_token ? "yes" : "no");
   emit("refresh_session_credential_stored", data.refresh_token ? "yes" : "no");
   emit("authenticated_supabase_client_ready", data.access_token ? "yes" : "no");
-  return data.access_token;
+  const customerId = customerIdFromToken(data.access_token);
+  if (!customerId) {
+    emit("customer_profile_missing", "missing_customer_id");
+    emit("auth_bootstrap_returned", "missing_customer_id");
+    return { status: "missing_customer_id" };
+  }
+  emit("customer_id_resolved", "yes");
+  emit("auth_bootstrap_returned", "ready");
+  return {
+    status: "ready",
+    accessToken: data.access_token,
+    accessExp: cached.exp,
+    refreshToken: data.refresh_token,
+    refreshExp: data.refresh_expires_in ? now + data.refresh_expires_in : undefined,
+    customerId,
+  };
+}
+
+export async function getAccessToken(options?: CustomerProfileTraceOptions): Promise<string> {
+  const session = await ensureMyTreeSession(options);
+  return session.status === "ready" ? session.accessToken : "";
 }
 
 /** The current MyTree customer_id (from the LINE-issued token), or null. */
 export async function getCurrentCustomerId(options?: CustomerProfileTraceOptions): Promise<string | null> {
   const emit = customerProfileTraceEmitter(options);
   emit("customer_profile_function_entered");
-  const token = await getAccessToken(options);
-  if (!token) {
+  const session = await ensureMyTreeSession(options);
+  if (session.status !== "ready") {
     emit("customer_profile_missing", "no_token");
     emit("customer_profile_function_returned");
     return null;
   }
-  try {
-    emit("customer_identity_read_started", "jwt_payload");
-    const part = token.split(".")[1];
-    if (!part) {
-      emit("customer_identity_read_resolved", "missing_payload");
-      emit("customer_profile_missing", "missing_payload");
-      emit("customer_profile_function_returned");
-      return null;
-    }
-    const payload = JSON.parse(atob(part));
-    emit("customer_identity_read_resolved", "jwt_payload");
-    if (!payload.customer_id) {
-      emit("customer_profile_missing", "missing_customer_id");
-      emit("customer_profile_function_returned");
-      return null;
-    }
-    emit("customer_id_resolved", "yes");
-    emit("customer_profile_found");
-    emit("customer_profile_function_returned");
-    return payload.customer_id ?? null;
-  } catch {
-    emit("customer_profile_error");
-    emit("customer_profile_function_returned");
-    return null;
-  }
+  emit("customer_profile_found");
+  emit("customer_profile_function_returned");
+  return session.customerId;
 }
 
 const authenticatedSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -235,4 +279,15 @@ export function sanitizeBrokerErrorBody(value: string): string {
 function makeDebugRequestId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID().replace(/-/g, "");
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function customerIdFromToken(token: string): string | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const payload = JSON.parse(atob(part)) as { customer_id?: unknown };
+    return typeof payload.customer_id === "string" && payload.customer_id ? payload.customer_id : null;
+  } catch {
+    return null;
+  }
 }

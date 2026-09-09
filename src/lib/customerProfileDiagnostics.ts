@@ -1,5 +1,9 @@
 export type CustomerProfileTimelineStep =
   | "customer_profile_function_entered"
+  | "auth_bootstrap_started"
+  | "auth_bootstrap_returned"
+  | "liff_in_client"
+  | "id_token_available"
   | "liff_ready_wait_started"
   | "liff_ready_wait_resolved"
   | "liff_is_logged_in"

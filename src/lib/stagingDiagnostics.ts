@@ -6,6 +6,7 @@ export type StagingDiagnosticSnapshot = {
   supabaseHost: string;
   workerHost: string;
   buildSha: string;
+  myTreeSessionReady: boolean | null;
 };
 
 export function isStagingDiagnosticsHost(hostname: string): boolean {
@@ -22,6 +23,7 @@ export function buildStagingDiagnosticSnapshot(input: {
   isInClient?: boolean | null;
   isLoggedIn?: boolean | null;
   buildSha?: string;
+  myTreeSessionReady?: boolean | null;
 }): StagingDiagnosticSnapshot | null {
   if (!isStagingDiagnosticsHost(input.hostname)) return null;
   const supabaseUrl = new URL(input.supabaseUrl);
@@ -34,5 +36,6 @@ export function buildStagingDiagnosticSnapshot(input: {
     supabaseHost: supabaseUrl.hostname,
     workerHost: workerUrl.hostname,
     buildSha: input.buildSha ?? "unknown",
+    myTreeSessionReady: input.myTreeSessionReady ?? null,
   };
 }

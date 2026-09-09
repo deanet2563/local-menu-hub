@@ -1,6 +1,6 @@
 ﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
-import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId, supabase } from "@/lib/supabase";
 import { e2eDiagnosticsEnabled } from "@/lib/e2eDiagnostics";
 import type { CustomerProfileTimelineEvent } from "@/lib/customerProfileDiagnostics";
 
@@ -20,7 +20,6 @@ function AccountPage() {
   useEffect(() => {
     (async () => {
       try {
-        await initLiff();
         const cid = await getCurrentCustomerId({
           onTimelineStep: (event) => {
             if (!e2eDiagnosticsEnabled()) return;
