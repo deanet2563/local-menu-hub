@@ -22,7 +22,15 @@ import {
 import { e2eDiagnosticsEnabled, readLiffDiagnostics, type LiffDiagnosticSnapshot } from "@/lib/e2eDiagnostics";
 import { validateCartCustomizeRequirements } from "@/lib/cartCustomizeValidation";
 import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
-import { submitOrder, type OrderSubmitDiagnostics, type OrderSubmitTimelineEvent } from "@/lib/order";
+import { submitOrder, runExactInvalidOrderNetworkProbe, type OrderPayload, type OrderSubmitDiagnostics, type OrderSubmitTimelineEvent } from "@/lib/order";
+import {
+  buildMinimalOrderProbeBody,
+  buildRedactedOrderProbeBody,
+  isOrderNetworkProbeVisible,
+  runOrderNetworkProbe,
+  type OrderNetworkProbeId,
+  type OrderNetworkProbeResult,
+} from "@/lib/orderNetworkProbe";
 import { customerProfileTimeoutMessage, type CustomerProfileTimelineEvent } from "@/lib/customerProfileDiagnostics";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
@@ -104,6 +112,21 @@ function isSameDeliveryPoint(a: ConfirmedDeliveryPoint | null, b: Pick<Confirmed
   return Boolean(a && Math.abs(a.lat - b.lat) <= 0.000001 && Math.abs(a.lng - b.lng) <= 0.000001);
 }
 
+function skippedOrderProbe(probe: OrderNetworkProbeId, message: string): OrderNetworkProbeResult {
+  return {
+    probe,
+    label: probe === "D" ? "Real-shaped redacted order" : "Exact serialized real order body with invalid token",
+    resolved: false,
+    status: null,
+    responseText: "",
+    errorName: "Skipped",
+    errorMessage: message,
+    bodyBytes: 0,
+    startedAt: new Date().toISOString(),
+    elapsedMs: 0,
+  };
+}
+
 function sourceLabel(point: ConfirmedDeliveryPoint): string {
   if (point.resolutionMethod === "places_text_search") return "Google Places";
   if (point.source === "google_maps_url") return "Google Maps";
@@ -165,6 +188,8 @@ function CartCheckout() {
   const [orderErrorCode, setOrderErrorCode] = useState<string | null>(null);
   const [orderDiagnostics, setOrderDiagnostics] = useState<OrderSubmitDiagnostics | null>(null);
   const [submitTimeline, setSubmitTimeline] = useState<SubmitTimelineDiagnostics | null>(null);
+  const [orderProbeResults, setOrderProbeResults] = useState<OrderNetworkProbeResult[]>([]);
+  const [orderProbeRunning, setOrderProbeRunning] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [liffDiagnostics, setLiffDiagnostics] = useState<LiffDiagnosticSnapshot | null>(null);
   const [done, setDone] = useState(false);
@@ -499,9 +524,62 @@ function CartCheckout() {
     setShowDestinationChooser(true);
   }
 
+  function buildCheckoutOrderPayload(requestedFor: string | null): OrderPayload | null {
+    if (!checkoutShopId) return null;
+    return {
+      shopId: checkoutShopId,
+      items: checkoutItems.map((i) => ({
+        lineId: i.lineId,
+        kind: i.kind,
+        itemId: i.itemId,
+        qty: i.qty,
+        options: i.options,
+        note: i.note,
+        bundleSelections: i.bundleSelections,
+      })),
+      fulfillment,
+      payment,
+      address: fulfillment === "delivery" ? formatDeliveryAddress(deliveryAddress) : null,
+      destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
+      destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
+      locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
+      locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
+      submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
+      customerDeliveryCharge: deliveryCharge,
+      note: note.trim() || null,
+      requestedFor,
+    };
+  }
+
+  async function runOrderNetworkProbes() {
+    const requestedFor = timing === "preorder" ? bangkokInputToIso(requestedForLocal) : null;
+    const realShapedOrder = buildCheckoutOrderPayload(requestedFor);
+    setOrderProbeRunning(true);
+    setOrderProbeResults([]);
+    const append = (result: OrderNetworkProbeResult) => setOrderProbeResults((current) => [...current, result]);
+    try {
+      const probes: Array<{ id: OrderNetworkProbeId; body?: ReturnType<typeof buildMinimalOrderProbeBody> }> = [
+        { id: "A" },
+        { id: "B" },
+        { id: "C", body: buildMinimalOrderProbeBody(checkoutShopId) },
+      ];
+      for (const probe of probes) {
+        append(await runOrderNetworkProbe(probe.id, probe.body));
+      }
+      if (realShapedOrder) {
+        append(await runOrderNetworkProbe("D", buildRedactedOrderProbeBody(realShapedOrder)));
+        append(await runExactInvalidOrderNetworkProbe(realShapedOrder));
+      } else {
+        append(skippedOrderProbe("D", "No checkout order payload is available."));
+        append(skippedOrderProbe("E", "No checkout order payload is available."));
+      }
+    } finally {
+      setOrderProbeRunning(false);
+    }
+  }
+
   async function confirm() {
     if (!checkoutShopId) return;
-    const formattedAddress = formatDeliveryAddress(deliveryAddress);
     const nextFieldErrors: CheckoutErrors = {};
     if (fulfillment === "delivery" && !deliveryPoint) nextFieldErrors.deliveryPoint = "กรุณายืนยันจุดส่งจริงสำหรับ Rider";
     if (!customerName.trim()) nextFieldErrors.customerName = "กรุณากรอกชื่อผู้รับ";
@@ -615,30 +693,9 @@ function CartCheckout() {
       return setError("ตรวจข้อมูลลูกค้าไม่สำเร็จ กรุณาดู customer profile timeline");
     }
 
-    const res = await submitOrder({
-      shopId: checkoutShopId,
-      items: checkoutItems.map((i) => ({
-        lineId: i.lineId,
-        kind: i.kind,
-        itemId: i.itemId,
-        qty: i.qty,
-        options: i.options,
-        note: i.note,
-        bundleSelections: i.bundleSelections,
-      })),
-      fulfillment,
-      payment,
-      address: fulfillment === "delivery" ? formattedAddress : null,
-      destinationLat: fulfillment === "delivery" ? deliveryPoint?.lat ?? null : null,
-      destinationLng: fulfillment === "delivery" ? deliveryPoint?.lng ?? null : null,
-      locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
-      locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
-      submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
-      customerDeliveryCharge: deliveryCharge,
-      note: note.trim() || null,
-      requestedFor,
-    }, {
-      timeoutMs: 20_000,
+    const orderPayload = buildCheckoutOrderPayload(requestedFor);
+    if (!orderPayload) return setError("ไม่พบร้านสำหรับส่งคำสั่งซื้อ");
+    const res = await submitOrder(orderPayload, {
       onTimelineStep: (event) => recordTimeline(event.step, event.detail),
     });
 
@@ -1013,6 +1070,40 @@ function CartCheckout() {
               <li key={`${event.step}-${index}`}>{event.elapsedMs}ms {event.step}{event.detail ? `: ${event.detail}` : ""}</li>
             ))}
           </ol>
+        </section>
+      )}
+
+      {isOrderNetworkProbeVisible() && (
+        <section data-testid="order-network-probe" className="rounded-lg border border-blue-200 bg-blue-50 p-3 font-mono text-[10px] leading-4 text-blue-950">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-bold">Order Network Probe</p>
+            <button
+              type="button"
+              onClick={() => void runOrderNetworkProbes()}
+              disabled={orderProbeRunning}
+              className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              {orderProbeRunning ? "Running..." : "Run A-E"}
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-blue-800">Uses invalid placeholder LINE token only. No Authorization header or custom headers on order probes.</p>
+          {orderProbeResults.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {orderProbeResults.map((result) => (
+                <div key={`${result.probe}-${result.startedAt}`} className="rounded-lg border border-blue-100 bg-white p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold">Probe {result.probe}: {result.label}</p>
+                    <p>{result.elapsedMs}ms</p>
+                  </div>
+                  <p>browser: {result.resolved ? "resolved" : "rejected"}</p>
+                  <p>http_status: {result.status ?? "none"}</p>
+                  <p>body_bytes: {result.bodyBytes}</p>
+                  {result.errorName && <p>error: {result.errorName}: {result.errorMessage}</p>}
+                  {result.responseText && <pre className="mt-1 whitespace-pre-wrap break-all">{result.responseText}</pre>}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

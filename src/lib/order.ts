@@ -3,6 +3,7 @@ import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
+import { INVALID_ORDER_PROBE_ID_TOKEN, type OrderNetworkProbeResult } from "@/lib/orderNetworkProbe";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
@@ -68,6 +69,7 @@ export type OrderSubmitTimelineStep =
   | "id_token_requested"
   | "id_token_received"
   | "request_payload_built"
+  | "prefetch_diagnostics"
   | "fetch_started"
   | "fetch_resolved"
   | "fetch_rejected"
@@ -97,8 +99,13 @@ export type OrderSubmitResult = {
 };
 
 export type OrderSubmitOptions = {
-  timeoutMs?: number;
   onTimelineStep?: (event: OrderSubmitTimelineEvent) => void;
+};
+
+export type PreparedOrderRequest = {
+  enrichedOrder: OrderPayload;
+  requestBody: string;
+  fetchInit: RequestInit;
 };
 
 export function customerOrderErrorMessage(error: string | undefined, errorCode?: string): string {
@@ -184,20 +191,23 @@ export async function submitOrder(
 
   emit("id_token_received", "yes");
 
-  let timeoutId: number | null = null;
   try {
-    const enrichedOrder = withSetMetadata(quotedOrder);
-    emit("request_payload_built");
-    const controller = new AbortController();
-    timeoutId = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000);
+    const prepared = prepareOrderRequest(quotedOrder, idToken);
+    const { enrichedOrder, requestBody, fetchInit } = prepared;
+    emit("request_payload_built", "body_serialization_completed=yes");
+    const debugRequestId = buildOrderDebugRequestId();
+    emit("prefetch_diagnostics", [
+      `url=${ORDER_URL}`,
+      "method=POST",
+      `debug_request_id=${debugRequestId}`,
+      "content_type=application/json",
+      "hasAuthorizationHeader=no",
+      "hasIdTokenBody=yes",
+      "body_serialization_completed=yes",
+      `body_byte_length=${utf8ByteLength(requestBody)}`,
+    ].join(" | "));
     emit("fetch_started");
-    const res = await fetch(ORDER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, order: enrichedOrder }),
-      signal: controller.signal,
-    });
-    window.clearTimeout(timeoutId);
+    const res = await fetch(ORDER_URL, fetchInit);
     emit("fetch_resolved");
     emit("response_status", String(res.status));
     const responseBody = await res.text();
@@ -226,12 +236,102 @@ export async function submitOrder(
     emit("order_id_received", data.sub_id ?? data.order_id ?? "missing");
     return { ok: true, order_id: data.order_id, sub_id: data.sub_id, diagnostics };
   } catch (e) {
-    if (timeoutId !== null) window.clearTimeout(timeoutId);
-    if (e instanceof DOMException && e.name === "AbortError") {
-      emit("fetch_timeout");
-      return { ok: false, error: "Staging /order request timed out. Check the submit timeline for the last settled step.", errorCode: "fetch_timeout" };
-    }
-    emit("fetch_rejected", e instanceof Error ? e.message : "network error");
+    emit("fetch_rejected", safeFetchErrorDetail(e));
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
+}
+
+export function prepareOrderRequest(order: OrderPayload, idToken: string): PreparedOrderRequest {
+  const enrichedOrder = withSetMetadata(order);
+  const requestBody = JSON.stringify({ idToken, order: enrichedOrder });
+  return {
+    enrichedOrder,
+    requestBody,
+    fetchInit: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+    },
+  };
+}
+
+export async function runExactInvalidOrderNetworkProbe(order: OrderPayload): Promise<OrderNetworkProbeResult> {
+  const started = Date.now();
+  const startedAt = new Date(started).toISOString();
+  try {
+    const quotedOrder = withDeliveryQuoteToken(order);
+    const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
+    if (deliveryDestinationError) {
+      return {
+        probe: "E",
+        label: "Exact serialized real order body with invalid token",
+        resolved: false,
+        status: null,
+        responseText: "",
+        errorName: "ValidationError",
+        errorMessage: deliveryDestinationError,
+        bodyBytes: 0,
+        startedAt,
+        elapsedMs: Date.now() - started,
+      };
+    }
+    const { requestBody, fetchInit } = prepareOrderRequest(quotedOrder, INVALID_ORDER_PROBE_ID_TOKEN);
+    const response = await fetch(ORDER_URL, fetchInit);
+    return {
+      probe: "E",
+      label: "Exact serialized real order body with invalid token",
+      resolved: true,
+      status: response.status,
+      responseText: sanitizeProbeText(await response.text()),
+      errorName: null,
+      errorMessage: null,
+      bodyBytes: utf8ByteLength(requestBody),
+      startedAt,
+      elapsedMs: Date.now() - started,
+    };
+  } catch (cause) {
+    return {
+      probe: "E",
+      label: "Exact serialized real order body with invalid token",
+      resolved: false,
+      status: null,
+      responseText: "",
+      errorName: cause instanceof Error ? cause.name : "UnknownError",
+      errorMessage: cause instanceof Error ? cause.message : "network error",
+      bodyBytes: 0,
+      startedAt,
+      elapsedMs: Date.now() - started,
+    };
+  }
+}
+
+function buildOrderDebugRequestId(): string {
+  const random = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+    : Math.random().toString(36).slice(2, 14);
+  return `order-${Date.now().toString(36)}-${random}`;
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function safeFetchErrorDetail(error: unknown): string {
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const message = error instanceof Error ? error.message : "network error";
+  return [
+    `name=${name}`,
+    `message=${message}`,
+    "abort_controller=unused",
+    "timeout_triggered=no",
+    `navigator_onLine=${typeof navigator === "undefined" ? "unknown" : navigator.onLine ? "yes" : "no"}`,
+    `origin=${typeof window === "undefined" ? "unknown" : window.location.origin}`,
+  ].join(" | ");
+}
+
+function sanitizeProbeText(value: string): string {
+  return value
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted.jwt]")
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, "[redacted.uuid]")
+    .slice(0, 500);
 }
