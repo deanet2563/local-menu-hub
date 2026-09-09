@@ -4,6 +4,7 @@ import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 import { makeCustomerProfileTimelineEvent, type CustomerProfileTimelineEvent, type CustomerProfileTimelineStep } from "@/lib/customerProfileDiagnostics";
+import { browserSessionStorage, loadMyTreeSession, saveMyTreeSession } from "@/lib/mytreeSession";
 
 // ============================================================
 // MyTree — Supabase clients
@@ -71,6 +72,16 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
+  const stored = loadMyTreeSession(browserSessionStorage(), now);
+  if (stored) {
+    cached = { token: stored.accessToken, exp: stored.accessExp };
+    emit("mytree_access_token_stored", "yes");
+    emit("refresh_session_credential_stored", stored.refreshToken ? "yes" : "no");
+    emit("authenticated_supabase_client_ready", "yes");
+    return stored.accessToken;
+  }
+  emit("mytree_access_token_stored", "no");
+  emit("refresh_session_credential_stored", "no");
 
   emit("liff_ready_wait_started");
   await initLiff();
@@ -128,9 +139,24 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
     if (safeBody) emit("auth_broker_response_body", safeBody);
     throw new Error(`auth broker error: ${res.status}${safeBody ? ` ${safeBody}` : ""}`);
   }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
+  const data = (await res.json()) as {
+    access_token: string;
+    expires_in: number;
+    refresh_token?: string;
+    refresh_expires_in?: number;
+  };
+  emit("app_session_response_received", data.access_token ? "yes" : "no");
 
   cached = { token: data.access_token, exp: now + data.expires_in };
+  saveMyTreeSession(browserSessionStorage(), {
+    accessToken: data.access_token,
+    accessExp: cached.exp,
+    refreshToken: data.refresh_token,
+    refreshExp: data.refresh_expires_in ? now + data.refresh_expires_in : undefined,
+  });
+  emit("mytree_access_token_stored", data.access_token ? "yes" : "no");
+  emit("refresh_session_credential_stored", data.refresh_token ? "yes" : "no");
+  emit("authenticated_supabase_client_ready", data.access_token ? "yes" : "no");
   return data.access_token;
 }
 
@@ -160,6 +186,7 @@ export async function getCurrentCustomerId(options?: CustomerProfileTraceOptions
       emit("customer_profile_function_returned");
       return null;
     }
+    emit("customer_id_resolved", "yes");
     emit("customer_profile_found");
     emit("customer_profile_function_returned");
     return payload.customer_id ?? null;

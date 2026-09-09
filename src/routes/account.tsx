@@ -1,6 +1,8 @@
 ﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
 import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { e2eDiagnosticsEnabled } from "@/lib/e2eDiagnostics";
+import type { CustomerProfileTimelineEvent } from "@/lib/customerProfileDiagnostics";
 
 export const Route = createFileRoute("/account")({ component: AccountPage });
 
@@ -13,12 +15,29 @@ function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [authTimeline, setAuthTimeline] = useState<CustomerProfileTimelineEvent[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
         await initLiff();
-        const cid = await getCurrentCustomerId();
+        const cid = await getCurrentCustomerId({
+          onTimelineStep: (event) => {
+            if (!e2eDiagnosticsEnabled()) return;
+            setAuthTimeline((current) => [...current, event].slice(-30));
+          },
+        });
+        if (e2eDiagnosticsEnabled()) {
+          const guardEvent: CustomerProfileTimelineEvent = {
+            step: "account_auth_guard_result",
+            at: new Date().toISOString(),
+            elapsedMs: 0,
+            detail: cid ? "ready" : "missing",
+          };
+          setAuthTimeline((current) => [...current, {
+            ...guardEvent,
+          }].slice(-30));
+        }
         if (!cid) return;
         setId(cid);
 
@@ -74,6 +93,7 @@ function AccountPage() {
     return (
       <div className="p-6 text-center text-sm">
         🔒 กรุณาเปิดหน้านี้ผ่าน LINE เพื่อเข้าสู่ระบบ
+        {e2eDiagnosticsEnabled() && <AccountAuthDiagnostics events={authTimeline} />}
       </div>
     );
 
@@ -83,6 +103,7 @@ function AccountPage() {
         <h1 className="text-xl font-bold">ข้อมูลของฉัน</h1>
         <p className="text-sm text-gray-500">My Account</p>
       </div>
+      {e2eDiagnosticsEnabled() && <AccountAuthDiagnostics events={authTimeline} />}
 
       {isAdmin && (
         <Link
@@ -127,5 +148,16 @@ function AccountPage() {
         <Link to="/" className="rounded-lg bg-gray-100 px-3 py-2 text-center text-sm">สั่งอาหาร</Link>
       </div>
     </div>
+  );
+}
+
+function AccountAuthDiagnostics({ events }: { events: CustomerProfileTimelineEvent[] }) {
+  return (
+    <section className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left font-mono text-[11px] text-slate-800">
+      <p className="font-semibold">account_auth_diagnostics</p>
+      <pre className="mt-2 whitespace-pre-wrap break-all">
+        {events.map((event) => `${event.elapsedMs}ms ${event.step}${event.detail ? `: ${event.detail}` : ""}`).join("\n") || "no_events"}
+      </pre>
+    </section>
   );
 }
