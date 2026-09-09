@@ -12,6 +12,7 @@ const staging = buildStagingDiagnosticSnapshot({
   liffId: "2010936243-hG7sC3Wd",
   supabaseUrl: "https://qdvgkdxjstsxeamjsjhl.supabase.co",
   workerUrl: "https://mytree-worker-staging.kompakorn-t.workers.dev",
+  buildSha: "test-sha",
 });
 
 assertEqual(isStagingDiagnosticsHost("customer-staging.local-menu-hub.pages.dev"), true, "customer staging host shows diagnostics");
@@ -22,5 +23,6 @@ assertEqual(staging?.liffId, "2010936243-hG7sC3Wd", "diagnostics expose staging 
 assertEqual(staging?.supabaseRef, "qdvgkdxjstsxeamjsjhl", "diagnostics expose staging Supabase ref");
 assertEqual(staging?.supabaseHost, "qdvgkdxjstsxeamjsjhl.supabase.co", "diagnostics expose staging Supabase host");
 assertEqual(staging?.workerHost, "mytree-worker-staging.kompakorn-t.workers.dev", "diagnostics expose staging Worker host");
+assertEqual(staging?.buildSha, "test-sha", "diagnostics expose staging build SHA");
 assertEqual("tokenPresent" in (staging ?? {}), false, "diagnostics do not expose token state");
 assertEqual("anonKeyPresent" in (staging ?? {}), false, "diagnostics do not expose key state");

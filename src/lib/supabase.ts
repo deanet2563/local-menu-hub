@@ -100,13 +100,28 @@ export async function getAccessToken(options?: CustomerProfileTraceOptions): Pro
 
   emit("customer_identity_read_started");
   const brokerUrl = new URL(AUTH_BROKER);
-  emit("auth_broker_request_started", `${brokerUrl.host}${brokerUrl.pathname}`);
-  const res = await fetch(AUTH_BROKER, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
-  });
+  const debugRequestId = makeDebugRequestId();
+  emit("auth_broker_request_started", `POST ${brokerUrl.origin}${brokerUrl.pathname} request_id=${debugRequestId}`);
+  emit("auth_fetch_started", `${brokerUrl.origin}${brokerUrl.pathname}`);
+  let res: Response;
+  try {
+    res = await fetch(AUTH_BROKER, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-MyTree-Debug-Request-ID": debugRequestId,
+      },
+      body: JSON.stringify({ idToken }),
+    });
+  } catch (cause) {
+    emit("auth_fetch_rejected", cause instanceof Error ? `${cause.name}: ${cause.message}` : "fetch rejected");
+    throw cause;
+  }
+  emit("auth_fetch_resolved", debugRequestId);
   emit("auth_broker_response_status", String(res.status));
+  emit("auth_broker_response_environment", res.headers.get("X-MyTree-Environment") ?? "missing");
+  emit("auth_broker_response_worker_sha", res.headers.get("X-MyTree-Worker-SHA") ?? "missing");
+  emit("auth_broker_response_debug_id", res.headers.get("X-MyTree-Debug-Request-ID") ?? "missing");
   emit("customer_identity_read_resolved", String(res.status));
   if (!res.ok) {
     const safeBody = sanitizeBrokerErrorBody(await res.text());
@@ -188,4 +203,9 @@ export function sanitizeBrokerErrorBody(value: string): string {
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}/gi, "[uuid]")
     .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[jwt]")
     .slice(0, 240);
+}
+
+function makeDebugRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID().replace(/-/g, "");
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
 }
