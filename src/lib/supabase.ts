@@ -28,6 +28,11 @@ export function isOrderingPreview(): boolean {
   return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
+function isAiOfficeRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname === "/sweet/ai-office";
+}
+
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
 export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -39,10 +44,9 @@ export function initLiff(): Promise<void> {
   if (!liffReady) {
     liffReady = liff.init({
       liffId: LIFF_ID,
-      // Do not auto-login when somebody opens the raw Pages URL in Safari.
-      // When launched through the LIFF URL inside LINE, LIFF handles the
-      // in-client session automatically.
-      withLoginOnExternalBrowser: false,
+      // Customer raw-preview browsing must remain passive. AI Office is an
+      // admin surface, so it may actively establish the existing LINE session.
+      withLoginOnExternalBrowser: isAiOfficeRoute(),
     });
   }
   return liffReady;
@@ -59,14 +63,38 @@ export async function getAccessToken(): Promise<string> {
     // Raw preview browsing intentionally works outside LINE. Authenticated
     // actions are allowed only after the same preview is launched through its
     // configured staging LIFF URL.
-    if (isOrderingPreview()) return "";
+    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+
+    if (isAiOfficeRoute()) {
+      const current = new URL(window.location.href);
+      const isLineWebView = /Line\//i.test(window.navigator.userAgent);
+      const enteredViaLiff = current.searchParams.get("aiOfficeLiff") === "1";
+
+      // A raw Pages URL opened from a LINE message can run in LINE's generic
+      // in-app browser rather than a LIFF context. Re-enter through the LIFF
+      // permanent link so the existing LINE account context is available.
+      if (isLineWebView && !enteredViaLiff) {
+        const liffUrl = new URL(`https://liff.line.me/${LIFF_ID}/sweet/ai-office`);
+        liffUrl.searchParams.set("aiOfficeLiff", "1");
+        window.location.replace(liffUrl.toString());
+        return "";
+      }
+
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
+
     liff.login();
     return "";
   }
 
   const idToken = liff.getIDToken();
   if (!idToken) {
-    if (isOrderingPreview()) return "";
+    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+    if (isAiOfficeRoute()) {
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
     throw new Error("no LINE idToken");
   }
 
