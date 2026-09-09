@@ -8,6 +8,7 @@ export type IncomingJobQueueState<T extends IncomingJobLike> = {
   active: T | null;
   queued: T[];
   dismissedIds: string[];
+  isViewingList: boolean;
 };
 
 function offerTime(job: IncomingJobLike): number {
@@ -42,6 +43,7 @@ export function reconcileIncomingJobQueue<T extends IncomingJobLike>(
     active: nextActive,
     queued,
     dismissedIds: current.dismissedIds.filter((id) => jobs.some((job) => job.sub_id === id)),
+    isViewingList: current.isViewingList,
   };
 }
 
@@ -55,5 +57,18 @@ export function dismissActiveIncomingJob<T extends IncomingJobLike>(
     active: nextActive ?? null,
     queued,
     dismissedIds,
+    isViewingList: current.isViewingList,
   };
+}
+
+export function viewIncomingQueue<T extends IncomingJobLike>(
+  current: IncomingJobQueueState<T>,
+): IncomingJobQueueState<T> {
+  return { ...current, isViewingList: true };
+}
+
+export function focusCurrentIncomingJob<T extends IncomingJobLike>(
+  current: IncomingJobQueueState<T>,
+): IncomingJobQueueState<T> {
+  return { ...current, isViewingList: false };
 }

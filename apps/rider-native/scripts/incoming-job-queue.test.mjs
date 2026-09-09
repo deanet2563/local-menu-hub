@@ -5,12 +5,14 @@ import {
   reconcileIncomingJobQueue,
   sortIncomingJobs,
 } from '../src/domain/incomingJobQueue.ts';
+import { extractRiderOfferSubId } from '../src/domain/riderNotificationPayload.ts';
+import { summarizeTodayRiderWork } from '../src/domain/riderDashboardState.ts';
 
 function job(sub_id, offer_requested_at) {
   return { sub_id, offer_requested_at, confirmed_at: null };
 }
 
-const empty = { active: null, queued: [], dismissedIds: [] };
+const empty = { active: null, queued: [], dismissedIds: [], isViewingList: false };
 
 assert.deepEqual(
   sortIncomingJobs([
@@ -51,3 +53,19 @@ const afterBackendRefresh = reconcileIncomingJobQueue(rejected, [
 
 assert.equal(afterBackendRefresh.active?.sub_id, 'offer-3', 'locally rejected offer must not immediately re-open');
 assert.deepEqual(afterBackendRefresh.queued.map((item) => item.sub_id), ['offer-2']);
+
+assert.equal(extractRiderOfferSubId({ subId: 'sub-1' }), 'sub-1');
+assert.equal(extractRiderOfferSubId({ sub_id: 'sub-2' }), 'sub-2');
+assert.equal(extractRiderOfferSubId({ url: 'mytreerider://nearby-jobs?subId=sub-3' }), 'sub-3');
+assert.equal(extractRiderOfferSubId({ deepLink: 'mytreerider://nearby-jobs?sub_order_id=sub-4' }), 'sub-4');
+assert.equal(extractRiderOfferSubId({ other: 'nope' }), null);
+
+assert.deepEqual(
+  summarizeTodayRiderWork([
+    { delivery_fee: 20, delivery_distance_km: 2.2, delivered_at: '2026-09-09T03:00:00.000Z' },
+    { delivery_fee: '12.5', delivery_distance_km: '1.1', delivered_at: '2026-09-09T10:00:00.000Z' },
+    { delivery_fee: 99, delivery_distance_km: 9, delivered_at: '2026-09-08T10:00:00.000Z' },
+    { delivery_fee: null, delivery_distance_km: null, delivered_at: null },
+  ], '2026-09-09'),
+  { earnings: 32.5, completedJobs: 2, distanceKm: 3.3 },
+);

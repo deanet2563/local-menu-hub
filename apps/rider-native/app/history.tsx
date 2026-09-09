@@ -75,7 +75,7 @@ export default function RiderHistoryScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>RIDER HISTORY</Text>
           <Text style={styles.title}>ประวัติงาน</Text>
-          <Text style={styles.subtitle}>แสดงงานที่ backend คืนให้ Rider session นี้เท่านั้น รวมงานส่งสำเร็จ ไม่สำเร็จ และงานที่ถูกยกเลิก/ปล่อยงานตามสัญญาปัจจุบัน</Text>
+          <Text style={styles.subtitle}>แสดงงานที่ backend คืนให้ Rider session นี้เท่านั้น งานยกเลิก/ปล่อยงานจะแสดงเมื่อมี event history ที่ Rider อ่านได้</Text>
         </View>
 
         <View style={styles.actionsRow}>

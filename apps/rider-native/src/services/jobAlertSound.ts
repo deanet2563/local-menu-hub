@@ -1,20 +1,43 @@
-import { Vibration } from 'react-native';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
-let activeOfferId: string | null = null;
+const JOB_ALERT_SOUND = require('../../assets/sounds/mytree_rider_job_alert_v1.wav');
+const COMPLETION_ALERT_SOUND = require('../../assets/sounds/mytree_rider_close_job_alert_v1.wav');
 
-export function startActiveJobAlert(offerId: string) {
-  if (activeOfferId === offerId) return;
-  stopActiveJobAlert();
-  activeOfferId = offerId;
-  Vibration.vibrate([0, 700, 450], true);
+let activeSound: AudioPlayer | null = null;
+let completionSound: AudioPlayer | null = null;
+
+export async function startIncomingJobAlert(): Promise<void> {
+  if (activeSound) return;
+  await setAudioModeAsync({ playsInSilentMode: true });
+  const player = createAudioPlayer(JOB_ALERT_SOUND);
+  player.loop = true;
+  player.volume = 1;
+  player.play();
+  activeSound = player;
 }
 
-export function stopActiveJobAlert(offerId?: string) {
-  if (offerId && activeOfferId !== offerId) return;
-  Vibration.cancel();
-  activeOfferId = null;
+export async function stopIncomingJobAlert(): Promise<void> {
+  const sound = activeSound;
+  activeSound = null;
+  if (!sound) return;
+  sound.pause();
+  sound.remove();
 }
 
-export function getActiveJobAlertId() {
-  return activeOfferId;
+export async function startCompletionJobAlert(): Promise<void> {
+  if (completionSound) return;
+  await setAudioModeAsync({ playsInSilentMode: true });
+  const player = createAudioPlayer(COMPLETION_ALERT_SOUND);
+  player.loop = true;
+  player.volume = 1;
+  player.play();
+  completionSound = player;
+}
+
+export async function stopCompletionJobAlert(): Promise<void> {
+  const sound = completionSound;
+  completionSound = null;
+  if (!sound) return;
+  sound.pause();
+  sound.remove();
 }
