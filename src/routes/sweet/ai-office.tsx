@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId, supabase } from "@/lib/supabase";
+import { ensureAiOfficeLineLogin } from "@/lib/aiOfficeAuth";
 
 export const Route = createFileRoute("/sweet/ai-office")({ component: AiOfficeRoute });
 
@@ -97,7 +98,8 @@ function AiOfficeRoute() {
   useEffect(() => {
     void (async () => {
       try {
-        await initLiff();
+        const loginState = await ensureAiOfficeLineLogin();
+        if (loginState === "redirecting") return;
         const cid = await getCurrentCustomerId();
         if (!cid) return setAuth("no-auth");
         const { data: admin } = await supabase.from("platform_admins").select("customer_id").eq("customer_id", cid).maybeSingle();
@@ -125,7 +127,7 @@ function AiOfficeRoute() {
   const attention = laneRows.filter((x) => x.ev.status === "BLOCKED" || x.ev.ageHours > 48);
 
   if (auth === "loading") return <div className="min-h-screen bg-slate-950 p-8 text-slate-300">กำลังเปิด MyTree AI Office…</div>;
-  if (auth === "no-auth") return <div className="min-h-screen bg-slate-950 p-8 text-white"><div className="mx-auto mt-24 max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center"><div className="text-4xl">🔒</div><h1 className="mt-4 text-xl font-bold">ต้องเข้าสู่ระบบ LINE</h1><p className="mt-2 text-sm text-slate-400">เปิดผ่านบัญชี MyTree ที่มีสิทธิ์ Platform Admin</p></div></div>;
+  if (auth === "no-auth") return <div className="min-h-screen bg-slate-950 p-8 text-white"><div className="mx-auto mt-24 max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center"><div className="text-4xl">🔒</div><h1 className="mt-4 text-xl font-bold">ไม่พบ LINE session</h1><p className="mt-2 text-sm text-slate-400">กรุณาเปิด AI Office ผ่าน LIFF link ของ MyTree</p></div></div>;
   if (auth === "not-admin") return <div className="min-h-screen bg-slate-950 p-8 text-white"><div className="mx-auto mt-24 max-w-md rounded-3xl border border-red-900/40 bg-slate-900 p-8 text-center"><div className="text-4xl">⛔</div><h1 className="mt-4 text-xl font-bold">ไม่มีสิทธิ์เข้าถึง AI Office</h1></div></div>;
 
   return (
@@ -174,9 +176,10 @@ function AiOfficeRoute() {
 }
 
 function Metric({ label, value, sub, danger = false }: { label: string; value: string; sub: string; danger?: boolean }) {
-  return <div className={`rounded-2xl border p-4 ${danger ? "border-red-900/60 bg-red-950/20" : "border-slate-800 bg-slate-900/70"}`}><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div><div className={`mt-1 text-3xl font-black ${danger ? "text-red-300" : "text-white"}`}>{value}</div><div className="mt-1 text-xs text-slate-500">{sub}</div></div>;
+  return <div className={`rounded-2xl border p-4 ${danger ? "border-red-900/60 bg-red-950/20" : "border-slate-800 bg-slate-900/70"}`}><div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div><div className={`mt-1 text-3xl font-black ${danger ? "text-red-300" : "text-white"}`}>{value}</div><div className="mt-1 text-xs text-slate-500">{sub}</div></div>;
 }
 
 function AgentCard({ lane, ev }: { lane: Lane; ev: ReturnType<typeof laneEvidence> }) {
-  return <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl shadow-black/10"><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-slate-800 text-2xl">{lane.icon}</div><div><div className="text-xs font-bold text-slate-500">{lane.id}</div><h3 className="font-bold">{lane.name}</h3><p className="text-xs text-slate-500">{lane.role}</p></div></div><span className={`rounded-full border px-2 py-1 text-[10px] font-black tracking-wide ${tone[ev.status] ?? tone.PLANNED}`}>{ev.status}</span></div><div className="mt-4"><div className="flex justify-between text-xs"><span className="text-slate-500">Evidence progress</span><span className="font-bold">{ev.progress}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${ev.progress}%` }} /></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><a href={ev.issue?.html_url ?? `https://github.com/deanet2563/local-menu-hub/issues/${lane.issue}`} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-800 bg-slate-950 p-2 text-slate-300 hover:border-slate-600">Issue #{lane.issue}</a>{ev.pr ? <a href={ev.pr.html_url} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-800 bg-slate-950 p-2 text-slate-300 hover:border-slate-600">PR #{ev.pr.number}</a> : <div className="rounded-lg border border-slate-800 bg-slate-950 p-2 text-slate-600">No PR yet</div>}</div><div className="mt-3 flex items-center justify-between border-t border-slate-800 pt-3 text-[11px] text-slate-500"><span>{lane.branch ?? "coordination"}</span><span>{fmtTime(ev.latestAt)}</span></div></article>;
+  const href = ev.pr?.html_url ?? ev.issue?.html_url;
+  return <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg shadow-black/10"><div className="flex items-start justify-between gap-3"><div className="flex gap-3"><div className="text-3xl">{lane.icon}</div><div><div className="text-xs font-semibold text-slate-500">{lane.id}</div><h3 className="font-bold">{lane.name}</h3><div className="text-xs text-slate-400">{lane.role}</div></div></div><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${tone[ev.status]}`}>{ev.status}</span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${ev.progress}%` }} /></div><div className="mt-2 flex justify-between text-xs"><span className="font-semibold text-slate-300">{ev.progress}%</span><span className="text-slate-500">{fmtTime(ev.latestAt)}</span></div><div className="mt-3 rounded-xl bg-slate-950/80 p-3 text-xs text-slate-400"><div>Task #{lane.issue}{ev.issue ? ` • ${ev.issue.state}` : " • not fetched"}</div><div className="mt-1">{ev.pr ? `PR #${ev.pr.number} • ${ev.pr.merged_at ? "merged" : ev.pr.state}` : lane.branch ? `branch: ${lane.branch}` : "coordination lane"}</div>{ev.latestRun && <div className="mt-1">CI: {ev.latestRun.name} • {ev.latestRun.status}{ev.latestRun.conclusion ? `/${ev.latestRun.conclusion}` : ""}</div>}</div>{href && <a href={href} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs font-bold text-emerald-400 hover:text-emerald-300">ดูหลักฐาน ↗</a>}</div>;
 }
