@@ -12,25 +12,40 @@ import {
   type RiderSession,
 } from '@/auth/session';
 import { riderFeatures } from '@/config/features';
+import {
+  getActiveAssignedDelivery,
+  listRecentCompletedDeliveries,
+  type AssignedDelivery,
+} from '@/data/assignedDeliveryRepository';
 import { registerPushDevice } from '@/data/pushDeviceRepository';
 import { getRiderProfile, setRiderOnline, updateRiderLocation, type RiderProfile } from '@/data/riderRepository';
+import { summarizeTodayRiderWork, type RiderDashboardSummary } from '@/domain/riderDashboardState';
 import { ensureForegroundLocation, isLocationFresh, type RiderLocation } from '@/services/location';
 import { ensurePushReadiness } from '@/services/notifications';
 
 type ReadinessState = 'pending' | 'checking' | 'ready' | 'blocked';
 
-type HealthRowProps = { label: string; value: string; state?: ReadinessState };
+type DiagnosticRowProps = { label: string; value: string; state?: ReadinessState };
 
-function HealthRow({ label, value, state = 'pending' }: HealthRowProps) {
+const EMPTY_SUMMARY: RiderDashboardSummary = { earnings: 0, completedJobs: 0, distanceKm: 0 };
+
+function DiagnosticRow({ label, value, state = 'pending' }: DiagnosticRowProps) {
   return (
-    <View style={styles.healthRow}>
+    <View style={styles.diagnosticRow}>
       <View style={[styles.dot, state === 'ready' && styles.dotReady, state === 'blocked' && styles.dotBlocked, (state === 'pending' || state === 'checking') && styles.dotPending]} />
-      <View style={styles.healthText}>
-        <Text style={styles.healthLabel}>{label}</Text>
-        <Text style={styles.healthValue}>{value}</Text>
+      <View style={styles.diagnosticText}>
+        <Text style={styles.diagnosticLabel}>{label}</Text>
+        <Text style={styles.diagnosticValue}>{value}</Text>
       </View>
     </View>
   );
+}
+
+function routeForStatus(job: AssignedDelivery | null) {
+  if (!job) return 'ยังไม่มีงานปัจจุบัน';
+  if (job.delivery_status === 'rider_called') return 'กำลังไปรับของที่ร้าน';
+  if (job.delivery_status === 'picked_up') return 'กำลังนำส่งลูกค้า';
+  return 'กำลังอัปเดตสถานะงาน';
 }
 
 export default function RiderHomeScreen() {
@@ -48,6 +63,8 @@ export default function RiderHomeScreen() {
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [accountState, setAccountState] = useState<ReadinessState>('checking');
   const [accountText, setAccountText] = useState('กำลังตรวจ MyTree session...');
+  const [activeJob, setActiveJob] = useState<AssignedDelivery | null>(null);
+  const [summary, setSummary] = useState<RiderDashboardSummary>(EMPTY_SUMMARY);
   const [error, setError] = useState<string | null>(null);
 
   function applyProfile(profile: RiderProfile | null) {
@@ -66,17 +83,25 @@ export default function RiderHomeScreen() {
       setAccountText('รอ Admin อนุมัติ Rider');
     } else {
       setAccountState('ready');
-      setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ไม่ระบุพาหนะ'}`);
+      setAccountText(`${profile.name} · ${profile.vehicle_type ?? 'ยังไม่ระบุพาหนะ'}`);
     }
+  }
+
+  async function loadDashboard(activeSession: RiderSession) {
+    const [activeResult, completedResult] = await Promise.allSettled([
+      getActiveAssignedDelivery(activeSession),
+      listRecentCompletedDeliveries(activeSession),
+    ]);
+    if (activeResult.status === 'fulfilled') setActiveJob(activeResult.value);
+    if (completedResult.status === 'fulfilled') setSummary(summarizeTodayRiderWork(completedResult.value));
   }
 
   async function syncOnlineDeviceState(activeSession: RiderSession, profile: RiderProfile) {
     if (!profile.is_online) return;
-
     setPushState('checking');
     setLocationState('checking');
-    setPushText('กำลังซิงก์ Push อัตโนมัติ...');
-    setLocationText('กำลังอัปเดตตำแหน่งอัตโนมัติ...');
+    setPushText('กำลังซิงก์ Push...');
+    setLocationText('กำลังอัปเดตตำแหน่ง...');
 
     const [pushResult, locationResult] = await Promise.allSettled([
       ensurePushReadiness(),
@@ -88,7 +113,7 @@ export default function RiderHomeScreen() {
         try {
           await registerPushDevice(activeSession, profile.id, pushResult.value.token);
           setPushState('ready');
-          setPushText('พร้อมรับ Native Push · ลงทะเบียนอุปกรณ์แล้ว');
+          setPushText('พร้อมรับ Push');
         } catch (cause) {
           setPushState('blocked');
           setPushText('Push พร้อม แต่ลงทะเบียนอุปกรณ์ไม่สำเร็จ');
@@ -96,7 +121,7 @@ export default function RiderHomeScreen() {
         }
       } else {
         setPushState('ready');
-        setPushText('พร้อมรับ Native Push');
+        setPushText('พร้อมรับ Push');
       }
     } else if (pushResult.status === 'fulfilled') {
       setPushState('blocked');
@@ -112,10 +137,10 @@ export default function RiderHomeScreen() {
       try {
         await updateRiderLocation(activeSession, profile.id, freshLocation);
         setLocationState('ready');
-        setLocationText('อัปเดตตำแหน่งกับระบบแล้ว');
+        setLocationText('ตำแหน่งล่าสุดพร้อม');
       } catch (cause) {
         setLocationState('blocked');
-        setLocationText('ได้ตำแหน่งแล้ว แต่ซิงก์กับระบบไม่สำเร็จ');
+        setLocationText('ได้ตำแหน่งแล้ว แต่ซิงก์ระบบไม่สำเร็จ');
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     } else if (locationResult.status === 'fulfilled') {
@@ -137,6 +162,7 @@ export default function RiderHomeScreen() {
     if (!saved) {
       setSession(null);
       setRider(null);
+      setActiveJob(null);
       setAccountState('pending');
       setAccountText('เข้าสู่ระบบด้วย LINE เพื่อเชื่อมบัญชี Rider');
       return;
@@ -146,14 +172,14 @@ export default function RiderHomeScreen() {
     if (!isSessionFresh(activeSession)) {
       if (activeSession.refreshToken && isRefreshSessionFresh(activeSession)) {
         try {
-          setAccountText('กำลังต่ออายุ MyTree session...');
+          setAccountText('กำลังต่ออายุ session...');
           activeSession = await refreshRiderSession(activeSession.refreshToken);
         } catch (cause) {
           await clearRiderSession();
           setSession(null);
           setRider(null);
           setAccountState('blocked');
-          setAccountText('Session ต่ออายุไม่สำเร็จ — กรุณาเข้าสู่ระบบใหม่');
+          setAccountText('Session ต่ออายุไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
           setError(cause instanceof Error ? cause.message : String(cause));
           return;
         }
@@ -162,7 +188,7 @@ export default function RiderHomeScreen() {
         setSession(null);
         setRider(null);
         setAccountState('blocked');
-        setAccountText('Session หมดอายุ — กรุณาเข้าสู่ระบบใหม่');
+        setAccountText('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
         return;
       }
     }
@@ -171,6 +197,7 @@ export default function RiderHomeScreen() {
       const profile = await getRiderProfile(activeSession);
       setSession(activeSession);
       applyProfile(profile);
+      await loadDashboard(activeSession);
       if (profile?.is_online) await syncOnlineDeviceState(activeSession, profile);
     } catch (cause) {
       setAccountState('blocked');
@@ -184,7 +211,10 @@ export default function RiderHomeScreen() {
   useEffect(() => {
     if (!session || !rider?.is_online) return;
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') void syncOnlineDeviceState(session, rider);
+      if (nextState === 'active') {
+        void syncOnlineDeviceState(session, rider);
+        void loadDashboard(session);
+      }
     });
     return () => subscription.remove();
   }, [session, rider?.id, rider?.is_online]);
@@ -202,6 +232,7 @@ export default function RiderHomeScreen() {
       const profile = await getRiderProfile(newSession);
       setSession(newSession);
       applyProfile(profile);
+      await loadDashboard(newSession);
       if (profile?.is_online) await syncOnlineDeviceState(newSession, profile);
     } catch (cause) {
       setSession(null);
@@ -226,7 +257,7 @@ export default function RiderHomeScreen() {
     const [pushResult, locationResult] = await Promise.allSettled([ensurePushReadiness(), ensureForegroundLocation()]);
     if (pushResult.status === 'fulfilled') {
       setPushState(pushResult.value.ready ? 'ready' : 'blocked');
-      setPushText(pushResult.value.ready ? 'พร้อมรับ Native Push' : pushResult.value.reason ?? 'Push ยังไม่พร้อม');
+      setPushText(pushResult.value.ready ? 'พร้อมรับ Push' : pushResult.value.reason ?? 'Push ยังไม่พร้อม');
     } else {
       setPushState('blocked');
       setPushText('ตรวจสอบ Push ไม่สำเร็จ');
@@ -251,7 +282,7 @@ export default function RiderHomeScreen() {
       if (rider.is_online) {
         await setRiderOnline(session, rider, false);
       } else {
-        if (pushState !== 'ready') throw new Error('ต้องเปิด Native Push Notification ก่อน Online');
+        if (pushState !== 'ready') throw new Error('ต้องเปิด Native Push ก่อน Online');
         let freshLocation = location;
         if (!freshLocation || !isLocationFresh(freshLocation.capturedAt)) {
           const refreshed = await ensureForegroundLocation();
@@ -263,7 +294,9 @@ export default function RiderHomeScreen() {
         }
         await setRiderOnline(session, rider, true, freshLocation);
       }
-      applyProfile(await getRiderProfile(session));
+      const profile = await getRiderProfile(session);
+      applyProfile(profile);
+      await loadDashboard(session);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -284,8 +317,10 @@ export default function RiderHomeScreen() {
       await clearRiderSession();
       setSession(null);
       setRider(null);
+      setActiveJob(null);
+      setSummary(EMPTY_SUMMARY);
       setAccountState('pending');
-      setAccountText('ออกจากระบบแล้ว — กรุณาเข้าสู่ระบบ Rider');
+      setAccountText('ออกจากระบบแล้ว กรุณาเข้าสู่ระบบ Rider');
       setLoggingOut(false);
     }
   }
@@ -293,21 +328,27 @@ export default function RiderHomeScreen() {
   const nativeReady = pushState === 'ready' && locationState === 'ready';
   const accountReady = accountState === 'ready' && !!session && !!rider;
   const canToggleOnline = accountReady && (rider?.is_online === true || nativeReady);
+  const isOnline = rider?.is_online === true;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>FOOD DELIVERY ONLY</Text>
-          <Text style={styles.title}>พร้อมรับงาน</Text>
-          <Text style={styles.subtitle}>เมื่อ Rider Online แอปจะซิงก์ Native Push และตำแหน่งล่าสุดอัตโนมัติเมื่อเปิดหรือกลับเข้าแอป</Text>
-        </View>
-
-        <View style={styles.card}>
-          <HealthRow label="บัญชีไรเดอร์" value={accountText} state={accountState} />
-          <HealthRow label="การแจ้งเตือน" value={pushText} state={pushState} />
-          <HealthRow label="ตำแหน่ง" value={locationText} state={locationState} />
-          <HealthRow label="สถานะรับงาน" value={rider?.is_online ? 'Online — พร้อมรับงานส่งอาหาร' : 'Offline'} state={rider?.is_online ? 'ready' : 'pending'} />
+        <View style={styles.hero}>
+          <View>
+            <Text style={styles.eyebrow}>MyTree Rider</Text>
+            <Text style={styles.title}>{isOnline ? 'พร้อมรับงาน' : 'พักรับงาน'}</Text>
+            <Text style={styles.subtitle}>{accountReady ? accountText : 'เข้าสู่ระบบ Rider เพื่อเริ่มรับงานส่งอาหารและพัสดุในชุมชน'}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isOnline, disabled: !canToggleOnline || updatingOnline }}
+            disabled={!canToggleOnline || updatingOnline}
+            onPress={toggleOnline}
+            style={[styles.onlineSwitch, isOnline && styles.onlineSwitchActive, (!canToggleOnline || updatingOnline) && styles.buttonDisabled]}
+          >
+            <View style={[styles.switchKnob, isOnline && styles.switchKnobActive]} />
+            <Text style={[styles.switchText, isOnline && styles.switchTextActive]}>{updatingOnline ? 'กำลังซิงก์' : isOnline ? 'Online' : 'Offline'}</Text>
+          </Pressable>
         </View>
 
         {!session && (
@@ -316,31 +357,68 @@ export default function RiderHomeScreen() {
           </Pressable>
         )}
 
-        {location && (
-          <View style={styles.locationCard}>
-            <Text style={styles.locationLabel}>ตำแหน่งล่าสุดบนอุปกรณ์</Text>
-            <Text style={styles.locationValue}>{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</Text>
-            <Text style={styles.locationMeta}>Accuracy {location.accuracy ? `${Math.round(location.accuracy)} m` : 'unknown'}</Text>
+        <View style={styles.metricsRow}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>รายได้วันนี้</Text>
+            <Text style={styles.metricValue}>฿{summary.earnings.toFixed(0)}</Text>
           </View>
-        )}
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>งานสำเร็จ</Text>
+            <Text style={styles.metricValue}>{summary.completedJobs}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>ระยะทาง</Text>
+            <Text style={styles.metricValue}>{summary.distanceKm.toFixed(1)} กม.</Text>
+          </View>
+        </View>
 
-        <Pressable style={[styles.primaryButton, checking && styles.buttonDisabled]} accessibilityRole="button" disabled={checking} onPress={checkReadiness}>
-          <Text style={styles.primaryButtonText}>{checking ? 'กำลังตรวจสอบ...' : 'ตรวจ Push + Location'}</Text>
+        <Pressable accessibilityRole="button" disabled={!accountReady || !activeJob} onPress={() => router.push('/active-delivery')} style={[styles.activeCard, !activeJob && styles.activeCardEmpty]}>
+          <Text style={styles.sectionLabel}>งานปัจจุบัน</Text>
+          <Text style={styles.activeTitle}>{routeForStatus(activeJob)}</Text>
+          {activeJob ? (
+            <Text style={styles.activeMeta} numberOfLines={2}>{activeJob.shops?.name ?? activeJob.shop_id} → {activeJob.delivery_address ?? 'จุดส่งลูกค้า'}</Text>
+          ) : (
+            <Text style={styles.activeMeta}>เมื่อรับงานสำเร็จ งานจะขึ้นที่นี่ทันที</Text>
+          )}
         </Pressable>
 
-        <Pressable style={[styles.onlineButton, rider?.is_online && styles.onlineButtonActive, (!canToggleOnline || updatingOnline) && styles.buttonDisabled]} accessibilityRole="button" disabled={!canToggleOnline || updatingOnline} onPress={toggleOnline}>
-          <Text style={styles.onlineButtonText}>{updatingOnline ? 'กำลังอัปเดต...' : rider?.is_online ? 'ออก Offline' : 'เปิด Online รับงาน'}</Text>
-        </Pressable>
+        <View style={styles.primaryActions}>
+          <Pressable accessibilityRole="button" disabled={!isOnline || !riderFeatures.deliveryV3Accept} onPress={() => router.push('/nearby-jobs')} style={[styles.incomingButton, (!isOnline || !riderFeatures.deliveryV3Accept) && styles.buttonDisabled]}>
+            <Text style={styles.incomingButtonTitle}>งานเข้า</Text>
+            <Text style={styles.incomingButtonText}>เปิดดูและรับงานใหม่</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={!accountReady} onPress={() => router.push('/active-delivery')} style={[styles.currentButton, !accountReady && styles.buttonDisabled]}>
+            <Text style={styles.currentButtonTitle}>งานปัจจุบัน</Text>
+            <Text style={styles.currentButtonText}>รับสินค้า → ส่งสำเร็จ</Text>
+          </Pressable>
+        </View>
 
-        <View style={styles.workRow}>
-          <Pressable accessibilityRole="button" disabled={!accountReady} onPress={() => router.push('/active-delivery')} style={[styles.workButton, !accountReady && styles.buttonDisabled]}>
-            <Text style={styles.workButtonTitle}>งานปัจจุบัน</Text>
-            <Text style={styles.workButtonMeta}>Pickup → Delivery</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" disabled={!rider?.is_online || !riderFeatures.deliveryV3Accept} onPress={() => router.push('/nearby-jobs')} style={[styles.workButton, (!rider?.is_online || !riderFeatures.deliveryV3Accept) && styles.buttonDisabled]}>
-            <Text style={styles.workButtonTitle}>งานใกล้ฉัน</Text>
-            <Text style={styles.workButtonMeta}>{riderFeatures.deliveryV3Accept ? 'Delivery V3 · First Accept' : 'รอเปิด Delivery V3'}</Text>
-          </Pressable>
+        <View style={styles.navGrid}>
+          {[
+            ['ประวัติ', '/history'],
+            ['รายได้', '/earnings'],
+            ['แชท', '/chat'],
+            ['โปรไฟล์', '/profile'],
+            ['ตั้งค่า', '/settings'],
+            ['ช่วยเหลือ', '/help'],
+          ].map(([label, href]) => (
+            <Pressable key={href} accessibilityRole="button" disabled={!accountReady} onPress={() => router.push(href as never)} style={[styles.navTile, !accountReady && styles.buttonDisabled]}>
+              <Text style={styles.navTileText}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.diagnosticsCard}>
+          <View style={styles.diagnosticsHeader}>
+            <Text style={styles.sectionLabel}>Settings / Diagnostics</Text>
+            <Pressable accessibilityRole="button" disabled={checking} onPress={checkReadiness}>
+              <Text style={styles.refreshText}>{checking ? 'กำลังตรวจ...' : 'ตรวจอีกครั้ง'}</Text>
+            </Pressable>
+          </View>
+          <DiagnosticRow label="บัญชี" value={accountText} state={accountState} />
+          <DiagnosticRow label="Push" value={pushText} state={pushState} />
+          <DiagnosticRow label="ตำแหน่ง" value={locationText} state={locationState} />
+          {location && <Text style={styles.locationText}>ตำแหน่งล่าสุด {location.lat.toFixed(5)}, {location.lng.toFixed(5)} · accuracy {location.accuracy ? `${Math.round(location.accuracy)} m` : 'unknown'}</Text>}
         </View>
 
         {!!session && (
@@ -350,47 +428,60 @@ export default function RiderHomeScreen() {
         )}
 
         {error && <Text style={styles.error}>{error}</Text>}
-        <Text style={styles.note}>Phase 2 ใช้ Native LINE Login และ persistent revocable `rider_native` session; Delivery V3 ใช้ Rider First Accept → Atomic Auto Lock → Shop Notified โดย backend เป็น source of truth</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
+  safeArea: { flex: 1, backgroundColor: '#F4F6F2' },
   scrollView: { flex: 1 },
-  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32, gap: 18 },
-  header: { gap: 8 },
-  eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: '#246B50' },
-  title: { fontSize: 30, fontWeight: '800', color: '#112235' },
-  subtitle: { fontSize: 15, lineHeight: 22, color: '#5B6877' },
-  card: { gap: 16, padding: 18, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
-  healthRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  container: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 32, gap: 16 },
+  hero: { gap: 16, padding: 18, borderRadius: 8, backgroundColor: '#122319' },
+  eyebrow: { fontSize: 12, fontWeight: '800', color: '#8EE6B0' },
+  title: { marginTop: 4, fontSize: 32, fontWeight: '900', color: '#FFFFFF' },
+  subtitle: { marginTop: 5, fontSize: 14, lineHeight: 20, color: '#D6E8DD' },
+  onlineSwitch: { minHeight: 62, borderRadius: 8, backgroundColor: '#F2F4F7', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+  onlineSwitchActive: { backgroundColor: '#16A34A' },
+  switchKnob: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#98A2B3' },
+  switchKnobActive: { backgroundColor: '#FFFFFF' },
+  switchText: { fontSize: 18, fontWeight: '900', color: '#344054' },
+  switchTextActive: { color: '#FFFFFF' },
+  lineButton: { alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 8, backgroundColor: '#06C755', paddingHorizontal: 18 },
+  lineButtonText: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  metricsRow: { flexDirection: 'row', gap: 8 },
+  metricCard: { flex: 1, minHeight: 88, justifyContent: 'center', padding: 12, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE5D7' },
+  metricLabel: { fontSize: 11, fontWeight: '800', color: '#667085' },
+  metricValue: { marginTop: 6, fontSize: 21, fontWeight: '900', color: '#122319' },
+  activeCard: { gap: 6, padding: 16, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#70D69B' },
+  activeCardEmpty: { borderColor: '#DDE5D7' },
+  sectionLabel: { fontSize: 12, fontWeight: '900', color: '#667085' },
+  activeTitle: { fontSize: 20, fontWeight: '900', color: '#1D2939' },
+  activeMeta: { fontSize: 13, lineHeight: 19, color: '#667085' },
+  primaryActions: { flexDirection: 'row', gap: 10 },
+  incomingButton: { flex: 1, minHeight: 82, justifyContent: 'center', padding: 14, borderRadius: 8, backgroundColor: '#246B50' },
+  currentButton: { flex: 1, minHeight: 82, justifyContent: 'center', padding: 14, borderRadius: 8, backgroundColor: '#163E72' },
+  incomingButtonTitle: { fontSize: 19, fontWeight: '900', color: '#FFFFFF' },
+  currentButtonTitle: { fontSize: 19, fontWeight: '900', color: '#FFFFFF' },
+  incomingButtonText: { marginTop: 4, fontSize: 12, color: '#DDF5E7' },
+  currentButtonText: { marginTop: 4, fontSize: 12, color: '#DCE9FF' },
+  navGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  navTile: { width: '31.8%', minHeight: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE5D7' },
+  navTileText: { fontSize: 14, fontWeight: '900', color: '#344054' },
+  diagnosticsCard: { gap: 12, padding: 14, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE5D7' },
+  diagnosticsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  refreshText: { fontSize: 13, fontWeight: '900', color: '#246B50' },
+  diagnosticRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
   dotReady: { backgroundColor: '#2F855A' },
   dotPending: { backgroundColor: '#D69E2E' },
   dotBlocked: { backgroundColor: '#C53030' },
-  healthText: { flex: 1 },
-  healthLabel: { fontSize: 15, fontWeight: '700', color: '#1F2937' },
-  healthValue: { marginTop: 2, fontSize: 13, color: '#667085' },
-  lineButton: { alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 16, backgroundColor: '#06C755', paddingHorizontal: 18 },
-  lineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  locationCard: { padding: 14, borderRadius: 14, backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6' },
-  locationLabel: { fontSize: 12, fontWeight: '700', color: '#067647' },
-  locationValue: { marginTop: 4, fontSize: 16, fontWeight: '700', color: '#074D31' },
-  locationMeta: { marginTop: 2, fontSize: 12, color: '#3F6B57' },
-  primaryButton: { alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 16, backgroundColor: '#163E72', paddingHorizontal: 18 },
-  onlineButton: { alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 16, backgroundColor: '#667085', paddingHorizontal: 18 },
-  onlineButtonActive: { backgroundColor: '#067647' },
-  workRow: { flexDirection: 'row', gap: 10 },
-  workButton: { flex: 1, minHeight: 72, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
-  workButtonTitle: { fontSize: 15, fontWeight: '800', color: '#1D2939' },
-  workButtonMeta: { marginTop: 4, fontSize: 11, color: '#667085' },
-  logoutButton: { alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF' },
-  logoutButtonText: { fontSize: 14, fontWeight: '700', color: '#344054' },
+  diagnosticText: { flex: 1 },
+  diagnosticLabel: { fontSize: 13, fontWeight: '800', color: '#344054' },
+  diagnosticValue: { marginTop: 2, fontSize: 12, color: '#667085' },
+  locationText: { fontSize: 12, lineHeight: 18, color: '#667085' },
+  logoutButton: { alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 8, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF' },
+  logoutButtonText: { fontSize: 14, fontWeight: '800', color: '#344054' },
   buttonDisabled: { opacity: 0.45 },
-  primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  onlineButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   error: { fontSize: 13, lineHeight: 19, color: '#B42318' },
-  note: { fontSize: 13, lineHeight: 19, color: '#667085' },
 });

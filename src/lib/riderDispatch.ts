@@ -1,7 +1,8 @@
 import liff from "@line/liff";
 import { initLiff } from "@/lib/supabase";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
-const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
+const WORKER_URL = MYTREE_WORKER_URL;
 
 export type RiderOfferResult = {
   ok: boolean;

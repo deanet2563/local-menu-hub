@@ -18,7 +18,9 @@ import {
   type ConfirmedDeliveryPoint,
   type DeliveryRouteQuote,
 } from "@/lib/deliveryLocation";
+import { customerDeliveryChargeForCheckout, resetDeliveryStateForPickup } from "@/lib/checkoutFulfillment";
 import { submitOrder } from "@/lib/order";
+import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
 import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
 
@@ -109,13 +111,22 @@ function CartCheckout() {
   const [saveAddressLabel, setSaveAddressLabel] = useState("บ้าน");
   const [makeDefaultAddress, setMakeDefaultAddress] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [completedSubId, setCompletedSubId] = useState<string | null>(null);
+  const [completedPayment, setCompletedPayment] = useState<"cash" | "qr_transfer" | null>(null);
+  const [slipUploading, setSlipUploading] = useState(false);
+  const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null);
+  const [slipSuccess, setSlipSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [done, setDone] = useState(false);
+  const slipInputRef = useRef<HTMLInputElement | null>(null);
   const restoredDraftRef = useRef(false);
   const latestQuoteKeyRef = useRef<string | null>(null);
+  const quoteSeqRef = useRef(0);
+  const locationSeqRef = useRef(0);
 
   const availability = useMemo(() => shop ? getShopAvailability(shop.is_open, shop.business_hours) : null, [shop]);
+  const deliveryCharge = customerDeliveryChargeForCheckout(fulfillment, routeQuote);
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ key: string; name: string; isSet: boolean; items: typeof c.items; count: number; total: number }> = [];
@@ -147,7 +158,7 @@ function CartCheckout() {
         .maybeSingle();
       const row = data as ShopCheckout | null;
       setShop(row);
-      if (row?.delivery_enabled === false && row.pickup_enabled !== false) setFulfillment("pickup");
+      if (row?.delivery_enabled === false && row.pickup_enabled !== false) changeFulfillment("pickup");
       if (!row?.payment_cash_enabled && row?.payment_qr_enabled) setPayment("qr_transfer");
     })();
   }, [checkoutShopId]);
@@ -162,7 +173,30 @@ function CartCheckout() {
     }
   }, [shop, availability]);
 
+  function changeFulfillment(next: "delivery" | "pickup") {
+    setFulfillment(next);
+    if (next === "pickup") {
+      quoteSeqRef.current += 1;
+      locationSeqRef.current += 1;
+      latestQuoteKeyRef.current = null;
+      setCandidatePoint(null);
+      setDeliveryPoint(null);
+      setShowDestinationChooser(true);
+      setResolvingLocation(false);
+      setLocating(false);
+      const reset = resetDeliveryStateForPickup({ routeQuote, error, fieldErrors, quotingRoute });
+      setRouteQuote(reset.routeQuote);
+      setError(reset.error);
+      setFieldErrors(reset.fieldErrors);
+      setQuotingRoute(reset.quotingRoute);
+      return;
+    }
+    setError(null);
+    setFieldErrors({});
+  }
+
   const confirmDeliveryPoint = useCallback(async (point: ConfirmedDeliveryPoint) => {
+    if (fulfillment !== "delivery") return;
     setCandidatePoint(point);
     setFieldErrors((current) => ({ ...current, deliveryPoint: undefined }));
     const quoteKey = `${checkoutShopId}:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
@@ -174,20 +208,24 @@ function CartCheckout() {
     if (!checkoutShopId) return;
     setQuotingRoute(true);
     setError(null);
+    const requestSeq = quoteSeqRef.current + 1;
+    quoteSeqRef.current = requestSeq;
     try {
       const quote = await quoteDeliveryRoute(checkoutShopId, point);
+      if (requestSeq !== quoteSeqRef.current) return;
       latestQuoteKeyRef.current = quoteKey;
       setDeliveryPoint(point);
       setRouteQuote(quote);
       setShowDestinationChooser(false);
     } catch (cause) {
+      if (requestSeq !== quoteSeqRef.current) return;
       latestQuoteKeyRef.current = null;
       setShowDestinationChooser(true);
       setError(cause instanceof Error ? cause.message : "คำนวณเส้นทางไม่สำเร็จ");
     } finally {
-      setQuotingRoute(false);
+      if (requestSeq === quoteSeqRef.current) setQuotingRoute(false);
     }
-  }, [checkoutShopId, deliveryPoint, routeQuote]);
+  }, [checkoutShopId, deliveryPoint, fulfillment, routeQuote]);
 
   useEffect(() => {
     (async () => {
@@ -213,7 +251,7 @@ function CartCheckout() {
           setSaveAddress(draft.saveAddress);
           setSaveAddressLabel(draft.saveAddressLabel);
           setMakeDefaultAddress(draft.makeDefaultAddress);
-          if (draft.destination) {
+          if (draft.fulfillment === "delivery" && draft.destination) {
             const point = pointFromDraft(draft.destination);
             setCandidatePoint(point);
             setDeliveryPoint(point);
@@ -317,10 +355,14 @@ function CartCheckout() {
 
   async function resolveLocationInput() {
     if (!locationInput.trim()) return setError("วาง Google Maps link หรือ latitude, longitude ก่อน");
+    if (fulfillment !== "delivery") return;
+    const requestSeq = locationSeqRef.current + 1;
+    locationSeqRef.current = requestSeq;
     setResolvingLocation(true);
     setError(null);
     try {
       const point = await resolveDeliveryLocation(locationInput.trim(), checkoutShopId);
+      if (requestSeq !== locationSeqRef.current) return;
       setCandidatePoint(point);
       setDeliveryPoint(null);
       setRouteQuote(null);
@@ -328,21 +370,26 @@ function CartCheckout() {
       setSelectedAddressId(null);
       if (point.formattedAddress) applyFormattedAddressSuggestion(point.formattedAddress);
     } catch (cause) {
+      if (requestSeq !== locationSeqRef.current) return;
       setError(cause instanceof Error ? cause.message : "ตรวจจุดส่งไม่สำเร็จ");
     } finally {
-      setResolvingLocation(false);
+      if (requestSeq === locationSeqRef.current) setResolvingLocation(false);
     }
   }
 
   function captureDeliveryPoint() {
+    if (fulfillment !== "delivery") return;
     if (!("geolocation" in navigator)) {
       setError("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
       return;
     }
     setLocating(true);
     setError(null);
+    const requestSeq = locationSeqRef.current + 1;
+    locationSeqRef.current = requestSeq;
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (requestSeq !== locationSeqRef.current) return;
         const point: ConfirmedDeliveryPoint = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -355,6 +402,7 @@ function CartCheckout() {
         void confirmDeliveryPoint(point);
       },
       (geoError) => {
+        if (requestSeq !== locationSeqRef.current) return;
         setLocating(false);
         setDeliveryPoint(null);
         setRouteQuote(null);
@@ -444,8 +492,29 @@ function CartCheckout() {
       setDeliveryAddresses(nextAddresses);
     }
     clearCheckoutDraft(customerId, checkoutShopId);
+    setCompletedSubId(res.sub_id ?? null);
+    setCompletedPayment(payment);
     cart.clear();
     setDone(true);
+  }
+
+  async function onCompletedSlipChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !completedSubId) return;
+    setSlipUploading(true);
+    setError(null);
+    setSlipSuccess(null);
+    const localPreview = URL.createObjectURL(file);
+    setSlipPreviewUrl(localPreview);
+    try {
+      await uploadAndAttachPaymentSlipToOrder({ subId: completedSubId, file });
+      setSlipSuccess("แนบสลิปเรียบร้อย ร้านจะได้รับแจ้งเตือนสำคัญเพื่อตรวจสอบยอดชำระ");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "แนบสลิปไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setSlipUploading(false);
+    }
   }
 
   if (done) return (
@@ -453,6 +522,28 @@ function CartCheckout() {
       <p className="text-2xl">✅</p>
       <p className="text-lg font-semibold">{timing === "preorder" ? "ส่งออเดอร์ล่วงหน้าแล้ว" : "ส่งคำสั่งซื้อแล้ว"}</p>
       <p className="text-sm text-gray-500">กำลังรอร้านยืนยันออเดอร์ ติดตามสถานะได้ที่ประวัติออเดอร์</p>
+      {completedPayment === "qr_transfer" && completedSubId && (
+        <div className="mt-4 rounded-xl border border-purple-100 bg-purple-50 p-3 text-left space-y-3">
+          <p className="text-sm font-semibold text-purple-900">แนบสลิปการชำระเงิน</p>
+          <p className="text-xs leading-5 text-purple-800">หลังโอนผ่าน QR แล้ว ให้แนบรูปสลิปเพื่อให้ร้านตรวจสอบและยืนยันยอด</p>
+          {shop?.qr_code_url && <img src={shop.qr_code_url} alt="QR Code ร้าน" className="mx-auto h-44 w-44 rounded-lg border border-purple-100 bg-white object-contain" />}
+          {slipPreviewUrl && <img src={slipPreviewUrl} alt="ตัวอย่างสลิปที่เลือก" className="mx-auto max-h-56 rounded-lg border border-purple-100 object-contain" />}
+          <input ref={slipInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void onCompletedSlipChosen(event)} />
+          <button
+            type="button"
+            onClick={() => slipInputRef.current?.click()}
+            disabled={slipUploading}
+            className="w-full rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {slipUploading ? "กำลังอัปโหลดสลิป..." : "แนบสลิปการชำระเงิน"}
+          </button>
+          {slipSuccess && <p className="text-xs font-medium text-green-700">{slipSuccess}</p>}
+        </div>
+      )}
+      {completedPayment === "qr_transfer" && !completedSubId && (
+        <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-700">สร้างออเดอร์แล้ว แต่ยังไม่พบเลขออเดอร์ย่อยสำหรับแนบสลิป กรุณาแนบสลิปจากประวัติออเดอร์</p>
+      )}
+      {error && <p className="text-sm text-red-500">{error}</p>}
       <Link to="/orders" className="text-orange-500 underline block mt-2">ดูสถานะออเดอร์</Link>
       <Link to="/" className="text-gray-400 underline block text-sm">กลับหน้าแรก</Link>
     </div>
@@ -525,8 +616,8 @@ function CartCheckout() {
       <div className="rounded-lg border border-gray-200 p-3 space-y-3">
         <p className="text-sm font-medium text-gray-700">รับสินค้า</p>
         <div className="flex gap-2">
-          {shop?.delivery_enabled !== false && <button type="button" onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "delivery" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>ส่งถึงบ้าน</button>}
-          {shop?.pickup_enabled !== false && <button type="button" onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "pickup" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>รับเอง</button>}
+          {shop?.delivery_enabled !== false && <button type="button" onClick={() => changeFulfillment("delivery")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "delivery" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>ส่งถึงบ้าน</button>}
+          {shop?.pickup_enabled !== false && <button type="button" onClick={() => changeFulfillment("pickup")} className={`flex-1 rounded-lg py-2 text-sm ${fulfillment === "pickup" ? "bg-orange-500 text-white" : "bg-gray-100"}`}>รับเอง</button>}
         </div>
       </div>
 
@@ -687,9 +778,9 @@ function CartCheckout() {
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="fixed left-4 right-4 bottom-4 z-20">
-        <button onClick={confirm} disabled={submitting || quotingRoute || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
+        <button onClick={confirm} disabled={submitting || (fulfillment === "delivery" && quotingRoute) || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
           <span className="min-w-0">{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
-          <span className="shrink-0">{routeQuote && fulfillment === "delivery" ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${routeQuote.deliveryFee.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
+          <span className="shrink-0">{fulfillment === "delivery" && deliveryCharge > 0 ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${deliveryCharge.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
         </button>
       </div>
     </div>

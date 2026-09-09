@@ -1,5 +1,6 @@
 import liff from "@line/liff";
 import { initLiff } from "@/lib/supabase";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 // ============================================================
 // MyTree — switch the current user's LINE rich menu by role.
@@ -7,7 +8,7 @@ import { initLiff } from "@/lib/supabase";
 // LINE OA message quota (it's a menu-management API call, not a message).
 // ============================================================
 
-const RICHMENU_URL = "https://mytree-worker.kompakorn-t.workers.dev/richmenu/link";
+const RICHMENU_URL = `${MYTREE_WORKER_URL}/richmenu/link`;
 
 export async function linkRichMenu(target: "customer" | "shop" | "rider"): Promise<void> {
   try {

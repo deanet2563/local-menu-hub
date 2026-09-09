@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 export type OwnedShopProfile = {
   shop_id: string;
   name: string;
+  logo_url: string | null;
   is_open: boolean;
   is_approved: boolean;
   is_banned: boolean;
@@ -24,7 +25,6 @@ export async function getOwnedShopProfile(): Promise<OwnedShopProfile | null> {
   const { data: staff, error: staffError } = await supabase
     .from('shop_staff')
     .select('shop_id')
-    .eq('role', 'owner')
     .limit(1)
     .maybeSingle();
 
@@ -33,7 +33,7 @@ export async function getOwnedShopProfile(): Promise<OwnedShopProfile | null> {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('shop_id,name,is_open,is_approved,is_banned,banned_reason')
+    .select('shop_id,name,logo_url,is_open,is_approved,is_banned,banned_reason')
     .eq('shop_id', staff.shop_id)
     .maybeSingle();
 

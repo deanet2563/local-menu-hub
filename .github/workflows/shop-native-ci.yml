@@ -5,15 +5,54 @@ on:
   pull_request:
     paths:
       - 'apps/shop-native/**'
+      - 'supabase/migrations/2026090*.sql'
       - '.github/workflows/shop-native-ci.yml'
   push:
     branches:
       - 'feature/shop-native-foundation'
     paths:
       - 'apps/shop-native/**'
+      - 'supabase/migrations/2026090*.sql'
       - '.github/workflows/shop-native-ci.yml'
 
 jobs:
+  migration-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Guard production shop-id compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(supabase/migrations/2026090*.sql)
+          if grep -Ein 'shop_id[[:space:]]+uuid[^;]*references[[:space:]]+public\.shops' "${files[@]}"; then
+            echo 'Shop Native migrations must use text shop_id because production shops.shop_id is text.'
+            exit 1
+          fi
+          if grep -Ein 'p_shop_id[[:space:]]+uuid' "${files[@]}"; then
+            echo 'Shop-scoped migration functions must use text p_shop_id because production shops.shop_id is text.'
+            exit 1
+          fi
+          if grep -Ein '= *any\(public\.fn_staff_shop_ids\(\)\)' "${files[@]}"; then
+            echo 'fn_staff_shop_ids() returns SETOF text; use IN (SELECT public.fn_staff_shop_ids()).'
+            exit 1
+          fi
+
+      - name: Guard atomic customer delivery pricing order wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          atomic='supabase/migrations/20260904101500_atomic_customer_delivery_pricing_order_v3.sql'
+          test -f "$atomic"
+          grep -Fq 'function public.fn_create_order_v3_priced' "$atomic"
+          grep -Fq 'from public.fn_create_order_v2(' "$atomic"
+          grep -Fq 'update public.sub_orders' "$atomic"
+          grep -Fq 'customer_delivery_charge = v_customer_delivery_charge' "$atomic"
+          grep -Fq 'delivery_fee_payer = v_delivery_fee_payer' "$atomic"
+          grep -Fq "raise exception 'failed to persist atomic delivery pricing snapshot'" "$atomic"
+
   validate:
     runs-on: ubuntu-latest
     defaults:

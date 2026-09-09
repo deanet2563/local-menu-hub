@@ -6,6 +6,10 @@ export type AssignedDelivery = {
   delivery_status: 'rider_called' | 'picked_up' | 'delivered' | 'failed' | string;
   delivery_address: string | null;
   delivery_photo_url: string | null;
+  delivery_fee: number | null;
+  delivery_distance_km: number | null;
+  picked_up_at?: string | null;
+  delivered_at?: string | null;
   amount: number;
   created_at: string;
   shops: {
@@ -41,12 +45,23 @@ export type RiderV3CancelResult = {
   shopId: string;
 };
 
+export type RiderCompletedDeliveryRow = {
+  sub_id: string;
+  delivery_fee: number | null;
+  delivery_distance_km: number | null;
+  delivered_at: string | null;
+};
+
 const SELECT = [
   'sub_id',
   'shop_id',
   'delivery_status',
   'delivery_address',
   'delivery_photo_url',
+  'delivery_fee',
+  'delivery_distance_km',
+  'picked_up_at',
+  'delivered_at',
   'amount',
   'created_at',
   'shops(name,phone,address,lat,lng)',
@@ -91,6 +106,23 @@ export async function getActiveAssignedDelivery(session: RiderSession): Promise<
   if (!response.ok) throw new Error(`assigned delivery lookup failed: ${response.status}`);
   const rows = (await response.json()) as AssignedDelivery[];
   return rows[0] ?? null;
+}
+
+export async function listRecentCompletedDeliveries(session: RiderSession, limit = 50): Promise<RiderCompletedDeliveryRow[]> {
+  const { url } = config();
+  const query = new URLSearchParams({
+    select: 'sub_id,delivery_fee,delivery_distance_km,delivered_at',
+    delivery_status: 'eq.delivered',
+    delivered_at: 'not.is.null',
+    order: 'delivered_at.desc',
+    limit: String(limit),
+  });
+
+  const response = await fetch(`${url}/rest/v1/sub_orders?${query.toString()}`, {
+    headers: headers(session),
+  });
+  if (!response.ok) throw new Error(`completed delivery lookup failed: ${response.status}`);
+  return (await response.json()) as RiderCompletedDeliveryRow[];
 }
 
 export async function markDeliveryPickedUp(

@@ -2,6 +2,7 @@ import liff from "@line/liff";
 import { initLiff, isOrderingPreview } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
 // ============================================================
 // MyTree — submit an order to the worker /order endpoint.
@@ -11,7 +12,7 @@ import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/delive
 // it never changes server-authoritative prices.
 // ============================================================
 
-const ORDER_URL = "https://mytree-worker.kompakorn-t.workers.dev/order";
+const ORDER_URL = `${MYTREE_WORKER_URL}/order`;
 
 export type OrderLinePayload = {
   lineId: string;
@@ -79,7 +80,7 @@ function validateDeliveryDestination(order: OrderPayload): string | null {
 
 export async function submitOrder(
   order: OrderPayload
-): Promise<{ ok: boolean; order_id?: string; error?: string }> {
+): Promise<{ ok: boolean; order_id?: string; sub_id?: string; error?: string }> {
   const quotedOrder = withDeliveryQuoteToken(order);
   const deliveryDestinationError = validateDeliveryDestination(quotedOrder);
   if (deliveryDestinationError) return { ok: false, error: deliveryDestinationError };
@@ -107,9 +108,9 @@ export async function submitOrder(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, order: enrichedOrder }),
     });
-    const data = (await res.json()) as { ok?: boolean; order_id?: string; error?: string };
+    const data = (await res.json()) as { ok?: boolean; order_id?: string; sub_id?: string; error?: string };
     if (!res.ok) return { ok: false, error: data.error ?? `error ${res.status}` };
-    return { ok: true, order_id: data.order_id };
+    return { ok: true, order_id: data.order_id, sub_id: data.sub_id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
