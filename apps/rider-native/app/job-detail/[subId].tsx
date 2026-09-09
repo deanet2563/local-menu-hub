@@ -112,7 +112,7 @@ export default function NearbyJobDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>DELIVERY V3 · FIRST ACCEPT</Text>
+          <Text style={styles.eyebrow}>งานส่งแบบรับก่อนล็อกก่อน</Text>
           <Text style={styles.title}>{job?.shop_name ?? 'รายละเอียดงาน'}</Text>
           <Text style={styles.subtitle}>ตรวจต้นทาง ปลายทาง ระยะทาง และค่าขนส่งก่อนตัดสินใจรับงาน</Text>
         </View>
