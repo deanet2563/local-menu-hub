@@ -24,7 +24,10 @@
 - `distance` pricing means customer charge follows the authoritative route quote and `delivery_fee_payer = customer`.
 - `free` pricing means customer charge is `0` and the shop pays the Rider fee.
 - `flat` pricing means the customer pays the merchant-defined customer charge and the shop pays the Rider fee if MyTree Rider is used.
-- `sub_orders.amount` remains the legacy item/order amount field and must not be used by UI copy as final customer grand total until live semantics are verified against actual order rows.
+- `sub_orders.amount` is resolved from source/schema evidence as the shop/item subtotal: legacy `fn_create_order` calculates `sum(qty * unit_price)` from validated `p_items`, stores it in `sub_orders.amount`, and updates `hub_orders.total` from `sum(sub_orders.amount)`.
+- `sub_orders.amount` and `hub_orders.total` do not include `sub_orders.customer_delivery_charge` in the priced-order migration contract.
+- Customer payable total for checkout/receipt wording is `sub_orders.amount + sub_orders.customer_delivery_charge`.
+- Rider compensation display must use `delivery_fee` or route-derived `calculated_delivery_fee`; it must never use `customer_delivery_charge`.
 
 ## Changes Recorded
 
@@ -32,6 +35,7 @@
 - The migration creates `fn_create_order_v3_priced`, wraps the live-compatible destination-aware `fn_create_order_v2` overload, and freezes `customer_delivery_charge` plus `delivery_fee_payer` in the same DB transaction.
 - The RPC remains `SECURITY DEFINER`, `search_path = public, pg_temp`, revoked from `public`, `anon`, and `authenticated`, and granted only to `service_role`.
 - Worker CI now triggers for `supabase/migrations/**` and runs a priced-order migration contract test before the non-deploying `wrangler deploy --dry-run`.
+- Worker PR #53 now includes read-only `supabase/ops/priced_order_v3_preflight.sql` for production preflight/postflight capture of amount semantics, required columns/constraints, `fn_create_order_v2` compatibility, and `fn_create_order_v3_priced` privileges.
 
 ## Verification Evidence
 
@@ -41,10 +45,18 @@ Worker local checks from `.worktrees/mytree-worker-pr53`:
 - `node --test tests/payment-slip-producer.test.mjs` -> 4/4 passed.
 - `npx --yes wrangler@latest deploy --dry-run --config wrangler.toml` -> passed, no production deploy.
 
+Follow-up Worker checks from the same worktree:
+
+- `node --test tests/priced-order-migration-contract.test.mjs` -> 4/4 passed after adding amount/payable-total and production preflight assertions.
+
 ## Dependencies / Blockers
 
 - No production SQL was run for this checkpoint.
-- Applying `20260904101500_atomic_customer_delivery_pricing_order_v3.sql` to live Supabase requires explicit production approval and pre/postflight capture.
+- Applying `20260904101500_atomic_customer_delivery_pricing_order_v3.sql` to live Supabase requires explicit production approval and pre/postflight capture using `supabase/ops/priced_order_v3_preflight.sql`.
 - Customer reusable Shop Customize feature flag must remain off until Worker PR #53, DB migration verification, and customer LIFF checkout E2E pass.
-- Final customer UI wording for totals remains blocked on live confirmation of `sub_orders.amount` semantics versus `customer_delivery_charge`.
 - Shop/Rider native APK and real-device gates remain outside this Backend/DB lane.
+
+## Downstream Readiness
+
+- Backend is READY FOR RIDER #79 from a contract perspective: `delivery_fee`/`calculated_delivery_fee` remain Rider compensation, `delivery_fee_payer` remains the no-split payer, and the priced-order RPC does not alter Rider V3 first-accept semantics.
+- Backend is READY FOR CUSTOMER #80 for implementation behind the existing feature flag: customer payable total must be displayed as item subtotal plus `customer_delivery_charge`, and reusable Customize should stay disabled until the production migration plus LIFF checkout E2E are verified.
