@@ -131,7 +131,7 @@ export default function ActiveDeliveryScreen() {
   }
 
   const shopMap = mapsUrl({ lat: job.shops?.lat, lng: job.shops?.lng, address: job.shops?.address });
-  const customerMap = mapsUrl({ address: job.delivery_address });
+  const customerMap = mapsUrl({ lat: job.delivery_destination_lat, lng: job.delivery_destination_lng, address: job.delivery_address });
   const customer = job.hub_orders?.customers;
   const pickedUpState = job.delivery_status === 'picked_up';
   const pickupEnabled = riderFeatures.deliveryV3Accept && !updating;

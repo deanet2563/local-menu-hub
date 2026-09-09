@@ -343,6 +343,10 @@ export default function RiderHomeScreen() {
           </Pressable>
         </View>
 
+        <Pressable accessibilityRole="button" disabled={!accountReady} onPress={() => router.push('/history')} style={[styles.historyButton, !accountReady && styles.buttonDisabled]}>
+          <Text style={styles.historyButtonText}>ประวัติงาน Rider</Text>
+        </Pressable>
+
         {!!session && (
           <Pressable accessibilityRole="button" disabled={loggingOut} onPress={logout} style={[styles.logoutButton, loggingOut && styles.buttonDisabled]}>
             <Text style={styles.logoutButtonText}>{loggingOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}</Text>
@@ -386,6 +390,8 @@ const styles = StyleSheet.create({
   workButton: { flex: 1, minHeight: 72, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
   workButtonTitle: { fontSize: 15, fontWeight: '800', color: '#1D2939' },
   workButtonMeta: { marginTop: 4, fontSize: 11, color: '#667085' },
+  historyButton: { alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 14, backgroundColor: '#EEF4FF' },
+  historyButtonText: { fontSize: 14, fontWeight: '800', color: '#163E72' },
   logoutButton: { alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF' },
   logoutButtonText: { fontSize: 14, fontWeight: '700', color: '#344054' },
   buttonDisabled: { opacity: 0.45 },

@@ -5,6 +5,8 @@ export type AssignedDelivery = {
   shop_id: string;
   delivery_status: 'rider_called' | 'picked_up' | 'delivered' | 'failed' | string;
   delivery_address: string | null;
+  delivery_destination_lat: number | null;
+  delivery_destination_lng: number | null;
   delivery_photo_url: string | null;
   amount: number;
   created_at: string;
@@ -46,6 +48,8 @@ const SELECT = [
   'shop_id',
   'delivery_status',
   'delivery_address',
+  'delivery_destination_lat',
+  'delivery_destination_lng',
   'delivery_photo_url',
   'amount',
   'created_at',
@@ -91,6 +95,22 @@ export async function getActiveAssignedDelivery(session: RiderSession): Promise<
   if (!response.ok) throw new Error(`assigned delivery lookup failed: ${response.status}`);
   const rows = (await response.json()) as AssignedDelivery[];
   return rows[0] ?? null;
+}
+
+export async function listRiderDeliveryHistory(session: RiderSession): Promise<AssignedDelivery[]> {
+  const { url } = config();
+  const query = new URLSearchParams({
+    select: SELECT,
+    delivery_status: 'in.(delivered,failed,cancelled)',
+    order: 'created_at.desc',
+    limit: '30',
+  });
+
+  const response = await fetch(`${url}/rest/v1/sub_orders?${query.toString()}`, {
+    headers: headers(session),
+  });
+  if (!response.ok) throw new Error(`delivery history lookup failed: ${response.status}`);
+  return (await response.json()) as AssignedDelivery[];
 }
 
 export async function markDeliveryPickedUp(

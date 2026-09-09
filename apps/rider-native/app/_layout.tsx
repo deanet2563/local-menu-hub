@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="job-detail/[subId]" options={{ title: 'รายละเอียดงาน' }} />
         <Stack.Screen name="cancel-delivery" options={{ title: 'ปล่อยงาน' }} />
         <Stack.Screen name="proof-delivery" options={{ title: 'ยืนยันการส่ง' }} />
+        <Stack.Screen name="history" options={{ title: 'ประวัติงาน' }} />
       </Stack>
     </>
   );
