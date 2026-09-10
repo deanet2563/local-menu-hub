@@ -26,6 +26,31 @@ function ProductCard({ item, shopName }: { item: Item; shopName: string }) {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+function HeaderActionIcon({ type }: { type: "favorites" | "notifications" }) {
+  if (type === "favorites") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 21s-7-4.4-9.2-8.7C1.2 9.1 3.3 5.5 6.8 5.5c2 0 3.4 1.1 4.2 2.4.8-1.3 2.2-2.4 4.2-2.4 3.5 0 5.6 3.6 4 6.8C19 16.6 12 21 12 21Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M10 21h4" />
+    </svg>
+  );
+}
+
 function mountStagingDiagnosticsPanel(snapshot: NonNullable<ReturnType<typeof buildStagingDiagnosticSnapshot>>): () => void {
   const existing = document.querySelector('[data-testid="staging-home-diagnostics"]');
   existing?.remove();
@@ -158,28 +183,45 @@ export function HubHome() {
     [cat, categories, items, visibleItems],
   );
   const filteredShops = openOnly ? orderedShops : shops;
+  const locationLabel = locationState === "ready" ? "ตำแหน่งปัจจุบัน" : "ชุมชนใกล้คุณ";
 
   if (loading) return <div className="min-h-screen bg-[#f7f7f3] p-5 text-sm text-slate-500">กำลังเตรียมร้านใกล้คุณ...</div>;
 
   return (
     <div className="min-h-screen bg-[#f7f7f3] pb-24 text-slate-900">
       <header className="mx-auto max-w-md px-4 pb-3 pt-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[.18em] text-orange-600">MyTree</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight">วันนี้อยากค้นพบอะไร</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl font-bold tracking-tight text-slate-950">MyTree</p>
+            <p className="mt-0.5 text-sm font-semibold text-emerald-700">Community Thailand</p>
+            <p className="mt-3 truncate text-sm font-medium text-slate-600">📍 ส่งไปที่ {locationLabel}</p>
           </div>
-          <Link to="/account" className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-xl" aria-label="บัญชี">◯</Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link to="/favorites" className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm active:scale-95" aria-label="Favorites">
+              <HeaderActionIcon type="favorites" />
+            </Link>
+            <Link to="/notifications" className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm active:scale-95" aria-label="Notifications">
+              <HeaderActionIcon type="notifications" />
+            </Link>
+          </div>
         </div>
         <div className="mt-4 flex gap-2">
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-            <span className="text-lg text-slate-400">⌕</span>
-            <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="ค้นหาร้านหรือเมนู" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+            <span className="text-slate-400"><SearchIcon /></span>
+            <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="ค้นหาใน MyTree" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
           </label>
           <button type="button" onClick={() => setShowFilters(true)} className="rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold shadow-sm">ตัวกรอง</button>
         </div>
+        <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-950">รอบบ้านคุณ มีอะไรน่าสนใจ?</h1>
       </header>
       <main className="mx-auto max-w-md space-y-7">
+        <section className="px-4">
+          <div className="grid grid-cols-3 gap-2">
+            <Link to="/food" className="rounded-2xl bg-emerald-700 px-3 py-3 text-sm font-bold text-white shadow-sm">อาหาร</Link>
+            <Link to="/community" className="rounded-2xl border border-emerald-100 bg-white px-3 py-3 text-sm font-bold text-emerald-800 shadow-sm">ชุมชน</Link>
+            <Link to="/map" className="rounded-2xl border border-emerald-100 bg-white px-3 py-3 text-sm font-bold text-emerald-800 shadow-sm">แผนที่</Link>
+          </div>
+        </section>
         <section className="px-4">
           <div className="flex items-center justify-between">
             <div>
@@ -218,6 +260,29 @@ export function HubHome() {
               </div>
             </div>
           ))}
+        </section>
+        <section className="px-4">
+          <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">ชุมชน MyTree</h2>
+                <p className="mt-1 text-sm text-slate-500">ข่าวสาร เพื่อนบ้าน และกิจกรรมในชุมชนกำลังจะมา</p>
+              </div>
+              <Link to="/community" className="shrink-0 text-xs font-semibold text-emerald-700">ดูพื้นที่</Link>
+            </div>
+          </div>
+        </section>
+        <section className="px-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Link to="/map" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900">รอบตัวฉัน</h2>
+              <p className="mt-1 text-xs text-slate-500">เตรียมพื้นที่แผนที่ชุมชน</p>
+            </Link>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900">บริการและตลาด</h2>
+              <p className="mt-1 text-xs text-slate-500">ตัวอย่างพื้นที่ staging สำหรับอนาคต</p>
+            </div>
+          </div>
         </section>
         <section className="px-4">
           <div className="flex items-end justify-between">
