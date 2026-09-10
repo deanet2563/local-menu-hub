@@ -69,6 +69,96 @@ const EMPTY: CartState = { shopId: null, items: [] };
 
 function hasWindow() { return typeof window !== "undefined"; }
 function normalizeOption(o: CartOptionSelection): CartOptionSelection { return { ...o, priceDelta: Number(o.priceDelta) || 0 }; }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object");
+}
+function stringField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+function nullableStringField(value: unknown): string | null {
+  const text = stringField(value);
+  return text || null;
+}
+function numberField(value: unknown, fallback = 0): number {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+function readPriceDelta(value: Record<string, unknown>): number {
+  return numberField(value.priceDelta ?? value.price_delta);
+}
+function normalizeRestoredOption(value: unknown): CartOptionSelection | null {
+  if (!isRecord(value)) return null;
+  const optionId = stringField(value.optionId ?? value.option_id ?? value.id);
+  if (!optionId) return null;
+  const groupId = stringField(value.groupId ?? value.group_id);
+  const optionName = stringField(value.optionName ?? value.option_name ?? value.name ?? value.label) || optionId;
+  const groupName = stringField(value.groupName ?? value.group_name ?? value.sectionName ?? value.section_name) || groupId || "ตัวเลือก";
+  return { groupId, groupName, optionId, optionName, priceDelta: readPriceDelta(value) };
+}
+function normalizeRestoredBundleSelection(value: unknown): CartBundleSelection | null {
+  if (!isRecord(value)) return null;
+  const itemId = stringField(value.itemId ?? value.item_id);
+  const groupId = stringField(value.groupId ?? value.group_id);
+  if (!itemId || !groupId) return null;
+  const qty = Math.max(1, Math.trunc(numberField(value.qty, 1)));
+  const options = Array.isArray(value.options)
+    ? value.options.map(normalizeRestoredOption).filter((option): option is CartOptionSelection => Boolean(option))
+    : [];
+  return {
+    groupId,
+    groupName: stringField(value.groupName ?? value.group_name) || groupId,
+    itemId,
+    itemName: stringField(value.itemName ?? value.item_name ?? value.name) || itemId,
+    qty,
+    unitPriceDelta: value.unitPriceDelta === undefined && value.unit_price_delta === undefined
+      ? undefined
+      : numberField(value.unitPriceDelta ?? value.unit_price_delta),
+    options,
+    note: nullableStringField(value.note),
+  };
+}
+function normalizeRestoredItem(value: unknown): CartItem | null {
+  if (!isRecord(value)) return null;
+  const itemId = stringField(value.itemId ?? value.item_id);
+  const shopId = stringField(value.shopId ?? value.shop_id);
+  if (!itemId || !shopId) return null;
+  const qty = Math.trunc(numberField(value.qty));
+  if (qty <= 0) return null;
+  const options = Array.isArray(value.options)
+    ? value.options.map(normalizeRestoredOption).filter((option): option is CartOptionSelection => Boolean(option))
+    : [];
+  const bundleSelections = Array.isArray(value.bundleSelections)
+    ? value.bundleSelections.map(normalizeRestoredBundleSelection).filter((selection): selection is CartBundleSelection => Boolean(selection))
+    : [];
+  return {
+    lineId: stringField(value.lineId ?? value.line_id) || itemId,
+    kind: value.kind === "bundle" ? "bundle" : "item",
+    itemId,
+    shopId,
+    name: stringField(value.name ?? value.itemName ?? value.item_name) || itemId,
+    price: numberField(value.price),
+    imageUrl: nullableStringField(value.imageUrl ?? value.image_url),
+    qty,
+    options,
+    note: nullableStringField(value.note),
+    bundleSelections,
+    setId: nullableStringField(value.setId ?? value.set_id),
+    setName: nullableStringField(value.setName ?? value.set_name),
+  };
+}
+
+export function normalizeRestoredCartState(parsed: unknown): CartState {
+  if (!isRecord(parsed) || ![2, STORAGE_VERSION].includes(numberField(parsed.version, -1))) return EMPTY;
+  const state = isRecord(parsed.state) ? parsed.state : null;
+  if (!state || !Array.isArray(state.items)) return EMPTY;
+  const items = state.items.map(normalizeRestoredItem).filter((item): item is CartItem => Boolean(item));
+  const firstItem = items[0];
+  const preferredShop = stringField(state.shopId ?? state.shop_id);
+  const shopId = preferredShop && items.some((i) => i.shopId === preferredShop)
+    ? preferredShop
+    : firstItem?.shopId ?? null;
+  return { shopId, items };
+}
 
 function stableLineSignature(item: AddCartItem): string {
   const options = [...(item.options ?? [])]
@@ -128,16 +218,7 @@ function restore(): CartState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY;
-    const parsed = JSON.parse(raw) as PersistedCart;
-    if (![2, STORAGE_VERSION].includes(parsed.version) || !parsed.state || !Array.isArray(parsed.state.items)) return EMPTY;
-    const items = parsed.state.items
-      .filter((i) => i && i.shopId && i.itemId && i.qty > 0)
-      .map((i) => ({ ...i, setId: i.setId ?? null, setName: i.setName ?? null }));
-    const firstItem = items[0];
-    const preferredShop = parsed.state.shopId && items.some((i) => i.shopId === parsed.state.shopId)
-      ? parsed.state.shopId
-      : firstItem?.shopId ?? null;
-    return { shopId: preferredShop, items };
+    return normalizeRestoredCartState(JSON.parse(raw));
   } catch { return EMPTY; }
 }
 
