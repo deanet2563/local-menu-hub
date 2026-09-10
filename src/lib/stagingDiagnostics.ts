@@ -15,6 +15,11 @@ export function isStagingDiagnosticsHost(hostname: string): boolean {
     || /^customer-e2e-[a-z0-9-]+\.local-menu-hub\.pages\.dev$/i.test(hostname);
 }
 
+export function isStagingDiagnosticsDebugEnabled(location: Pick<Location, "hostname" | "search">): boolean {
+  if (!isStagingDiagnosticsHost(location.hostname)) return false;
+  return new URLSearchParams(location.search).get("debug") === "1";
+}
+
 export function buildStagingDiagnosticSnapshot(input: {
   hostname: string;
   liffId: string;

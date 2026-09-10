@@ -21,6 +21,7 @@ const STAGING_HOST = "customer-staging.local-menu-hub.pages.dev";
 const STAGING_LIFF_ID = "2010936243-hG7sC3Wd";
 const STAGING_WORKER_URL = "https://mytree-worker-staging.kompakorn-t.workers.dev";
 const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
+const STAGING_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdmdrZHhqc3RzeGVhbWpzamhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDA0NDcsImV4cCI6MjEwNDQxNjQ0N30.bEekjhWLhoI_aISu73uAW3MAMYKtPGajRp0grovOM6M";
 
 function isCustomerStagingHost(): boolean {
   return typeof window !== "undefined" && window.location.hostname === STAGING_HOST;
@@ -33,7 +34,9 @@ const AUTH_BROKER = `${isCustomerStagingHost() ? STAGING_WORKER_URL : MYTREE_WOR
 export const MYTREE_SUPABASE_URL = isCustomerStagingHost()
   ? STAGING_SUPABASE_URL
   : import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_ANON_KEY = isCustomerStagingHost()
+  ? STAGING_SUPABASE_ANON_KEY
+  : import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
