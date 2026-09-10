@@ -102,6 +102,8 @@ try {
   };
   const result = await submitOrder(payload, { onTimelineStep: (event) => timeline.push(event) });
   assert.equal(result.ok, true);
+  assert.equal(result.diagnostics.workerReached, true);
+  assert.equal(result.diagnostics.status, 200);
   assert.equal(capturedInit.method, "POST");
   assert.deepEqual(capturedInit.headers, { "Content-Type": "application/json" });
   assert.equal("Authorization" in capturedInit.headers, false);
@@ -116,6 +118,8 @@ try {
   assert.match(prefetch?.detail ?? "", /body_serialization_completed=yes/);
   assert.match(prefetch?.detail ?? "", /body_byte_length=\d+/);
   assert.doesNotMatch(prefetch?.detail ?? "", /line-id-token/);
+  const workerHeaders = timeline.find((event) => event.step === "worker_response_headers");
+  assert.match(workerHeaders?.detail ?? "", /worker_reached=yes/);
 
   globalThis.fetch = async () => {
     throw new TypeError("Failed to fetch");

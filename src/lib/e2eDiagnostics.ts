@@ -1,6 +1,7 @@
 import liff from "@line/liff";
 import { initLiff, LIFF_ID, MYTREE_SUPABASE_URL } from "@/lib/supabase";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
+import { isStagingDiagnosticsDebugEnabled } from "@/lib/stagingDiagnostics";
 
 export type LiffDiagnosticSnapshot = {
   liffId: string;
@@ -17,7 +18,9 @@ export type LiffDiagnosticSnapshot = {
 };
 
 export function e2eDiagnosticsEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS === "true";
+  if (import.meta.env.VITE_ENABLE_E2E_DIAGNOSTICS === "true") return true;
+  if (typeof window === "undefined") return false;
+  return isStagingDiagnosticsDebugEnabled(window.location);
 }
 
 export async function readLiffDiagnostics(): Promise<LiffDiagnosticSnapshot> {
