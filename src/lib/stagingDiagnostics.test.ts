@@ -1,5 +1,6 @@
 import {
   buildStagingDiagnosticSnapshot,
+  isStagingDiagnosticsDebugEnabled,
   isStagingDiagnosticsHost,
 } from "@/lib/stagingDiagnostics";
 
@@ -20,6 +21,9 @@ assertEqual(isStagingDiagnosticsHost("customer-staging.local-menu-hub.pages.dev"
 assertEqual(isStagingDiagnosticsHost("customer-e2e.local-menu-hub.pages.dev"), true, "customer e2e host shows diagnostics");
 assertEqual(isStagingDiagnosticsHost("local-menu-hub.pages.dev"), false, "production Pages host hides diagnostics");
 assertEqual(isStagingDiagnosticsHost("mytree.cc"), false, "production domain hides diagnostics");
+assertEqual(isStagingDiagnosticsDebugEnabled({ hostname: "customer-staging.local-menu-hub.pages.dev", search: "" }), false, "staging diagnostics are hidden by default");
+assertEqual(isStagingDiagnosticsDebugEnabled({ hostname: "customer-staging.local-menu-hub.pages.dev", search: "?debug=1" }), true, "staging diagnostics are visible with debug flag");
+assertEqual(isStagingDiagnosticsDebugEnabled({ hostname: "mytree.cc", search: "?debug=1" }), false, "production diagnostics stay hidden with debug flag");
 assertEqual(staging?.liffId, "2010936243-hG7sC3Wd", "diagnostics expose staging LIFF ID");
 assertEqual(staging?.supabaseRef, "qdvgkdxjstsxeamjsjhl", "diagnostics expose staging Supabase ref");
 assertEqual(staging?.supabaseHost, "qdvgkdxjstsxeamjsjhl.supabase.co", "diagnostics expose staging Supabase host");
