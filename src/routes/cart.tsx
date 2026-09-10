@@ -37,7 +37,10 @@ import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability"
 import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
 import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
-export const Route = createFileRoute("/cart")({ component: CartCheckout });
+export const Route = createFileRoute("/cart")({
+  component: CartCheckout,
+  errorComponent: CartRouteError,
+});
 
 type ShopCheckout = {
   name: string;
@@ -69,6 +72,19 @@ type SubmitTimelineDiagnostics = {
   quoteTokenExists: "yes" | "no";
   events: SubmitTimelineEvent[];
 };
+
+function CartRouteError({ error }: { error: unknown }) {
+  const showDebug = e2eDiagnosticsEnabled();
+  const message = error instanceof Error ? error.message : String(error || "unknown error");
+  return (
+    <div className="customer-bottom-safe-padding mx-auto max-w-md p-4 text-sm text-slate-700">
+      <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+        <p className="font-semibold text-red-700">Something went wrong!</p>
+        {showDebug && <pre className="mt-3 whitespace-pre-wrap break-all font-mono text-[11px] text-red-900">{message}</pre>}
+      </div>
+    </div>
+  );
+}
 
 function stagingSubmitTimelineEnabled(): boolean {
   if (!e2eDiagnosticsEnabled()) return false;
@@ -261,21 +277,6 @@ function CartCheckout() {
     });
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (fulfillment !== "pickup") return;
-    quoteSeqRef.current += 1;
-    locationSeqRef.current += 1;
-    latestQuoteKeyRef.current = null;
-    setCandidatePoint(null);
-    setDeliveryPoint(null);
-    setRouteQuote(null);
-    setQuotingRoute(false);
-    setResolvingLocation(false);
-    setLocating(false);
-    setFieldErrors((current) => ({ ...current, deliveryPoint: undefined, premises: undefined, locality: undefined }));
-    setError((current) => isDeliveryOnlyCheckoutError(current) ? null : current);
-  }, [fulfillment]);
 
   function changeFulfillment(next: "delivery" | "pickup") {
     setFulfillment(next);

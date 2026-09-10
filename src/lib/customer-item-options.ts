@@ -6,6 +6,12 @@ import { loadItemOptionGroups, type OrderingOptionGroup } from "@/lib/ordering-c
 // from selecting a new-schema option that the authoritative /order endpoint
 // would reject. Legacy option groups remain fully available.
 const REUSABLE_SHOP_CUSTOMIZE_ENABLED = import.meta.env.VITE_ENABLE_REUSABLE_SHOP_CUSTOMIZE === "true";
+const CUSTOMER_STAGING_HOST = "customer-staging.local-menu-hub.pages.dev";
+
+export function reusableShopCustomizeEnabled(): boolean {
+  if (REUSABLE_SHOP_CUSTOMIZE_ENABLED) return true;
+  return typeof window !== "undefined" && window.location.hostname === CUSTOMER_STAGING_HOST;
+}
 
 type ReusableCustomizeLink = {
   group_id: string;
@@ -36,7 +42,7 @@ type ReusableCustomizeOptionRow = {
 
 export async function loadCustomerItemOptionGroups(itemId: string): Promise<OrderingOptionGroup[]> {
   const legacy = await loadItemOptionGroups(itemId).catch(() => [] as OrderingOptionGroup[]);
-  if (!REUSABLE_SHOP_CUSTOMIZE_ENABLED) return legacy;
+  if (!reusableShopCustomizeEnabled()) return legacy;
 
   const { data: links, error: linkError } = await publicSupabase
     .from("menu_item_customize_groups")

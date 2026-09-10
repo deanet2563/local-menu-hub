@@ -39,7 +39,7 @@ try {
     platform: "node",
     target: "node20",
     define: {
-      "import.meta.env.VITE_ENABLE_REUSABLE_SHOP_CUSTOMIZE": '"true"',
+      "import.meta.env.VITE_ENABLE_REUSABLE_SHOP_CUSTOMIZE": "undefined",
     },
     plugins: [stubPlugin],
   });

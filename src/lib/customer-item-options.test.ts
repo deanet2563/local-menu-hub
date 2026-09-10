@@ -1,4 +1,4 @@
-import { buildCustomerReusableOptionGroups, mergeCustomerOptionGroups } from "@/lib/customer-item-options";
+import { buildCustomerReusableOptionGroups, mergeCustomerOptionGroups, reusableShopCustomizeEnabled } from "@/lib/customer-item-options";
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   if (!Object.is(actual, expected)) throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
@@ -103,6 +103,12 @@ const noDefault = buildCustomerReusableOptionGroups({
   options: options.map((option) => ({ ...option, is_default: false })),
 });
 assertEqual(noDefault[0]?.options.some((option) => option.is_default), false, "canonical defaults are not inferred client-side");
+
+Object.defineProperty(globalThis, "window", {
+  value: { location: { hostname: "customer-staging.local-menu-hub.pages.dev" } },
+  configurable: true,
+});
+assertEqual(reusableShopCustomizeEnabled(), true, "customer staging host enables canonical Customize without Cloudflare env flag");
 
 const legacyGroup = {
   option_group_id: "legacy-group",
