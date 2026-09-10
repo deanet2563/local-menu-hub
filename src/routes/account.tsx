@@ -99,7 +99,7 @@ function AccountPage() {
 
   if (!id)
     return (
-      <div className="min-h-screen bg-[#f7f7f3] px-4 py-6 pb-24 text-slate-900">
+      <div className="customer-bottom-safe-padding min-h-screen bg-[#f7f7f3] px-4 py-6 text-slate-900">
         <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm shadow-sm">
           กรุณาเปิดหน้านี้ผ่าน LINE เพื่อเข้าสู่ระบบ
         </div>
@@ -159,7 +159,7 @@ function AccountPage() {
 
 function AccountShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#f7f7f3] pb-24 text-slate-900">
+    <div className="customer-bottom-safe-padding min-h-screen bg-[#f7f7f3] text-slate-900">
       <header className="mx-auto max-w-md px-4 pb-3 pt-5">
         <p className="text-xs font-semibold uppercase tracking-[.18em] text-orange-600">MyTree</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">บัญชีของฉัน</h1>

@@ -753,7 +753,7 @@ function CartCheckout() {
   }
 
   if (done) return (
-    <div className="p-6 text-center space-y-2 max-w-md mx-auto">
+    <div className="customer-bottom-safe-padding p-6 text-center space-y-2 max-w-md mx-auto">
       <p className="text-2xl">✅</p>
       <p className="text-lg font-semibold">{timing === "preorder" ? "ส่งออเดอร์ล่วงหน้าแล้ว" : "ส่งคำสั่งซื้อแล้ว"}</p>
       <p className="text-sm text-gray-500">กำลังรอร้านยืนยันออเดอร์ ติดตามสถานะได้ที่ประวัติออเดอร์</p>
@@ -806,14 +806,14 @@ function CartCheckout() {
   );
 
   if (checkoutItems.length === 0) return (
-    <div className="p-6 text-center text-sm text-gray-400">
+    <div className="customer-bottom-safe-padding p-6 text-center text-sm text-gray-400">
       ตะกร้าว่าง
       <Link to="/" className="text-orange-500 underline block mt-2">เลือกอาหาร</Link>
     </div>
   );
 
   return (
-    <div className="p-4 pb-44 space-y-4 max-w-md mx-auto">
+    <div className="max-w-md mx-auto space-y-4 p-4 pb-[calc(var(--customer-bottom-nav-clearance)+88px)]">
       <div className="flex items-center gap-3">
         {checkoutShopId && (
           <Link to="/shop/$shopId" params={{ shopId: checkoutShopId }} className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700">
@@ -1107,7 +1107,7 @@ function CartCheckout() {
         </section>
       )}
 
-      <div className="fixed left-4 right-4 bottom-4 z-20">
+      <div className="customer-floating-above-nav fixed left-4 right-4 z-20">
         <button onClick={confirm} disabled={submitting || (fulfillment === "delivery" && quotingRoute) || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
           <span className="min-w-0">{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
           <span className="shrink-0">{fulfillment === "delivery" && deliveryCharge > 0 ? `สินค้า ฿${cartTotal({ ...c, items: checkoutItems })} · ส่ง ฿${deliveryCharge.toFixed(2)}` : `฿${cartTotal({ ...c, items: checkoutItems })}`}</span>

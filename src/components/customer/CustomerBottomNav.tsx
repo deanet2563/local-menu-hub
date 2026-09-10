@@ -105,7 +105,7 @@ export function CustomerBottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.06)]" aria-label="เมนูหลัก">
-      <div className="mx-auto grid h-[76px] max-w-md grid-cols-5 px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2">
+      <div className="mx-auto grid h-[var(--customer-bottom-nav-height)] max-w-md grid-cols-5 px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2">
         {NAV_ITEMS.map((item) => {
           const active = item.match(pathname);
           return (

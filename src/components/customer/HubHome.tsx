@@ -123,14 +123,16 @@ export function HubHome() {
   useEffect(() => {
     (async () => {
       const [{ data: shopRows }, { data: itemRows }] = await Promise.all([
-        publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
+        publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false).order("created_at", { ascending: false }).order("shop_id", { ascending: true }),
         publicSupabase
           .from("menu_items")
           .select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)")
           .eq("is_available", true)
           .eq("shops.is_open", true)
           .eq("shops.is_approved", true)
-          .eq("shops.is_banned", false),
+          .eq("shops.is_banned", false)
+          .order("created_at", { ascending: false })
+          .order("item_id", { ascending: true }),
       ]);
       setShops((shopRows as Shop[]) ?? []);
       setItems((itemRows as Item[]) ?? []);
@@ -188,7 +190,7 @@ export function HubHome() {
   if (loading) return <div className="min-h-screen bg-[#f7f7f3] p-5 text-sm text-slate-500">กำลังเตรียมร้านใกล้คุณ...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f7f7f3] pb-24 text-slate-900">
+    <div className="customer-bottom-safe-padding min-h-screen bg-[#f7f7f3] text-slate-900">
       <header className="mx-auto max-w-md px-4 pb-3 pt-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -307,7 +309,7 @@ export function HubHome() {
         </section>
       </main>
       {c.items.length > 0 && (
-        <Link to="/cart" className="fixed bottom-[84px] left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
+        <Link to="/cart" className="customer-floating-above-nav fixed left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
           <span>ตะกร้า {cartCount(c)} รายการจาก {new Set(c.items.map((item) => item.shopId)).size} ร้าน</span>
           <span>฿{cartTotal(c)}</span>
         </Link>

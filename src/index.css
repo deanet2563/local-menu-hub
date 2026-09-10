@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --customer-bottom-nav-height: 76px;
+  --customer-bottom-nav-gap: 12px;
+  --customer-bottom-nav-clearance: calc(var(--customer-bottom-nav-height) + env(safe-area-inset-bottom) + var(--customer-bottom-nav-gap));
+}
+
+.customer-bottom-safe-padding {
+  padding-bottom: var(--customer-bottom-nav-clearance);
+}
+
+.customer-floating-above-nav {
+  bottom: var(--customer-bottom-nav-clearance);
+}

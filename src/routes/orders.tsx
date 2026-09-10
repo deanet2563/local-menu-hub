@@ -7,8 +7,8 @@ export const Route = createFileRoute("/orders")({
 });
 
 function CustomerOrdersPage() {
-  return <>
+  return <div className="customer-bottom-safe-padding">
     <CustomerReviewCenter />
     <OrderHistory />
-  </>;
+  </div>;
 }

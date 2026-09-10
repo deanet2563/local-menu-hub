@@ -164,7 +164,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
         </div>
       ))}
 
-      {cartCount(c) > 0 && <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"><span>ดูตะกร้า ({cartCount(c)})</span><span>฿{cartTotal(c)}</span></Link>}
+      {cartCount(c) > 0 && <Link to="/cart" className="customer-floating-above-nav fixed z-30 left-4 right-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"><span>ดูตะกร้า ({cartCount(c)})</span><span>฿{cartTotal(c)}</span></Link>}
 
       {configuring && <ProductConfigurator product={{ itemId: configuring.item_id, shopId: configuring.shop_id, name: configuring.name, price: configuring.price, imageUrl: configuring.image_url }} onClose={() => setConfiguring(null)} onConfirm={configuredAdd} />}
     </div>
