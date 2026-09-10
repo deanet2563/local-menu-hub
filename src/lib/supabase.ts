@@ -46,6 +46,10 @@ export type MyTreeAuthState =
   | { status: "ready"; accessToken: string; customerId: string; accessExp: number; refreshToken?: string; refreshExp?: number }
   | { status: "external_browser" | "line_not_logged_in" | "missing_id_token" | "missing_customer_id"; accessToken?: undefined; customerId?: undefined };
 
+export function shouldStartLiffLogin(input: { isInClient: boolean; isLoggedIn: boolean }): boolean {
+  return input.isInClient && !input.isLoggedIn;
+}
+
 function customerProfileTraceEmitter(options?: CustomerProfileTraceOptions) {
   const startedAt = Date.now();
   return (step: CustomerProfileTimelineStep, detail?: string) => {
@@ -108,14 +112,7 @@ export async function ensureMyTreeSession(options?: CustomerProfileTraceOptions)
   } catch (cause) {
     emit("liff_context_read", cause instanceof Error ? cause.message : "error");
   }
-  if (!loggedIn) {
-    // Raw preview browsing intentionally works outside LINE. Authenticated
-    // actions are allowed only after the same preview is launched through its
-    // configured staging LIFF URL.
-    if (isOrderingPreview()) {
-      emit("auth_bootstrap_returned", "line_not_logged_in");
-      return { status: "line_not_logged_in" };
-    }
+  if (shouldStartLiffLogin({ isInClient: inClient, isLoggedIn: loggedIn })) {
     liff.login();
     emit("auth_bootstrap_returned", "line_not_logged_in");
     return { status: "line_not_logged_in" };
