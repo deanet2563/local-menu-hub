@@ -1,6 +1,10 @@
 import { validateCartLineCustomizeSelections } from "@/lib/cartCustomizeValidation";
 import type { OrderingOptionGroup } from "@/lib/ordering-config";
 
+function assertEqual<T>(actual: T, expected: T, message: string): void {
+  if (!Object.is(actual, expected)) throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
+}
+
 const softnessGroup: OrderingOptionGroup = {
   option_group_id: "7dc2732d-0a6d-435d-82e9-b8540798a321",
   shop_id: "ร้านกุ๊ก-e41d",
@@ -50,3 +54,7 @@ export const cartCustomizeValidationCompileChecks = {
   exactlyOneAccepted: exactlyOneSelected.ok === true,
   bundleChildRejected: bundleChildMissing.ok === false,
 };
+
+assertEqual(zeroSelected.ok, false, "required Customize blocks zero selections");
+assertEqual(exactlyOneSelected.ok, true, "valid required Customize selection is accepted");
+assertEqual(bundleChildMissing.ok, false, "bundle child required Customize is validated");

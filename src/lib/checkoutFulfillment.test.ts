@@ -4,6 +4,10 @@ import {
   resetDeliveryStateForPickup,
 } from "@/lib/checkoutFulfillment";
 
+function assertEqual<T>(actual: T, expected: T, message: string): void {
+  if (!Object.is(actual, expected)) throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
+}
+
 const reset = resetDeliveryStateForPickup({
   routeQuote: {
     distanceMeters: 1200,
@@ -33,3 +37,14 @@ export const checkoutFulfillmentCompileChecks = {
   pickupClearsDeliveryFieldErrors: !reset.fieldErrors.deliveryPoint && !reset.fieldErrors.premises && !reset.fieldErrors.locality,
   pickupKeepsContactErrors: reset.fieldErrors.customerName === "required",
 };
+
+assertEqual(checkoutRequiresDeliveryGate("pickup"), false, "pickup does not require delivery gate");
+assertEqual(checkoutRequiresDeliveryGate("delivery"), true, "delivery requires delivery gate");
+assertEqual(customerDeliveryChargeForCheckout("pickup", { deliveryFee: 25 }), 0, "pickup customer delivery charge is zero");
+assertEqual(customerDeliveryChargeForCheckout("delivery", { deliveryFee: 25 }), 25, "delivery charge is preserved for delivery");
+assertEqual(reset.routeQuote, null, "pickup clears route quote");
+assertEqual(reset.error, null, "pickup clears delivery-only errors");
+assertEqual(reset.fieldErrors.deliveryPoint, undefined, "pickup clears delivery point error");
+assertEqual(reset.fieldErrors.premises, undefined, "pickup clears premises error");
+assertEqual(reset.fieldErrors.locality, undefined, "pickup clears locality error");
+assertEqual(reset.fieldErrors.customerName, "required", "pickup keeps customer contact error");
