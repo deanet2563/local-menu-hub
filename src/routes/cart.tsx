@@ -545,7 +545,7 @@ function CartCheckout() {
       locationSource: fulfillment === "delivery" ? deliveryPoint?.source ?? null : null,
       locationAccuracyM: fulfillment === "delivery" ? deliveryPoint?.accuracy ?? null : null,
       submittedMapUrl: fulfillment === "delivery" && deliveryPoint?.source === "google_maps_url" ? deliveryPoint.submittedValue ?? null : null,
-      customerDeliveryCharge: deliveryCharge,
+      customerDeliveryCharge: fulfillment === "delivery" ? deliveryCharge : undefined,
       note: note.trim() || null,
       requestedFor,
     };
@@ -783,6 +783,14 @@ function CartCheckout() {
       {e2eDiagnosticsEnabled() && orderDiagnostics && (
         <details className="rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-[10px] leading-4 text-gray-600">
           <summary>order request diagnostics</summary>
+          <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <p>endpoint: {orderDiagnostics.endpoint}</p>
+            <p>worker reached: {orderDiagnostics.workerReached ? "yes" : "no"}</p>
+            <p>worker env: {orderDiagnostics.workerEnvironment ?? "missing"}</p>
+            <p>worker sha: {orderDiagnostics.workerSha ?? "missing"}</p>
+            <p>http status: {orderDiagnostics.status}</p>
+            <p>debug id: {orderDiagnostics.workerDebugRequestId ?? "missing"}</p>
+          </div>
           <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(orderDiagnostics, null, 2)}</pre>
         </details>
       )}
@@ -1050,6 +1058,14 @@ function CartCheckout() {
       {e2eDiagnosticsEnabled() && orderDiagnostics && (
         <details className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-[10px] leading-4 text-amber-950">
           <summary>รายละเอียดการส่งออเดอร์สำหรับ E2E</summary>
+          <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <p>endpoint: {orderDiagnostics.endpoint}</p>
+            <p>worker reached: {orderDiagnostics.workerReached ? "yes" : "no"}</p>
+            <p>worker env: {orderDiagnostics.workerEnvironment ?? "missing"}</p>
+            <p>worker sha: {orderDiagnostics.workerSha ?? "missing"}</p>
+            <p>http status: {orderDiagnostics.status}</p>
+            <p>debug id: {orderDiagnostics.workerDebugRequestId ?? "missing"}</p>
+          </div>
           <pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(orderDiagnostics, null, 2)}</pre>
         </details>
       )}

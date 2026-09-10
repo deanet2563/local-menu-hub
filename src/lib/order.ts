@@ -49,6 +49,10 @@ export type OrderSubmitDiagnostics = {
   method: "POST";
   status: number;
   responseBody: string;
+  workerReached: boolean;
+  workerEnvironment: string | null;
+  workerSha: string | null;
+  workerDebugRequestId: string | null;
   fulfillment: OrderPayload["fulfillment"];
   shopId: string;
   itemCount: number;
@@ -76,6 +80,7 @@ export type OrderSubmitTimelineStep =
   | "fetch_timeout"
   | "response_status"
   | "response_body_received"
+  | "worker_response_headers"
   | "response_json_parsed"
   | "order_id_received"
   | "submit_order_returned"
@@ -212,6 +217,15 @@ export async function submitOrder(
     emit("response_status", String(res.status));
     const responseBody = await res.text();
     emit("response_body_received");
+    const workerEnvironment = res.headers.get("X-MyTree-Environment");
+    const workerSha = res.headers.get("X-MyTree-Worker-SHA");
+    const workerDebugRequestId = res.headers.get("X-MyTree-Debug-Request-ID");
+    emit("worker_response_headers", [
+      `worker_reached=yes`,
+      `environment=${workerEnvironment ?? "missing"}`,
+      `worker_sha=${workerSha ?? "missing"}`,
+      `debug_request_id=${workerDebugRequestId ?? "missing"}`,
+    ].join(" | "));
     let data: { ok?: boolean; order_id?: string; sub_id?: string; error?: string; error_code?: string } = {};
     try {
       data = JSON.parse(responseBody) as typeof data;
@@ -222,6 +236,10 @@ export async function submitOrder(
       method: "POST" as const,
       status: res.status,
       responseBody,
+      workerReached: true,
+      workerEnvironment,
+      workerSha,
+      workerDebugRequestId,
       fulfillment: enrichedOrder.fulfillment,
       shopId: enrichedOrder.shopId,
       itemCount: enrichedOrder.items.length,
