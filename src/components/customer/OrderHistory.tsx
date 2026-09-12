@@ -3,14 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { CustomerDeliveryCancel, CUSTOMER_RIDER_V3_ENABLED } from "@/components/customer/CustomerDeliveryCancel";
 import { uploadAndAttachPaymentSlipToOrder } from "@/lib/paymentSlip";
-
-type StoredItem = {
-  item_name?: string;
-  qty?: number;
-  unit_price?: number;
-  set_id?: string | null;
-  set_name?: string | null;
-};
+import {
+  buildOrderHistoryDisplayLines,
+  type OrderHistoryConfigSnapshot,
+  type OrderHistoryDisplayLine,
+  type OrderHistoryOrderItem,
+  type OrderHistoryStoredItem,
+} from "@/lib/orderHistoryDisplay";
 
 type OrderRow = {
   sub_id: string;
@@ -28,13 +27,12 @@ type OrderRow = {
   customer_delivery_charge: number;
   created_at: string;
   requested_for: string | null;
-  items_json: StoredItem[] | null;
+  items_json: OrderHistoryStoredItem[] | null;
   shops: { name: string; qr_code_url: string | null } | null;
-  order_items: { item_name_snapshot: string; qty: number; line_total: number }[];
+  order_items: OrderHistoryOrderItem[];
+  order_line_configurations: OrderHistoryConfigSnapshot[] | null;
   riders: { name: string; phone: string } | null;
 };
-
-type DisplayItem = { name: string; qty: number; total: number; setName: string | null; setId: string | null };
 
 const ORDER_LABEL: Record<string, string> = {
   pending: "รอร้านรับออเดอร์",
@@ -57,22 +55,13 @@ function formatRequestedFor(value: string): string {
   return new Date(value).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "long", timeStyle: "short" });
 }
 
-function displayItems(order: OrderRow): DisplayItem[] {
-  if (Array.isArray(order.items_json) && order.items_json.length > 0) {
-    return order.items_json.map((i, idx) => ({
-      name: i.item_name?.trim() || `รายการ ${idx + 1}`,
-      qty: Number(i.qty) || 0,
-      total: (Number(i.qty) || 0) * (Number(i.unit_price) || 0),
-      setName: i.set_name?.trim() || null,
-      setId: i.set_id?.trim() || null,
-    }));
-  }
-  return order.order_items.map((i) => ({ name: i.item_name_snapshot, qty: Number(i.qty) || 0, total: Number(i.line_total) || 0, setName: null, setId: null }));
-}
-
 function groupedDisplayItems(order: OrderRow) {
-  const items = displayItems(order);
-  const groups: Array<{ key: string; name: string; isSet: boolean; items: DisplayItem[]; total: number }> = [];
+  const items = buildOrderHistoryDisplayLines({
+    itemsJson: order.items_json,
+    orderItems: order.order_items,
+    lineConfigurations: order.order_line_configurations,
+  });
+  const groups: Array<{ key: string; name: string; isSet: boolean; items: OrderHistoryDisplayLine[]; total: number }> = [];
   const index = new Map<string, number>();
   for (const item of items) {
     const key = item.setId ? `set:${item.setId}` : item.setName ? `set-name:${item.setName}` : "general";
@@ -101,7 +90,7 @@ export function OrderHistory() {
   async function load() {
     const { data, error: loadError } = await supabase
       .from("sub_orders")
-      .select("sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, customer_delivery_charge, created_at, requested_for, items_json, shops(name,qr_code_url), order_items(item_name_snapshot,qty,line_total), riders:assigned_rider_id(name,phone)")
+      .select("sub_id, shop_id, fulfillment_type, payment_method, order_status, payment_status, delivery_status, delivery_address, delivery_photo_url, payment_slip_url, customer_note, amount, customer_delivery_charge, created_at, requested_for, items_json, shops(name,qr_code_url), order_items(item_name_snapshot,qty,line_total), order_line_configurations(line_ref,item_name_snapshot,unit_price_snapshot,qty,options_snapshot,bundle_selections_snapshot,item_note), riders:assigned_rider_id(name,phone)")
       .order("created_at", { ascending: false })
       .limit(30);
     if (loadError) setError(loadError.message);
@@ -159,7 +148,17 @@ export function OrderHistory() {
             <div className="space-y-2">
               {groups.map((group) => <div key={group.key} className={group.isSet ? "rounded-lg bg-orange-50/60 border border-orange-100 p-2" : "py-1"}>
                 {group.isSet && <div className="flex justify-between text-xs font-semibold text-orange-700 mb-1"><span>{group.name}</span><span>฿{group.total}</span></div>}
-                <div className="text-sm text-gray-600 space-y-0.5">{group.items.map((i, idx) => <div key={`${group.key}-${idx}`} className="flex justify-between gap-3"><span>{i.name} × {i.qty}</span><span className="shrink-0">฿{i.total}</span></div>)}</div>
+                <div className="text-sm text-gray-600 space-y-1">{group.items.map((i) => (
+                  <div key={`${group.key}-${i.key}`} className="space-y-0.5">
+                    <div className="flex justify-between gap-3"><span>{i.name} × {i.qty}</span><span className="shrink-0">฿{i.total}</span></div>
+                    {(i.detailLines.length > 0 || i.note) && (
+                      <div className="pl-3 text-xs leading-5 text-gray-500">
+                        {i.detailLines.map((line) => <p key={line}>{line}</p>)}
+                        {i.note && <p>📝 {i.note}</p>}
+                      </div>
+                    )}
+                  </div>
+                ))}</div>
               </div>)}
             </div>
 
