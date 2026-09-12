@@ -20,6 +20,10 @@ assertEqual(shouldShowCustomerBottomNav("/sweet/orders"), false, "shop admin rou
 const css = readFileSync("src/index.css", "utf8");
 assertEqual(css.includes("--customer-bottom-nav-clearance"), true, "shared bottom nav clearance token exists");
 
+const bottomNav = readFileSync("src/components/customer/CustomerBottomNav.tsx", "utf8");
+assertEqual(bottomNav.includes('<path d="M7 3v18" />'), true, "food tab includes fork handle");
+assertEqual(bottomNav.includes('<path d="M17 3a3 5 0 0 0-3 5v4h3v9" />'), true, "food tab includes spoon silhouette");
+
 const productConfigurator = readFileSync("src/components/customer/ProductConfigurator.tsx", "utf8");
 assertEqual(productConfigurator.includes("customer-bottom-safe-padding fixed inset-0"), true, "product sheet uses shared nav clearance");
 assertEqual(productConfigurator.includes("z-[70]"), true, "product sheet renders above fixed bottom nav");

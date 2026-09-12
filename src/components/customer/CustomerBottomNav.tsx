@@ -32,10 +32,9 @@ function FoodIcon(active: boolean) {
   return (
     <IconShell active={active}>
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 10h16" />
-        <path d="M6 10a6 6 0 0 0 12 0" />
-        <path d="M6 10a6 6 0 0 1 12 0" />
-        <path d="M12 4v3" />
+        <path d="M7 3v18" />
+        <path d="M5 3v5a2 2 0 0 0 4 0V3" />
+        <path d="M17 3a3 5 0 0 0-3 5v4h3v9" />
       </svg>
     </IconShell>
   );
