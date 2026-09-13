@@ -256,7 +256,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const advancedMarkerRef = useRef<GoogleMarkerLibrary["AdvancedMarkerElement"] | null>(null);
   const markerRef = useRef<GoogleMarker | null>(null);
   const mapListenersRef = useRef<Array<{ remove(): void }>>([]);
-  const markerListenersRef = useRef<Array<{ remove(): void }>>([]);
   const merchantMarkersRef = useRef<MarkerHandle[]>([]);
   const cartShopMarkerRef = useRef<MarkerHandle | null>(null);
   const merchantRequestSeqRef = useRef(0);
@@ -268,6 +267,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const [mapsRuntimeError, setMapsRuntimeError] = useState<string | null>(null);
   const [mapInitStage, setMapInitStage] = useState<MapInitStage>("not_started");
   const [mapElementSize, setMapElementSize] = useState("unknown");
+  const [gmAuthFailureSeen, setGmAuthFailureSeen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [markerLibraryState, setMarkerLibraryState] = useState<MarkerLibraryState>("not_requested");
   const [advancedMarkerAvailable, setAdvancedMarkerAvailable] = useState(false);
@@ -328,6 +328,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     }
     const unsubscribeAuthFailure = subscribeMapsAuthFailure(() => {
       captureRuntimeError("gm_authFailure");
+      setGmAuthFailureSeen(true);
       if (!disposed) {
         setMapsError("Google Maps key ไม่อนุญาตโดเมนทดสอบนี้ กรุณาเพิ่ม hostname ของ E2E preview ใน HTTP referrer ของ Browser key");
       }
@@ -409,13 +410,10 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());
       mapListenersRef.current = [];
-      markerListenersRef.current.forEach((listener) => listener.remove());
-      markerListenersRef.current = [];
       clearMerchantMarkers();
       clearCartShopMarker();
       mapRef.current = null;
       advancedMarkerRef.current = null;
-      markerRef.current = null;
       setMapReady(false);
       setMarkerLibraryState("not_requested");
       setAdvancedMarkerAvailable(false);
@@ -424,6 +422,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       setCartShopMarkerCreated(false);
       setMapInitStage("not_started");
       setMapElementSize("unknown");
+      setGmAuthFailureSeen(false);
     };
   }, [onCandidateChange]);
 
@@ -585,22 +584,38 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !candidate || !window.google) return;
+    const currentCandidate = candidateRef.current;
+    if (!map || !mapReady || !currentCandidate || !window.google) return;
+
+    const marker = new window.google.maps.Marker({
+      map,
+      position: { lat: currentCandidate.lat, lng: currentCandidate.lng },
+      draggable: true,
+    });
+    let dragListener: { remove(): void } | null = marker.addListener("dragend", (event) => {
+      const latLng = event.latLng;
+      if (!latLng) return;
+      onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
+    });
+    markerRef.current = marker;
+
+    return () => {
+      if (dragListener) {
+        dragListener.remove();
+        dragListener = null;
+      }
+      marker.setMap(null);
+      if (markerRef.current === marker) markerRef.current = null;
+    };
+  }, [Boolean(candidate), mapReady, onCandidateChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !candidate) return;
     const position = { lat: candidate.lat, lng: candidate.lng };
     map.setCenter(position);
-    if (!markerRef.current) {
-      const marker = new window.google.maps.Marker({ map, position, draggable: true });
-      const dragListener = marker.addListener("dragend", (event) => {
-        const latLng = event.latLng;
-        if (!latLng) return;
-        onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
-      });
-      markerListenersRef.current = [dragListener];
-      markerRef.current = marker;
-    } else {
-      markerRef.current.setPosition(position);
-    }
-  }, [candidate, mapReady, onCandidateChange]);
+    markerRef.current?.setPosition(position);
+  }, [candidate?.lat, candidate?.lng, mapReady]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -743,9 +758,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
               <p>mapStage: {mapInitStage}</p>
               <p>mapElement: {mapElementSize}</p>
+              <p>gmAuthFailure: {gmAuthFailureSeen ? "yes" : "no"}</p>
               <p>windowGoogle: {window.google ? "yes" : "no"}</p>
               <p>googleMaps: {window.google?.maps ? "yes" : "no"}</p>
               <p>MapCtor: {typeof window.google?.maps?.Map === "function" ? "yes" : "no"}</p>
+              <p>mapConstructorCompleted: {mapInitStage === "constructor_completed" ? "yes" : "no"}</p>
               <p>markerLibrary: {markerLibraryState}</p>
               <p>advancedMarker: {advancedMarkerAvailable ? "yes" : "no"}</p>
               <p>advancedMarkerSkipped: {advancedMarkerSkipped ? "yes" : "no"}</p>
@@ -753,6 +770,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
               <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
               <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
+              <p>origin: {window.location.origin}</p>
               <p>hostname: {window.location.hostname}</p>
               <p>referrer: {document.referrer || "none"}</p>
               <p>keySuffix: {getMapsApiKey() ? getMapsApiKey().slice(-6) : "missing"}</p>
