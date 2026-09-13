@@ -309,7 +309,7 @@ export function HubHome() {
         </section>
       </main>
       {c.items.length > 0 && (
-        <Link to="/cart" className="customer-floating-above-nav fixed left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
+        <Link to="/cart" search={(prev) => prev} className="customer-floating-above-nav fixed left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
           <span>ตะกร้า {cartCount(c)} รายการจาก {new Set(c.items.map((item) => item.shopId)).size} ร้าน</span>
           <span>฿{cartTotal(c)}</span>
         </Link>
