@@ -56,3 +56,12 @@ on conflict (item_id) do update set
   category = excluded.category,
   image_url = excluded.image_url,
   is_available = excluded.is_available;
+
+-- Gate C2 staging map parity: this demo bao shop is the Gate B/C test cart shop.
+-- Coordinates mirror the public Production SonBaoBao shop row used as the
+-- grounded bao-shop location source for staging map render tests.
+update public.shops
+set
+  lat = 13.773212302227083,
+  lng = 100.67610292467903
+where shop_id = 'demo-a5-baobao-house';
