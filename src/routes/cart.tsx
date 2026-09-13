@@ -76,11 +76,16 @@ type SubmitTimelineDiagnostics = {
 function CartRouteError({ error }: { error: unknown }) {
   const showDebug = e2eDiagnosticsEnabled();
   const message = error instanceof Error ? error.message : String(error || "unknown error");
+  const stack = error instanceof Error && error.stack ? error.stack : null;
   return (
     <div className="customer-bottom-safe-padding mx-auto max-w-md p-4 text-sm text-slate-700">
       <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
         <p className="font-semibold text-red-700">Something went wrong!</p>
-        {showDebug && <pre className="mt-3 whitespace-pre-wrap break-all font-mono text-[11px] text-red-900">{message}</pre>}
+        {showDebug && (
+          <pre className="mt-3 whitespace-pre-wrap break-all font-mono text-[11px] text-red-900">
+            {stack ? `${message}\n\n${stack}` : message}
+          </pre>
+        )}
       </div>
     </div>
   );
