@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   DELIVERY_PLACE_SEARCH_MIN_LENGTH,
   searchDeliveryPlaces,
@@ -226,6 +226,11 @@ function markerContent(shop: MerchantMapShop, kind: MerchantMarkerKind): HTMLEle
   }
   wrapper.appendChild(visual);
   return wrapper;
+}
+
+function safeDetachAdvancedMarker(marker: GoogleAdvancedMarker): void {
+  if (!marker.map) return;
+  marker.map = null;
 }
 
 function merchantStatusLabel(shop: MerchantMapShop): string | null {
@@ -493,7 +498,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setMerchantShops(normalizeMerchantMapRows((data ?? []) as MerchantMapRow[]));
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const map = mapRef.current;
     const AdvancedMarkerElement = advancedMarkerRef.current;
     if (!map || !mapReady) return;
@@ -513,13 +518,13 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
         zIndex: 10_000,
       });
       const listeners = [marker.addListener("click", () => setSelectedMerchant(shop))];
-      return { listeners, clear: () => { marker.map = null; } };
+      return { listeners, clear: () => safeDetachAdvancedMarker(marker) };
     });
 
     return clearMerchantMarkers;
   }, [advancedMarkerAvailable, cartShop?.shopId, mapReady, merchantShops, shopId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !cartShop || !window.google) {
       clearCartShopMarker();
@@ -539,7 +544,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
         zIndex: 20_000,
       });
       const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
-      cartShopMarkerRef.current = { listeners, clear: () => { marker.map = null; } };
+      cartShopMarkerRef.current = { listeners, clear: () => safeDetachAdvancedMarker(marker) };
       setLegacyFallbackUsed(false);
       setCartShopMarkerCreated(true);
       return clearCartShopMarker;
