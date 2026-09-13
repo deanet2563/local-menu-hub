@@ -31,10 +31,14 @@ function HomeIcon(active: boolean) {
 function FoodIcon(active: boolean) {
   return (
     <IconShell active={active}>
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 3v18" />
-        <path d="M5 3v5a2 2 0 0 0 4 0V3" />
-        <path d="M17 3a3 5 0 0 0-3 5v4h3v9" />
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5.5 4.5v5.25" />
+        <path d="M7.5 4.5v5.25" />
+        <path d="M9.5 4.5v5.25" />
+        <path d="M5.5 9.75h4" />
+        <path d="M7.5 9.75v9.75" />
+        <ellipse cx="16.5" cy="7.5" rx="2.5" ry="3.25" />
+        <path d="M16.5 10.75v8.75" />
       </svg>
     </IconShell>
   );

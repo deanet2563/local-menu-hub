@@ -21,8 +21,10 @@ const css = readFileSync("src/index.css", "utf8");
 assertEqual(css.includes("--customer-bottom-nav-clearance"), true, "shared bottom nav clearance token exists");
 
 const bottomNav = readFileSync("src/components/customer/CustomerBottomNav.tsx", "utf8");
-assertEqual(bottomNav.includes('<path d="M7 3v18" />'), true, "food tab includes fork handle");
-assertEqual(bottomNav.includes('<path d="M17 3a3 5 0 0 0-3 5v4h3v9" />'), true, "food tab includes spoon silhouette");
+assertEqual(bottomNav.includes('strokeWidth="1.8"'), true, "food tab uses the approved lighter line weight");
+assertEqual(bottomNav.includes('<path d="M7.5 9.75v9.75" />'), true, "food tab includes centered fork handle");
+assertEqual(bottomNav.includes('<ellipse cx="16.5" cy="7.5" rx="2.5" ry="3.25" />'), true, "food tab includes visible spoon bowl");
+assertEqual(bottomNav.includes('<path d="M16.5 10.75v8.75" />'), true, "food tab includes spoon handle inside viewBox");
 
 const productConfigurator = readFileSync("src/components/customer/ProductConfigurator.tsx", "utf8");
 assertEqual(productConfigurator.includes("customer-bottom-safe-padding fixed inset-0"), true, "product sheet uses shared nav clearance");
