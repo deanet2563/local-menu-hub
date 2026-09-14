@@ -970,7 +970,7 @@ function CartCheckout() {
             </div>
           ) : (
             <div className="space-y-3">
-              <DeliveryLocationPicker shopId={checkoutShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} debug={e2eDiagnosticsEnabled()} />
+              <DeliveryLocationPicker shopId={checkoutShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
               <button type="button" onClick={captureDeliveryPoint} disabled={locating || quotingRoute} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-800 disabled:opacity-50">{locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบัน"}</button>
               <div className="rounded-lg border border-gray-200 bg-white">
                 <button type="button" onClick={() => setFallbackExpanded((current) => !current)} className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-gray-800">
