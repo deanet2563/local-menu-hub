@@ -56,13 +56,9 @@ type MarkerHandle = {
   clear(): void;
 };
 
-type CartShopQueryState = "waiting_for_shop_id" | "loading" | "loaded" | "not_found_or_no_coordinates" | "error";
-type MapInitStage = "not_started" | "script_loaded" | "constructor_entered" | "constructor_completed" | "constructor_threw";
-
 declare global {
   interface Window {
     google?: GoogleMapsApi;
-    gm_authFailure?: () => void;
   }
 }
 
@@ -76,15 +72,9 @@ type Props = {
 
 const DEFAULT_CENTER = { lat: 13.777, lng: 100.674 };
 let mapsLoadPromise: Promise<GoogleMapsApi> | null = null;
-const mapsAuthFailureHandlers = new Set<() => void>();
 
 function getMapsApiKey(): string {
   return import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? "";
-}
-
-function getMapsMapId(): string | null {
-  const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
-  return mapId ? String(mapId) : null;
 }
 
 function loadGoogleMaps(): Promise<GoogleMapsApi> {
@@ -113,17 +103,6 @@ function loadGoogleMaps(): Promise<GoogleMapsApi> {
   });
 
   return mapsLoadPromise;
-}
-
-function subscribeMapsAuthFailure(handler: () => void): () => void {
-  mapsAuthFailureHandlers.add(handler);
-  window.gm_authFailure = () => {
-    for (const current of mapsAuthFailureHandlers) current();
-  };
-  return () => {
-    mapsAuthFailureHandlers.delete(handler);
-    if (mapsAuthFailureHandlers.size === 0) delete window.gm_authFailure;
-  };
 }
 
 function pointFromResult(result: DeliveryPlaceSearchResult): ConfirmedDeliveryPoint {
@@ -178,27 +157,19 @@ function legacyMerchantMarkerIcon(): { url: string; scaledSize: unknown; anchor:
   };
 }
 
-export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false }: Props) {
+export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress }: Props) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const markerRef = useRef<GoogleMarker | null>(null);
   const mapListenersRef = useRef<Array<{ remove(): void }>>([]);
+  const markerListenersRef = useRef<Array<{ remove(): void }>>([]);
   const cartShopMarkerRef = useRef<MarkerHandle | null>(null);
   const cartShopRequestSeqRef = useRef(0);
   const initialFitDoneRef = useRef(false);
   const candidateRef = useRef<ConfirmedDeliveryPoint | null>(candidate);
-  const debugEnabled = debug;
   const [mapsError, setMapsError] = useState<string | null>(null);
-  const [mapsRuntimeError, setMapsRuntimeError] = useState<string | null>(null);
-  const [mapInitStage, setMapInitStage] = useState<MapInitStage>("not_started");
-  const [mapElementSize, setMapElementSize] = useState("unknown");
-  const [gmAuthFailureSeen, setGmAuthFailureSeen] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [legacyFallbackUsed, setLegacyFallbackUsed] = useState(false);
-  const [cartShopMarkerCreated, setCartShopMarkerCreated] = useState(false);
-  const [initialFitExecuted, setInitialFitExecuted] = useState(false);
   const [cartShop, setCartShop] = useState<MerchantMapShop | null>(null);
-  const [cartShopQueryState, setCartShopQueryState] = useState<CartShopQueryState>("waiting_for_shop_id");
   const [cartShopStatus, setCartShopStatus] = useState<string | null>(null);
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantMapShop | null>(null);
   const [query, setQuery] = useState("");
@@ -219,46 +190,10 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     let disposed = false;
-    const captureRuntimeError = (value: string) => {
-      if (!debugEnabled) return;
-      setMapsRuntimeError(value.slice(0, 300));
-    };
-    const onWindowError = (event: ErrorEvent) => captureRuntimeError(`window.error: ${event.message}`);
-    const onUnhandledRejection = (event: PromiseRejectionEvent) => captureRuntimeError(`unhandledrejection: ${String(event.reason)}`);
-    window.addEventListener("error", onWindowError);
-    window.addEventListener("unhandledrejection", onUnhandledRejection);
-    const originalConsoleError = console.error;
-    if (debugEnabled) {
-      console.error = (...args: unknown[]) => {
-        const text = args.map((arg) => String(arg)).join(" ");
-        const match = text.match(/Google Maps JavaScript API error:\s*([A-Za-z0-9_]+)/);
-        if (match) captureRuntimeError(`Google Maps JavaScript API error: ${match[1]}`);
-        originalConsoleError(...args);
-      };
-    }
-    const unsubscribeAuthFailure = subscribeMapsAuthFailure(() => {
-      captureRuntimeError("gm_authFailure");
-      setGmAuthFailureSeen(true);
-      if (!disposed) {
-        setMapsError("Google Maps key ไม่อนุญาตโดเมนทดสอบนี้ กรุณาเพิ่ม hostname ของ E2E preview ใน HTTP referrer ของ Browser key");
-      }
-    });
     void loadGoogleMaps()
       .then((google) => {
         if (disposed || !mapElementRef.current || mapRef.current) return;
-        setMapInitStage("script_loaded");
-        captureRuntimeError([
-          "script_loaded",
-          `windowGoogle=${window.google ? "yes" : "no"}`,
-          `googleMaps=${window.google?.maps ? "yes" : "no"}`,
-          `Map=${typeof window.google?.maps?.Map === "function" ? "yes" : "no"}`,
-        ].join(" | "));
         const initialCandidate = candidateRef.current;
-        const mapId = getMapsMapId();
-        const rect = mapElementRef.current.getBoundingClientRect();
-        setMapElementSize(`${Math.round(rect.width)}x${Math.round(rect.height)}`);
-        setMapInitStage("constructor_entered");
-        captureRuntimeError(`map_constructor_entered | size=${Math.round(rect.width)}x${Math.round(rect.height)} | mapId=${mapId ? "yes" : "no"}`);
         const map = new google.maps.Map(mapElementRef.current, {
           center: initialCandidate
             ? { lat: initialCandidate.lat, lng: initialCandidate.lng }
@@ -270,8 +205,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
           streetViewControl: false,
           fullscreenControl: false,
         });
-        setMapInitStage("constructor_completed");
-        captureRuntimeError("map_constructor_completed");
         mapRef.current = map;
         setMapReady(true);
         const clickListener = map.addListener("click", (event) => {
@@ -282,27 +215,20 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
         });
         mapListenersRef.current = [clickListener];
       })
-      .catch((error) => {
-        captureRuntimeError(`loader: ${error instanceof Error ? error.message : String(error)}`);
+      .catch(() => {
         if (!disposed) setMapsError("เปิดแผนที่ในแอปไม่ได้ตอนนี้ ยังใช้ GPS หรือ Google Maps link ได้");
       });
     return () => {
       disposed = true;
-      unsubscribeAuthFailure();
-      window.removeEventListener("error", onWindowError);
-      window.removeEventListener("unhandledrejection", onUnhandledRejection);
-      console.error = originalConsoleError;
       cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());
       mapListenersRef.current = [];
+      markerListenersRef.current.forEach((listener) => listener.remove());
+      markerListenersRef.current = [];
       clearCartShopMarker();
       mapRef.current = null;
+      markerRef.current = null;
       setMapReady(false);
-      setLegacyFallbackUsed(false);
-      setCartShopMarkerCreated(false);
-      setMapInitStage("not_started");
-      setMapElementSize("unknown");
-      setGmAuthFailureSeen(false);
     };
   }, [onCandidateChange]);
 
@@ -310,14 +236,12 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     if (!shopId) {
       cartShopRequestSeqRef.current += 1;
       setCartShop(null);
-      setCartShopQueryState("waiting_for_shop_id");
       setCartShopStatus("ยังไม่มีร้านค้าในตะกร้า");
       return;
     }
 
     const requestSeq = cartShopRequestSeqRef.current + 1;
     cartShopRequestSeqRef.current = requestSeq;
-    setCartShopQueryState("loading");
     setCartShopStatus(null);
     publicSupabase
       .from("shops")
@@ -330,13 +254,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
         if (requestSeq !== cartShopRequestSeqRef.current) return;
         if (error) {
           setCartShop(null);
-          setCartShopQueryState("error");
           setCartShopStatus("โหลดพิกัดร้านค้าในตะกร้าไม่สำเร็จ");
           return;
         }
         const [shop] = normalizeMerchantMapRows(data ? [data as MerchantMapRow] : []);
         setCartShop(shop ?? null);
-        setCartShopQueryState(shop ? "loaded" : "not_found_or_no_coordinates");
         setCartShopStatus(shop ? null : "ร้านค้าในตะกร้ายังไม่มีพิกัดสำหรับแสดงบนแผนที่");
       });
 
@@ -349,8 +271,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     const map = mapRef.current;
     if (!map || !mapReady || !cartShop || !window.google) {
       clearCartShopMarker();
-      setLegacyFallbackUsed(false);
-      setCartShopMarkerCreated(false);
       return;
     }
 
@@ -365,8 +285,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     });
     const listeners = [marker.addListener("click", () => setSelectedMerchant(cartShop))];
     cartShopMarkerRef.current = { listeners, clear: () => marker.setMap(null) };
-    setLegacyFallbackUsed(true);
-    setCartShopMarkerCreated(true);
 
     return clearCartShopMarker;
   }, [cartShop, mapReady]);
@@ -382,50 +300,32 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       ]);
       if (!bounds) return;
       initialFitDoneRef.current = true;
-      setInitialFitExecuted(true);
       map.fitBounds(bounds, CHECKOUT_MAP_FIT_PADDING);
       return;
     }
     initialFitDoneRef.current = true;
-    setInitialFitExecuted(true);
     map.setCenter({ lat: cartShop.lat, lng: cartShop.lng });
     map.setZoom(CHECKOUT_MAP_SINGLE_POINT_ZOOM);
   }, [cartShop, candidate, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    const currentCandidate = candidateRef.current;
-    if (!map || !mapReady || !currentCandidate || !window.google) return;
-
-    const marker = new window.google.maps.Marker({
-      map,
-      position: { lat: currentCandidate.lat, lng: currentCandidate.lng },
-      draggable: true,
-    });
-    let dragListener: { remove(): void } | null = marker.addListener("dragend", (event) => {
-      const latLng = event.latLng;
-      if (!latLng) return;
-      onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
-    });
-    markerRef.current = marker;
-
-    return () => {
-      if (dragListener) {
-        dragListener.remove();
-        dragListener = null;
-      }
-      marker.setMap(null);
-      if (markerRef.current === marker) markerRef.current = null;
-    };
-  }, [Boolean(candidate), mapReady, onCandidateChange]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady || !candidate) return;
+    if (!map || !mapReady || !candidate || !window.google) return;
     const position = { lat: candidate.lat, lng: candidate.lng };
     map.setCenter(position);
-    markerRef.current?.setPosition(position);
-  }, [candidate?.lat, candidate?.lng, mapReady]);
+    if (!markerRef.current) {
+      const marker = new window.google.maps.Marker({ map, position, draggable: true });
+      const dragListener = marker.addListener("dragend", (event) => {
+        const latLng = event.latLng;
+        if (!latLng) return;
+        onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
+      });
+      markerListenersRef.current = [dragListener];
+      markerRef.current = marker;
+    } else {
+      markerRef.current.setPosition(position);
+    }
+  }, [candidate, mapReady, onCandidateChange]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -559,31 +459,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               background: #ffedd5;
             }
           `}</style>
-          {debugEnabled && (
-            <div className="absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-lg bg-gray-950/90 p-2 font-mono text-[10px] leading-4 text-white shadow-lg">
-              <p>build: {import.meta.env.VITE_COMMIT_SHA || import.meta.env.VITE_BUILD_ID || "unknown"}</p>
-              <p>shopId: {shopId || "missing"}</p>
-              <p>cartShopQuery: {cartShopQueryState}</p>
-              <p>cartShop: {cartShop ? `${cartShop.name} @ ${cartShop.lat.toFixed(6)},${cartShop.lng.toFixed(6)}` : "none"}</p>
-              <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
-              <p>mapStage: {mapInitStage}</p>
-              <p>mapElement: {mapElementSize}</p>
-              <p>gmAuthFailure: {gmAuthFailureSeen ? "yes" : "no"}</p>
-              <p>windowGoogle: {window.google ? "yes" : "no"}</p>
-              <p>googleMaps: {window.google?.maps ? "yes" : "no"}</p>
-              <p>MapCtor: {typeof window.google?.maps?.Map === "function" ? "yes" : "no"}</p>
-              <p>mapConstructorCompleted: {mapInitStage === "constructor_completed" ? "yes" : "no"}</p>
-              <p>legacyFallback: {legacyFallbackUsed ? "yes" : "no"}</p>
-              <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
-              <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
-              <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
-              <p>origin: {window.location.origin}</p>
-              <p>hostname: {window.location.hostname}</p>
-              <p>referrer: {document.referrer || "none"}</p>
-              <p>keySuffix: {getMapsApiKey() ? getMapsApiKey().slice(-6) : "missing"}</p>
-              <p>runtimeError: {mapsRuntimeError ?? "none"}</p>
-            </div>
-          )}
           {cartShopStatus && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
               {cartShopStatus}
