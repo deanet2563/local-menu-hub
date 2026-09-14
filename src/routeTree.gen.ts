@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as CartRouteImport } from './routes/cart'
+import { Route as CommunityRouteImport } from './routes/community'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
@@ -45,6 +47,16 @@ const AccountRoute = AccountRouteImport.update({
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityRoute = CommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdersRoute = OrdersRouteImport.update({
@@ -147,6 +159,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
+  '/community': typeof CommunityRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
@@ -171,6 +185,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
+  '/community': typeof CommunityRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
@@ -196,6 +212,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
+  '/community': typeof CommunityRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
@@ -222,6 +240,8 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/cart'
+    | '/community'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/rider/profile'
@@ -246,6 +266,8 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/cart'
+    | '/community'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/rider/profile'
@@ -270,6 +292,8 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/cart'
+    | '/community'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/rider/profile'
@@ -295,6 +319,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   CartRoute: typeof CartRoute
+  CommunityRoute: typeof CommunityRoute
+  MapRoute: typeof MapRoute
   OrdersRoute: typeof OrdersRoute
   DebugCheckoutMapRoute: typeof DebugCheckoutMapRoute
   RiderProfileRoute: typeof RiderProfileRoute
@@ -337,6 +363,20 @@ declare module '@tanstack/react-router' {
       path: '/cart'
       fullPath: '/cart'
       preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community': {
+      id: '/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof CommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orders': {
@@ -479,6 +519,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   CartRoute: CartRoute,
+  CommunityRoute: CommunityRoute,
+  MapRoute: MapRoute,
   OrdersRoute: OrdersRoute,
   DebugCheckoutMapRoute: DebugCheckoutMapRoute,
   RiderProfileRoute: RiderProfileRoute,
