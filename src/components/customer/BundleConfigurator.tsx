@@ -110,8 +110,8 @@ export function BundleConfigurator({
   }
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[var(--customer-bottom-nav-clearance)] z-40 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md max-h-full overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md max-h-[100dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-xl">
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <p className="font-semibold truncate">{bundle.name}</p>
@@ -200,7 +200,7 @@ export function BundleConfigurator({
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
+        <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <button onClick={confirm} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex items-center justify-between font-medium">
             <span>เพิ่มชุดลงตะกร้า</span>
             <span>฿{(bundle.price + extraPerSet) * qty}</span>
