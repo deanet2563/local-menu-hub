@@ -49,7 +49,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
     if (maxExisting > setCount) setSetCount(maxExisting);
   }, [c.items, c.shopId, shopId, setCount]);
 
-  if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
+  if (loading) return <div className="customer-bottom-safe-padding min-h-screen bg-[#f7f7f3] p-5 text-sm text-slate-500">กำลังโหลด...</div>;
   if (!shop) return <p className="p-4 text-sm text-gray-400">ไม่พบร้าน</p>;
   if (!shop.is_approved || shop.is_banned) return <p className="p-4 text-sm text-gray-400">ร้านนี้ยังไม่พร้อมให้บริการ</p>;
 
@@ -101,10 +101,10 @@ export function ShopPage({ shopId }: { shopId: string }) {
   }
 
   return (
-    <div className="pb-28">
-      <div className="p-4 flex items-center gap-3 border-b border-gray-100">
+    <div className="customer-bottom-safe-padding min-h-screen bg-[#f7f7f3] text-slate-900">
+      <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-5">
         <Link to="/" className="text-gray-400 text-lg">‹</Link>
-        <img src={shop.logo_url ?? ""} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
+        <img src={shop.logo_url ?? ""} alt={shop.name} className="h-16 w-16 rounded-2xl bg-slate-200 object-cover shadow-sm" />
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{shop.name}</h1>
           <p className="text-xs text-gray-400 truncate">
@@ -113,7 +113,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 bg-white border-b border-orange-100 px-4 py-3">
+      <div className="sticky top-0 z-20 border-y border-orange-100 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <span className="text-sm text-gray-500 shrink-0">กำลังเลือก</span>
           {Array.from({ length: setCount }, (_, idx) => idx + 1).map((n) => {
@@ -161,7 +161,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ))}
 
       {cartCount(c) > 0 && (
-        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
+        <Link to="/cart" className="customer-floating-above-nav fixed left-4 right-4 z-30 mx-auto flex max-w-md justify-between rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>

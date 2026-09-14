@@ -686,7 +686,7 @@ function CartCheckout() {
       <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="หมายเหตุถึงร้าน (ไม่บังคับ)" value={note} onChange={(e) => setNote(e.target.value)} />
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      <div className="fixed left-4 right-4 bottom-4 z-20">
+      <div className="customer-floating-above-nav fixed left-4 right-4 z-20 mx-auto max-w-md">
         <button onClick={confirm} disabled={submitting || quotingRoute || availability?.state === "manual_closed"} className="w-full rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between gap-3 text-sm font-medium shadow-lg disabled:opacity-50">
           <span className="min-w-0">{submitting ? "กำลังส่ง..." : timing === "preorder" ? "ยืนยันสั่งล่วงหน้า" : "ยืนยันคำสั่งซื้อ"}</span>
           <span className="shrink-0">{routeQuote && fulfillment === "delivery" ? `สินค้า ฿${cartTotal(c)} · ส่ง ฿${routeQuote.deliveryFee.toFixed(2)}` : `฿${cartTotal(c)}`}</span>
