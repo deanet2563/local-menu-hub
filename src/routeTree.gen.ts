@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as CommunityIndexRouteImport } from './routes/community/index'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as RiderIndexRouteImport } from './routes/rider/index'
@@ -50,6 +51,11 @@ const CartRoute = CartRouteImport.update({
 const OrdersRoute = OrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityIndexRoute = CommunityIndexRouteImport.update({
+  id: '/community/',
+  path: '/community/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DebugCheckoutMapRoute = DebugCheckoutMapRouteImport.update({
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/community/': typeof CommunityIndexRoute
   '/hub/': typeof HubIndexRoute
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/community': typeof CommunityIndexRoute
   '/hub': typeof HubIndexRoute
   '/rider': typeof RiderIndexRoute
   '/shop': typeof ShopIndexRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/community/': typeof CommunityIndexRoute
   '/hub/': typeof HubIndexRoute
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/community/'
     | '/hub/'
     | '/rider/'
     | '/shop/'
@@ -258,6 +268,7 @@ export interface FileRouteTypes {
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/community'
     | '/hub'
     | '/rider'
     | '/shop'
@@ -282,6 +293,7 @@ export interface FileRouteTypes {
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/community/'
     | '/hub/'
     | '/rider/'
     | '/shop/'
@@ -307,6 +319,7 @@ export interface RootRouteChildren {
   SweetRidersRoute: typeof SweetRidersRoute
   SweetShopRoute: typeof SweetShopRoute
   SweetSignupRoute: typeof SweetSignupRoute
+  CommunityIndexRoute: typeof CommunityIndexRoute
   HubIndexRoute: typeof HubIndexRoute
   RiderIndexRoute: typeof RiderIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/orders'
       preLoaderRoute: typeof OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/': {
+      id: '/community/'
+      path: '/community'
+      fullPath: '/community/'
+      preLoaderRoute: typeof CommunityIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/debug/checkout-map': {
@@ -491,6 +511,7 @@ const rootRouteChildren: RootRouteChildren = {
   SweetRidersRoute: SweetRidersRoute,
   SweetShopRoute: SweetShopRoute,
   SweetSignupRoute: SweetSignupRoute,
+  CommunityIndexRoute: CommunityIndexRoute,
   HubIndexRoute: HubIndexRoute,
   RiderIndexRoute: RiderIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
