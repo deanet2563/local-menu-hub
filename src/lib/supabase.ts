@@ -22,6 +22,18 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let liffReady: Promise<void> | null = null;
 let cached: { token: string; exp: number } | null = null;
 
+const LIFF_INIT_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
 export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
@@ -38,15 +50,29 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-/** Initialise the environment-selected LIFF app exactly once. */
+/** Initialise the environment-selected LIFF app exactly once. A hung
+ * liff.init() (real-device observed) would otherwise leave liffReady a
+ * permanently-pending cached promise, silently wedging every future
+ * caller across the whole app (order submission, delivery quotes,
+ * customer/profile lookups, etc.). Timing it out lets it reject instead
+ * of hanging; only a successful init stays cached — a rejection clears
+ * liffReady so the next caller gets a fresh retry rather than inheriting
+ * a permanently-broken cache. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
   if (!liffReady) {
-    liffReady = liff.init({
-      liffId: LIFF_ID,
-      // Customer raw-preview browsing must remain passive. AI Office is an
-      // admin surface, so it may actively establish the existing LINE session.
-      withLoginOnExternalBrowser: isAiOfficeRoute(),
+    liffReady = withTimeout(
+      liff.init({
+        liffId: LIFF_ID,
+        // Customer raw-preview browsing must remain passive. AI Office is an
+        // admin surface, so it may actively establish the existing LINE session.
+        withLoginOnExternalBrowser: isAiOfficeRoute(),
+      }),
+      LIFF_INIT_TIMEOUT_MS,
+      "เชื่อมต่อ LINE ไม่สำเร็จ (หมดเวลา) กรุณาลองใหม่",
+    ).catch((err) => {
+      liffReady = null;
+      throw err;
     });
   }
   return liffReady;
