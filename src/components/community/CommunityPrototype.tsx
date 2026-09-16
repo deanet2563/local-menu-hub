@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   COMMUNITY_PROTOTYPE_COMMUNITIES,
   COMMUNITY_PROTOTYPE_DEFAULT_COMMUNITY,
@@ -30,7 +30,13 @@ const surfaceNav: { id: CommunityPrototypeSurface; label: string; href: string }
 export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
   const [communityId, setCommunityId] = useState(COMMUNITY_PROTOTYPE_DEFAULT_COMMUNITY.id);
   const [favoriteGroupIds, setFavoriteGroupIds] = useState<string[]>(["group-yoga"]);
+  const navRef = useRef<HTMLElement | null>(null);
   const activeCommunity = getCommunityPrototypeCommunity(communityId);
+  const orderedSurfaceNav = useMemo(() => {
+    const active = surfaceNav.find((item) => item.id === surface);
+    if (!active) return surfaceNav;
+    return [active, ...surfaceNav.filter((item) => item.id !== surface)];
+  }, [surface]);
   const posts = useMemo(
     () => COMMUNITY_PROTOTYPE_POSTS.filter((item) => item.communityId === communityId),
     [communityId],
@@ -64,12 +70,23 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
     ));
   }
 
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>("[data-community-nav-active='true']");
+    if (!nav || !active) return;
+    const nextScrollLeft = active.offsetLeft - (nav.clientWidth - active.clientWidth) / 2;
+    nav.scrollLeft = nextScrollLeft;
+    requestAnimationFrame(() => {
+      nav.scrollLeft = nextScrollLeft;
+    });
+  }, [surface]);
+
   return (
     <main className="min-h-screen bg-[#f7f5ef] pb-20 text-slate-950">
       <header className="border-b border-orange-100 bg-white">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3 sm:gap-4 sm:py-4">
           <PrototypeNotice />
-          <div className="flex flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-2">
             <label className="text-xs font-semibold text-slate-600" htmlFor="community-switcher">
               เลือกวงชุมชน
             </label>
@@ -77,7 +94,7 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
               id="community-switcher"
               value={communityId}
               onChange={(event) => setCommunityId(event.target.value)}
-              className="w-full rounded-xl border border-orange-200 bg-white px-3 py-3 text-base font-semibold text-slate-900 shadow-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+              className="w-full min-w-0 rounded-xl border border-orange-200 bg-white px-3 py-3 text-base font-semibold text-slate-900 shadow-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
             >
               {COMMUNITY_PROTOTYPE_COMMUNITIES.map((community) => (
                 <option key={community.id} value={community.id}>
@@ -86,18 +103,19 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-medium text-orange-700">{activeCommunity.relationshipLabel}</p>
-            <h1 className="mt-1 text-2xl font-bold leading-tight">{activeCommunity.name}</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <h1 className="mt-1 break-words text-2xl font-bold leading-tight">{activeCommunity.name}</h1>
+            <p className="mt-2 break-all text-sm leading-6 text-slate-600">
               {activeCommunity.boundaryLabel} · {activeCommunity.memberSummary}
             </p>
           </div>
-          <nav aria-label="Community prototype navigation" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            {surfaceNav.map((item) => (
+          <nav ref={navRef} aria-label="เมนู Community" className="-mx-4 flex max-w-[100vw] gap-2 overflow-x-auto px-4 pb-1">
+            {orderedSurfaceNav.map((item) => (
               <Link
                 key={item.id}
                 to={item.href}
+                data-community-nav-active={surface === item.id ? "true" : undefined}
                 className={`shrink-0 rounded-full border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                   surface === item.id
                     ? "border-orange-500 bg-orange-500 text-white"
@@ -111,7 +129,7 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-4">
+      <div className="mx-auto w-full max-w-3xl space-y-3 px-4 py-3 sm:space-y-4 sm:py-4">
         {surface === "home" && <HomeSurface posts={posts} />}
         {surface === "feed" && <FeedSurface posts={posts} />}
         {surface === "groups" && (
@@ -133,7 +151,7 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
 function PrototypeNotice() {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
-      ข้อมูลตัวอย่างสำหรับทดสอบ Community: ข้อมูลทั้งหมดเป็น fixture ยังไม่เชื่อมฐานข้อมูล และยังไม่มีการสร้างหรือบันทึกข้อมูลจริง
+      หน้าทดลอง Community — ข้อมูลทั้งหมดเป็นตัวอย่างและไม่มีการบันทึกข้อมูลจริง
     </div>
   );
 }
@@ -143,27 +161,27 @@ function HomeSurface({ posts }: { posts: typeof COMMUNITY_PROTOTYPE_POSTS }) {
   return (
     <>
       {pinned && (
-        <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
+        <section className="min-w-0 rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
           <StatusPill label="ปักหมุด" tone="orange" />
-          <h2 className="mt-3 text-lg font-bold">{pinned.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{pinned.body}</p>
+          <h2 className="mt-3 break-words text-lg font-bold">{pinned.title}</h2>
+          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{pinned.body}</p>
         </section>
       )}
-      <section className="grid grid-cols-2 gap-3">
+      <section className="grid min-w-0 grid-cols-2 gap-3 max-[374px]:grid-cols-1">
         {surfaceNav.filter((item) => item.id !== "home").map((item) => (
           <Link
             key={item.id}
             to={item.href}
-            className="rounded-xl border border-orange-100 bg-white p-3 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            className="min-w-0 rounded-xl border border-orange-100 bg-white p-3 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
           >
             {item.label}
-            <span className="mt-2 block text-xs font-normal leading-5 text-slate-500">เปิดดู prototype</span>
+            <span className="mt-2 block text-xs font-normal leading-5 text-slate-500">ดูตัวอย่าง</span>
           </Link>
         ))}
       </section>
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold">ตัวอย่างฟีดล่าสุด</h2>
+      <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <h2 className="min-w-0 break-words text-base font-bold">ตัวอย่างฟีดล่าสุด</h2>
           <Link to="/community/feed" className="text-sm font-semibold text-orange-600">
             ดูทั้งหมด
           </Link>
@@ -181,8 +199,8 @@ function HomeSurface({ posts }: { posts: typeof COMMUNITY_PROTOTYPE_POSTS }) {
 function FeedSurface({ posts }: { posts: typeof COMMUNITY_PROTOTYPE_POSTS }) {
   return (
     <section className="space-y-3">
-      <LockedAction title="สร้างโพสต์" detail="ยังไม่เปิดใช้งานใน prototype รอบนี้" />
-      {posts.length === 0 ? <EmptyState label="ยังไม่มีโพสต์สำหรับ community นี้" /> : null}
+      <LockedAction title="สร้างโพสต์" detail="ยังไม่เปิดใช้งานในหน้าทดลองรอบนี้" />
+      {posts.length === 0 ? <EmptyState label="ยังไม่มีโพสต์สำหรับชุมชนนี้" /> : null}
       {posts.map((post) => (
         <PostCard key={post.id} post={post} />
       ))}
@@ -204,26 +222,26 @@ function GroupsSurface({
       {groups.map((group) => {
         const isFavorite = favoriteGroupIds.includes(group.id);
         return (
-          <article key={group.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
+          <article key={group.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex min-w-0 flex-col gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
+              <div className="min-w-0">
                 <StatusPill
                   label={group.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เห็นได้ในชุมชน"}
                   tone={group.visibility === "private-group" ? "slate" : "green"}
                 />
-                <h2 className="mt-3 text-lg font-bold">{group.name}</h2>
+                <h2 className="mt-3 break-words text-lg font-bold">{group.name}</h2>
               </div>
               <button
                 type="button"
                 aria-pressed={isFavorite}
                 onClick={() => onToggleFavorite(group.id)}
-                className="rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="self-start rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300"
               >
                 {isFavorite ? "ปักไว้แล้ว" : "ปักหมุด"}
               </button>
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{group.description}</p>
-            <p className="mt-3 text-sm text-slate-500">
+            <p className="mt-2 break-all text-sm leading-6 text-slate-600">{group.description}</p>
+            <p className="mt-3 break-all text-sm text-slate-500">
               {group.memberCountLabel} · {group.nextActivityLabel}
             </p>
           </article>
@@ -237,12 +255,12 @@ function EventsSurface({ events }: { events: typeof COMMUNITY_PROTOTYPE_EVENTS }
   return (
     <section className="space-y-3">
       {events.map((event) => (
-        <article key={event.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article key={event.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <StatusPill
-            label={event.visibility === "private-group" ? "Private group" : "Member-only"}
+            label={event.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เฉพาะสมาชิก"}
             tone={event.visibility === "private-group" ? "slate" : "green"}
           />
-          <h2 className="mt-3 text-lg font-bold">{event.title}</h2>
+          <h2 className="mt-3 break-words text-lg font-bold">{event.title}</h2>
           <dl className="mt-3 grid gap-2 text-sm text-slate-600">
             <InfoRow label="วันที่" value={event.dateLabel} />
             <InfoRow label="เวลา" value={event.timeLabel} />
@@ -259,15 +277,15 @@ function HelpSurface({ requests }: { requests: typeof COMMUNITY_PROTOTYPE_HELP_R
   return (
     <section className="space-y-3">
       {requests.map((request) => (
-        <article key={request.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article key={request.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap gap-2">
             <StatusPill label={helpCategoryLabel(request.category)} tone="slate" />
             <StatusPill label={urgencyLabel(request.urgency)} tone={request.urgency === "high" ? "orange" : "green"} />
             <StatusPill label={helpStatusLabel(request.status)} tone="blue" />
           </div>
-          <h2 className="mt-3 text-lg font-bold">{request.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{request.body}</p>
-          <p className="mt-3 text-sm font-medium text-slate-700">{request.areaLabel}</p>
+          <h2 className="mt-3 break-words text-lg font-bold">{request.title}</h2>
+          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{request.body}</p>
+          <p className="mt-3 break-all text-sm font-medium text-slate-700">{request.areaLabel}</p>
         </article>
       ))}
     </section>
@@ -277,18 +295,18 @@ function HelpSurface({ requests }: { requests: typeof COMMUNITY_PROTOTYPE_HELP_R
 function MarketplaceSurface({ listings }: { listings: typeof COMMUNITY_PROTOTYPE_MARKETPLACE }) {
   return (
     <section className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-        ตลาดชุมชนนี้แยกจากระบบสั่งอาหาร ไม่มีตะกร้า ไม่มี QR payment และไม่มีการเรียก order contract
+      <div className="min-w-0 break-all rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+        ตลาดชุมชนสำหรับซื้อ ขาย แบ่งปัน และให้ฟรี แยกจากระบบสั่งอาหาร
       </div>
       {listings.map((listing) => (
-        <article key={listing.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article key={listing.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap gap-2">
             <StatusPill label={marketCategoryLabel(listing.category)} tone="green" />
             <StatusPill label={marketStatusLabel(listing.status)} tone={listing.status === "active" ? "blue" : "slate"} />
           </div>
-          <h2 className="mt-3 text-lg font-bold">{listing.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{listing.summary}</p>
-          <p className="mt-3 text-sm font-semibold text-orange-700">{listing.priceLabel}</p>
+          <h2 className="mt-3 break-words text-lg font-bold">{listing.title}</h2>
+          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{listing.summary}</p>
+          <p className="mt-3 break-words text-sm font-semibold text-orange-700">{listing.priceLabel}</p>
           <p className="mt-1 text-xs text-slate-500">{listing.ownerLabel}</p>
         </article>
       ))}
@@ -302,13 +320,13 @@ function MapSurface({ entries }: { entries: typeof COMMUNITY_PROTOTYPE_MAP_ENTRI
   return (
     <section className="space-y-4">
       <MapLayer
-        title="Public Directory"
-        detail="แสดงเฉพาะสถานที่สาธารณะหรือ business/service ที่ opt-in/approved แล้ว"
+        title="รายชื่อสถานที่สาธารณะ"
+        detail="แสดงเฉพาะสถานที่สาธารณะหรือร้านค้าและบริการที่ได้รับอนุญาตแล้ว"
         entries={publicEntries}
       />
       <MapLayer
-        title="Private Community Map"
-        detail="แสดงเฉพาะสมาชิก community เดียวกัน และไม่แสดงบ้านหรือพิกัดแม่นยำของสมาชิก"
+        title="แผนที่เฉพาะสมาชิก"
+        detail="แสดงเฉพาะสมาชิกในชุมชนเดียวกัน และไม่แสดงบ้านหรือพิกัดแม่นยำของสมาชิก"
         entries={privateEntries}
       />
     </section>
@@ -325,18 +343,18 @@ function MapLayer({
   entries: typeof COMMUNITY_PROTOTYPE_MAP_ENTRIES;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-bold">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="break-words text-lg font-bold">{title}</h2>
+      <p className="mt-2 break-all text-sm leading-6 text-slate-600">{detail}</p>
       <div className="mt-3 space-y-3">
-        {entries.length === 0 ? <EmptyState label="ยังไม่มีรายการใน layer นี้" /> : null}
+        {entries.length === 0 ? <EmptyState label="ยังไม่มีรายการในส่วนนี้" /> : null}
         {entries.map((entry) => (
-          <article key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <h3 className="font-semibold">{entry.name}</h3>
-            <p className="mt-1 text-sm text-slate-600">{entry.category}</p>
-            <p className="mt-2 text-sm text-slate-700">{entry.locationLabel}</p>
-            <p className="mt-1 text-xs font-medium text-slate-500">{entry.precisionLabel}</p>
-            <p className="mt-1 text-xs text-slate-500">{entry.visibilityNote}</p>
+          <article key={entry.id} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-3">
+            <h3 className="break-words font-semibold">{entry.name}</h3>
+            <p className="mt-1 break-all text-sm text-slate-600">{entry.category}</p>
+            <p className="mt-2 break-all text-sm text-slate-700">{entry.locationLabel}</p>
+            <p className="mt-1 break-all text-xs font-medium text-slate-500">{entry.precisionLabel}</p>
+            <p className="mt-1 break-all text-xs text-slate-500">{entry.visibilityNote}</p>
           </article>
         ))}
       </div>
@@ -346,14 +364,14 @@ function MapLayer({
 
 function PostCard({ post, compact = false }: { post: typeof COMMUNITY_PROTOTYPE_POSTS[number]; compact?: boolean }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2">
         <StatusPill label={postKindLabel(post.kind)} tone={post.kind === "safety" ? "orange" : "green"} />
-        <StatusPill label="Member-only" tone="slate" />
+        <StatusPill label="เฉพาะสมาชิก" tone="slate" />
       </div>
-      <h2 className="mt-3 text-lg font-bold">{post.title}</h2>
-      {!compact && <p className="mt-2 text-sm leading-6 text-slate-600">{post.body}</p>}
-      <p className="mt-3 text-xs text-slate-500">
+      <h2 className="mt-3 break-words text-lg font-bold">{post.title}</h2>
+      {!compact && <p className="mt-2 break-all text-sm leading-6 text-slate-600">{post.body}</p>}
+      <p className="mt-3 break-all text-xs text-slate-500">
         {post.authorLabel} · {post.postedAtLabel}
       </p>
     </article>
@@ -362,22 +380,22 @@ function PostCard({ post, compact = false }: { post: typeof COMMUNITY_PROTOTYPE_
 
 function LockedAction({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4">
+    <div className="min-w-0 rounded-xl border border-dashed border-slate-300 bg-white p-4">
       <button
         type="button"
         disabled
-        className="w-full rounded-xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500"
+        className="w-full whitespace-normal rounded-xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500"
       >
         {title}ยังไม่เปิดใช้งาน
       </button>
-      <p className="mt-2 text-sm leading-6 text-slate-500">{detail}</p>
+      <p className="mt-2 break-all text-sm leading-6 text-slate-500">{detail}</p>
     </div>
   );
 }
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+    <div className="min-w-0 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
       {label}
     </div>
   );
@@ -385,9 +403,9 @@ function EmptyState({ label }: { label: string }) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className="flex min-w-0 justify-between gap-3">
       <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-medium text-slate-800">{value}</dd>
+      <dd className="min-w-0 break-words text-right font-medium text-slate-800">{value}</dd>
     </div>
   );
 }
