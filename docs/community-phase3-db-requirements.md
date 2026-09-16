@@ -122,6 +122,11 @@ Recommended public exposure is a view/RPC that returns only approved public fiel
 - public coordinate or deliberately reduced precision coordinate
 - claimed/verified/public status
 
+Decision update for UX Prototype Round 1: Public Directory exposure should use a narrow
+`SECURITY DEFINER` RPC rather than anonymous/public SELECT on the base table. The RPC must
+return only the approved field allowlist, set a safe `search_path`, revoke broad execute,
+and grant execute only to the roles required for public directory access.
+
 ### Private Member-Only Map Layer
 
 Private entries include community facilities, access notes, resident-visible landmarks, internal pickup/drop-off notes, and local context that is useful to members but not suitable for public indexing. SELECT requires active membership in the exact `community_id`.

@@ -14,6 +14,12 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as CommunityIndexRouteImport } from './routes/community/index'
+import { Route as CommunityEventsRouteImport } from './routes/community/events'
+import { Route as CommunityFeedRouteImport } from './routes/community/feed'
+import { Route as CommunityGroupsRouteImport } from './routes/community/groups'
+import { Route as CommunityHelpRouteImport } from './routes/community/help'
+import { Route as CommunityMapRouteImport } from './routes/community/map'
+import { Route as CommunityMarketplaceRouteImport } from './routes/community/marketplace'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as RiderIndexRouteImport } from './routes/rider/index'
@@ -56,6 +62,36 @@ const OrdersRoute = OrdersRouteImport.update({
 const CommunityIndexRoute = CommunityIndexRouteImport.update({
   id: '/community/',
   path: '/community/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityEventsRoute = CommunityEventsRouteImport.update({
+  id: '/community/events',
+  path: '/community/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityFeedRoute = CommunityFeedRouteImport.update({
+  id: '/community/feed',
+  path: '/community/feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityGroupsRoute = CommunityGroupsRouteImport.update({
+  id: '/community/groups',
+  path: '/community/groups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityHelpRoute = CommunityHelpRouteImport.update({
+  id: '/community/help',
+  path: '/community/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityMapRoute = CommunityMapRouteImport.update({
+  id: '/community/map',
+  path: '/community/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityMarketplaceRoute = CommunityMarketplaceRouteImport.update({
+  id: '/community/marketplace',
+  path: '/community/marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DebugCheckoutMapRoute = DebugCheckoutMapRouteImport.update({
@@ -154,6 +190,12 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/community/events': typeof CommunityEventsRoute
+  '/community/feed': typeof CommunityFeedRoute
+  '/community/groups': typeof CommunityGroupsRoute
+  '/community/help': typeof CommunityHelpRoute
+  '/community/map': typeof CommunityMapRoute
+  '/community/marketplace': typeof CommunityMarketplaceRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
@@ -179,6 +221,12 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/community/events': typeof CommunityEventsRoute
+  '/community/feed': typeof CommunityFeedRoute
+  '/community/groups': typeof CommunityGroupsRoute
+  '/community/help': typeof CommunityHelpRoute
+  '/community/map': typeof CommunityMapRoute
+  '/community/marketplace': typeof CommunityMarketplaceRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
@@ -205,6 +253,12 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
+  '/community/events': typeof CommunityEventsRoute
+  '/community/feed': typeof CommunityFeedRoute
+  '/community/groups': typeof CommunityGroupsRoute
+  '/community/help': typeof CommunityHelpRoute
+  '/community/map': typeof CommunityMapRoute
+  '/community/marketplace': typeof CommunityMarketplaceRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
@@ -232,6 +286,12 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/orders'
+    | '/community/events'
+    | '/community/feed'
+    | '/community/groups'
+    | '/community/help'
+    | '/community/map'
+    | '/community/marketplace'
     | '/debug/checkout-map'
     | '/rider/profile'
     | '/rider/signup'
@@ -257,6 +317,12 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/orders'
+    | '/community/events'
+    | '/community/feed'
+    | '/community/groups'
+    | '/community/help'
+    | '/community/map'
+    | '/community/marketplace'
     | '/debug/checkout-map'
     | '/rider/profile'
     | '/rider/signup'
@@ -282,6 +348,12 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/orders'
+    | '/community/events'
+    | '/community/feed'
+    | '/community/groups'
+    | '/community/help'
+    | '/community/map'
+    | '/community/marketplace'
     | '/debug/checkout-map'
     | '/rider/profile'
     | '/rider/signup'
@@ -308,6 +380,12 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   CartRoute: typeof CartRoute
   OrdersRoute: typeof OrdersRoute
+  CommunityEventsRoute: typeof CommunityEventsRoute
+  CommunityFeedRoute: typeof CommunityFeedRoute
+  CommunityGroupsRoute: typeof CommunityGroupsRoute
+  CommunityHelpRoute: typeof CommunityHelpRoute
+  CommunityMapRoute: typeof CommunityMapRoute
+  CommunityMarketplaceRoute: typeof CommunityMarketplaceRoute
   DebugCheckoutMapRoute: typeof DebugCheckoutMapRoute
   RiderProfileRoute: typeof RiderProfileRoute
   RiderSignupRoute: typeof RiderSignupRoute
@@ -364,6 +442,48 @@ declare module '@tanstack/react-router' {
       path: '/community'
       fullPath: '/community/'
       preLoaderRoute: typeof CommunityIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/events': {
+      id: '/community/events'
+      path: '/community/events'
+      fullPath: '/community/events'
+      preLoaderRoute: typeof CommunityEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/feed': {
+      id: '/community/feed'
+      path: '/community/feed'
+      fullPath: '/community/feed'
+      preLoaderRoute: typeof CommunityFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/groups': {
+      id: '/community/groups'
+      path: '/community/groups'
+      fullPath: '/community/groups'
+      preLoaderRoute: typeof CommunityGroupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/help': {
+      id: '/community/help'
+      path: '/community/help'
+      fullPath: '/community/help'
+      preLoaderRoute: typeof CommunityHelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/map': {
+      id: '/community/map'
+      path: '/community/map'
+      fullPath: '/community/map'
+      preLoaderRoute: typeof CommunityMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/marketplace': {
+      id: '/community/marketplace'
+      path: '/community/marketplace'
+      fullPath: '/community/marketplace'
+      preLoaderRoute: typeof CommunityMarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/debug/checkout-map': {
@@ -500,6 +620,12 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   CartRoute: CartRoute,
   OrdersRoute: OrdersRoute,
+  CommunityEventsRoute: CommunityEventsRoute,
+  CommunityFeedRoute: CommunityFeedRoute,
+  CommunityGroupsRoute: CommunityGroupsRoute,
+  CommunityHelpRoute: CommunityHelpRoute,
+  CommunityMapRoute: CommunityMapRoute,
+  CommunityMarketplaceRoute: CommunityMarketplaceRoute,
   DebugCheckoutMapRoute: DebugCheckoutMapRoute,
   RiderProfileRoute: RiderProfileRoute,
   RiderSignupRoute: RiderSignupRoute,
