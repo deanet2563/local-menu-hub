@@ -135,7 +135,17 @@ export function canViewCommunitySurface(
   visibility: CommunityVisibility = "member-only",
 ): boolean {
   if (visibility === "public-preview") return true;
-  return memberships.some((membership) => membership.communityId === communityId && membership.status === "active");
+  if (visibility === "member-only") {
+    return memberships.some((membership) => membership.communityId === communityId && membership.status === "active");
+  }
+  if (visibility === "moderator-only") {
+    return memberships.some((membership) => (
+      membership.communityId === communityId
+      && membership.status === "active"
+      && (membership.role === "moderator" || membership.role === "admin")
+    ));
+  }
+  return false;
 }
 
 export function buildCommunityNavigationItems(communitySlug: string): CommunityNavigationItem[] {

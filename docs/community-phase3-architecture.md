@@ -32,7 +32,7 @@ Only `/community` is registered in this scaffold. Child links are placeholders u
 
 ## Hierarchy
 
-The Phase 3 hierarchy is:
+The Phase 3 hierarchy is for geographic and organizational boundaries:
 
 ```text
 community
@@ -44,6 +44,8 @@ community
 ```
 
 Sammakorn is the first top-level community. Future communities must not reuse Sammakorn-specific IDs or assumptions. Parent/child communities may later support village zones, schools, workplace campuses, or building clusters.
+
+Groups and Clubs are separate entities under a `community_id`, not nested communities. Use community hierarchy for boundaries such as villages, zones, schools, workplaces, or managed organizations; use groups/clubs for optional member circles inside that boundary.
 
 ## Membership
 
@@ -71,7 +73,7 @@ Only active memberships should unlock member-only surfaces. Pending, suspended, 
 
 Community visibility follows "วงใครวงมัน":
 
-- Public preview: safe discovery surfaces such as a community map entry or landing preview.
+- Public preview: safe discovery surfaces such as a community landing preview or approved public directory listing.
 - Member-only: feed, posts, events, help requests, marketplace, groups, and most local updates.
 - Moderator-only: moderation queues, reports, admin actions, and future governance tools.
 
@@ -81,12 +83,34 @@ Visibility must be enforced by backend/RLS in the schema round. Frontend state i
 
 Community Map remains deterministic. MyTree-owned or community-verified records must stay separate from provider-derived runtime seed data. Google-sourced unclaimed results are not durable MyTree merchant records and must not become indexable copied listing pages.
 
+Community Map has two layers:
+
+- Public directory layer: public places and business/service listings approved by an owner or community operator.
+- Private member-only community map layer: member-visible community facilities, notes, access points, and local context that must not be indexed publicly.
+
+Do not public-index member homes, precise resident locations, private posts, help requests, private events, private groups, or membership data.
+
 The `/community` scaffold can point users toward Community Map, but any future map implementation must preserve:
 
 - MyTree-owned vs provider-derived provenance.
 - Claimed/verified vs unclaimed visual distinction.
 - Provider attribution/caching rules.
 - Public SEO access for owned community pages where allowed.
+
+## Content And Moderation
+
+General member content may publish immediately inside its community boundary. Use report/reactive moderation and route risky system-detected content into `pending_review` before or after publish according to the specific surface risk.
+
+Append-only audit is required from day one for:
+
+- membership verification and status changes;
+- reports;
+- moderation actions;
+- content hide/remove actions.
+
+## Sponsored Content
+
+Sponsored content must be separate from organic content, clearly labeled, and configured with eligible `community_id` values. Sponsored placement must not silently modify organic ranking.
 
 ## Authorization Boundaries
 
@@ -97,6 +121,8 @@ Backend/server truth is authoritative. Future writes must validate:
 - role permission for the target action;
 - content visibility and moderation state;
 - group/club membership when a sub-boundary exists.
+
+The `merchant` community role is community-local. It does not automatically prove Shop ownership or grant merchant operational permissions.
 
 The frontend must never bypass RLS or infer authorization only from local navigation state.
 
