@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DeliveryAddressFields, formatDeliveryAddress, type DeliveryAddressFieldsValue } from "@/components/DeliveryAddressFields";
 import { DeliveryLocationPicker } from "@/components/DeliveryLocationPicker";
-import { cart, useCart, cartLineTotal, cartTotal, groupCartItemsByShop, type CartItem } from "@/lib/cart";
+import { cart, useCart, cartLineTotal, groupCartItemsByShop, type CartItem } from "@/lib/cart";
 import {
   formatDeliveryAddressSummary,
   loadCustomerDeliveryAddresses,
@@ -419,7 +419,13 @@ function CartCheckout() {
     updateShop(shopId, { done: true });
   }
 
-  const grandTotal = cartTotal(c);
+  const grandTotal = shopIds.reduce((total, shopId) => {
+    const items = groupedByShop.get(shopId) ?? [];
+    const subtotal = items.reduce((sum, i) => sum + cartLineTotal(i), 0);
+    const st = shopStates[shopId];
+    const deliveryFee = st?.fulfillment === "delivery" ? st.routeQuote?.deliveryFee ?? 0 : 0;
+    return total + subtotal + deliveryFee;
+  }, 0);
   const totalShopCount = shopIds.length;
   const totalItemCount = c.items.reduce((n, i) => n + i.qty, 0);
   const anyCompleted = Object.keys(completedShops).length > 0;
@@ -527,7 +533,11 @@ function CartCheckout() {
             <div className="px-3.5 py-3 space-y-3 border-t border-gray-100">
               <div className="flex justify-between text-sm font-semibold">
                 <span>ยอดรวมร้านนี้</span>
-                <span className="text-[#a85f2c]">{st.fulfillment === "delivery" && st.routeQuote ? `฿${subtotal} + ส่ง ฿${st.routeQuote.deliveryFee.toFixed(2)}` : `฿${subtotal}`}</span>
+                <span className="text-[#a85f2c]">
+                  {st.fulfillment === "delivery" && st.routeQuote
+                    ? `฿${subtotal} + ส่ง ฿${st.routeQuote.deliveryFee.toFixed(2)} = ฿${(subtotal + st.routeQuote.deliveryFee).toFixed(2)}`
+                    : `฿${subtotal}`}
+                </span>
               </div>
 
               <div className="flex gap-2">
@@ -694,7 +704,7 @@ function CartCheckout() {
 
       <div className="fixed left-4 right-4 bottom-4 z-20 rounded-xl bg-[#28432f] shadow-lg px-4 py-3 flex items-center justify-between">
         <span className="text-xs text-white/70">ยอดรวมทั้งตะกร้า</span>
-        <span className="text-base font-bold text-white">฿{grandTotal}</span>
+        <span className="text-base font-bold text-white">฿{grandTotal.toFixed(2)}</span>
       </div>
     </div>
   );
