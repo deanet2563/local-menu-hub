@@ -419,6 +419,12 @@ function CartCheckout() {
     updateShop(shopId, { done: true });
   }
 
+  function clearAllCart() {
+    const ok = window.confirm("ล้างตะกร้าทั้งหมด? สินค้าจากทุกร้านในตะกร้าจะถูกลบ");
+    if (!ok) return;
+    cart.clear();
+  }
+
   const grandTotal = shopIds.reduce((total, shopId) => {
     const items = groupedByShop.get(shopId) ?? [];
     const subtotal = items.reduce((sum, i) => sum + cartLineTotal(i), 0);
@@ -454,10 +460,17 @@ function CartCheckout() {
           <h1 className="text-lg font-bold">ตะกร้าของฉัน</h1>
           <p className="text-xs text-gray-500 mt-0.5">{totalItemCount} รายการ · {totalShopCount + Object.keys(completedShops).length} ร้าน</p>
         </div>
-        <Link to="/" className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700">
-          <span aria-hidden="true">←</span>
-          <span>เพิ่มร้าน/สินค้า</span>
-        </Link>
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <Link to="/" className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700">
+            <span aria-hidden="true">←</span>
+            <span>เพิ่มร้าน/สินค้า</span>
+          </Link>
+          {c.items.length > 0 && (
+            <button type="button" onClick={clearAllCart} className="text-[11px] text-red-500 underline">
+              ล้างตะกร้าทั้งหมด
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Paid shop cards — kept visible via snapshot even after cart.clearShop(). */}

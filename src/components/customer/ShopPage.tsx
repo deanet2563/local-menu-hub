@@ -91,16 +91,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
       setName: activeSetName,
     };
 
-    let result: ReturnType<typeof cart.add> = "ok";
-    for (let n = 0; n < input.qty; n += 1) {
-      result = cart.add(payload);
-      if (result === "different_shop") break;
-    }
-    if (result === "different_shop") {
-      const ok = window.confirm("ตะกร้ามีของจากร้านอื่นอยู่ — สั่งได้ทีละร้านเท่านั้น\nล้างตะกร้าแล้วเริ่มใหม่กับร้านนี้ไหม?");
-      if (!ok) return;
-      for (let n = 0; n < input.qty; n += 1) cart.add(payload, { force: n === 0 });
-    }
+    for (let n = 0; n < input.qty; n += 1) cart.add(payload, { allowMultipleShops: true });
     setConfiguring(null);
   }
 
