@@ -4,6 +4,10 @@ import { publicSupabase } from "@/lib/supabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 
+function shopInitials(name: string): string {
+  return name.trim().slice(0, 2).toUpperCase() || "?";
+}
+
 // ============================================================
 // MyTree — Shop page
 // Customers freely create ชุด 1 / ชุด 2 / ... and add any menu products
@@ -104,7 +108,13 @@ export function ShopPage({ shopId }: { shopId: string }) {
     <div className="pb-28">
       <div className="p-4 flex items-center gap-3 border-b border-gray-100">
         <Link to="/" className="text-gray-400 text-lg">‹</Link>
-        <img src={shop.logo_url ?? ""} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
+        {shop.logo_url ? (
+          <img src={shop.logo_url} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
+        ) : (
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center font-extrabold text-lg shrink-0 bg-[#faeadb] text-[#a85f2c]" aria-hidden="true">
+            {shopInitials(shop.name)}
+          </div>
+        )}
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{shop.name}</h1>
           <p className="text-xs text-gray-400 truncate">
@@ -113,7 +123,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 bg-white border-b border-orange-100 px-4 py-3">
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <span className="text-sm text-gray-500 shrink-0">กำลังเลือก</span>
           {Array.from({ length: setCount }, (_, idx) => idx + 1).map((n) => {
@@ -124,13 +134,13 @@ export function ShopPage({ shopId }: { shopId: string }) {
                 type="button"
                 key={n}
                 onClick={() => setActiveSetNo(n)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium border ${active ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-200"}`}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium border ${active ? "bg-[#3f6b4a] text-white border-[#3f6b4a]" : "bg-white text-gray-700 border-gray-200"}`}
               >
                 ชุด {n}{count > 0 ? ` (${count})` : ""}
               </button>
             );
           })}
-          <button type="button" onClick={addSet} className="shrink-0 rounded-full px-4 py-2 text-sm font-medium text-orange-600 border border-dashed border-orange-400 bg-white">
+          <button type="button" onClick={addSet} className="shrink-0 rounded-full px-4 py-2 text-sm font-medium text-[#28432f] border border-dashed border-[#3f6b4a] bg-white">
             ＋ เพิ่มชุด
           </button>
         </div>
@@ -148,10 +158,10 @@ export function ShopPage({ shopId }: { shopId: string }) {
                 <img src={i.image_url ?? ""} alt={i.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{i.name}</p>
-                  <p className="text-sm text-orange-600">฿{i.price}</p>
+                  <p className="text-sm font-bold text-[#a85f2c]">฿{i.price}</p>
                   {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ใน{activeSetName} {qtyOf(i.item_id)} ชิ้น</p>}
                 </div>
-                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
+                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-[#3f6b4a] text-white text-sm px-3 py-1.5">
                   {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
                 </button>
               </div>
@@ -161,7 +171,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ))}
 
       {cartCount(c) > 0 && (
-        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
+        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-[#28432f] text-white px-4 py-3 flex justify-between text-sm font-medium">
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>

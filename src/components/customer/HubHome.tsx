@@ -130,14 +130,14 @@ export function HubHome() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-gray-700">ร้านใกล้คุณ</p>
-            {locationState === "ready" && <p className="text-[11px] text-green-600">เรียงตามตำแหน่งปัจจุบันแล้ว</p>}
+            {locationState === "ready" && <p className="text-[11px] text-[#3f6b4a]">เรียงตามตำแหน่งปัจจุบันแล้ว</p>}
             {locationState === "error" && <p className="text-[11px] text-gray-400">เปิดสิทธิ์ตำแหน่งเพื่อเรียงร้านที่ใกล้ที่สุด</p>}
           </div>
           <button
             type="button"
             onClick={() => void refreshNearbyShops()}
             disabled={locationState === "loading"}
-            className="shrink-0 text-xs text-orange-500 disabled:opacity-50"
+            className="shrink-0 text-xs text-[#3f6b4a] disabled:opacity-50"
           >
             {locationState === "loading" ? "📍 กำลังค้นหา..." : "📍 อัปเดตตำแหน่ง"}
           </button>
@@ -154,7 +154,7 @@ export function HubHome() {
         <div className="flex gap-2 overflow-x-auto pb-1">
           <button
             onClick={() => setCat(null)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs ${!cat ? "bg-orange-500 text-white" : "bg-gray-100"}`}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs ${!cat ? "bg-[#3f6b4a] text-white" : "bg-gray-100"}`}
           >
             ทั้งหมด
           </button>
@@ -162,7 +162,7 @@ export function HubHome() {
             <button
               key={cc}
               onClick={() => setCat(cc)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs ${cat === cc ? "bg-orange-500 text-white" : "bg-gray-100"}`}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs ${cat === cc ? "bg-[#3f6b4a] text-white" : "bg-gray-100"}`}
             >
               {cc}
             </button>
@@ -182,7 +182,7 @@ export function HubHome() {
             <div className="p-2">
               <p className="text-sm font-medium truncate">{i.name}</p>
               <p className="text-xs text-gray-400 truncate">{shopName(i.shop_id)}</p>
-              <p className="text-sm text-orange-600 mt-0.5">฿{i.price}</p>
+              <p className="text-sm font-bold text-[#a85f2c] mt-0.5">฿{i.price}</p>
             </div>
           </Link>
         ))}
@@ -191,7 +191,7 @@ export function HubHome() {
       {cartCount(c) > 0 && (
         <Link
           to="/cart"
-          className="fixed left-4 right-4 bottom-20 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"
+          className="fixed left-4 right-4 bottom-20 rounded-xl bg-[#28432f] text-white px-4 py-3 flex justify-between text-sm font-medium"
         >
           <span>ตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>

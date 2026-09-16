@@ -100,6 +100,10 @@ function sourceLabel(point: ConfirmedDeliveryPoint): string {
   return "หมุดบนแผนที่";
 }
 
+function shopInitials(name: string | null | undefined): string {
+  return (name ?? "?").trim().slice(0, 2).toUpperCase() || "?";
+}
+
 function CartCheckout() {
   const c = useCart();
   const groupedByShop = useMemo(() => groupCartItemsByShop(c.items), [c.items]);
@@ -423,7 +427,7 @@ function CartCheckout() {
   if (c.items.length === 0 && !anyCompleted) return (
     <div className="p-6 text-center text-sm text-gray-400">
       ตะกร้าว่าง
-      <Link to="/" className="text-orange-500 underline block mt-2">เลือกอาหาร</Link>
+      <Link to="/" className="text-[#3f6b4a] underline block mt-2">เลือกอาหาร</Link>
     </div>
   );
 
@@ -432,7 +436,7 @@ function CartCheckout() {
       <p className="text-2xl">✅</p>
       <p className="text-lg font-semibold">ส่งคำสั่งซื้อครบทุกร้านแล้ว</p>
       <p className="text-sm text-gray-500">กำลังรอร้านยืนยันออเดอร์ ติดตามสถานะได้ที่ประวัติออเดอร์</p>
-      <Link to="/orders" className="text-orange-500 underline block mt-2">ดูสถานะออเดอร์</Link>
+      <Link to="/orders" className="text-[#3f6b4a] underline block mt-2">ดูสถานะออเดอร์</Link>
       <Link to="/" className="text-gray-400 underline block text-sm">กลับหน้าแรก</Link>
     </div>
   );
@@ -452,10 +456,13 @@ function CartCheckout() {
 
       {/* Paid shop cards — kept visible via snapshot even after cart.clearShop(). */}
       {Object.entries(completedShops).map(([shopId, snap]) => (
-        <section key={`done-${shopId}`} className="rounded-2xl border border-green-200 overflow-hidden">
-          <div className="px-3.5 py-3 bg-green-50 flex items-center justify-between gap-2">
-            <p className="font-bold text-sm text-green-900">{snap.shopName}</p>
-            <span className="text-[10.5px] rounded-full px-2.5 py-1 bg-green-600 text-white font-medium">จ่ายแล้ว</span>
+        <section key={`done-${shopId}`} className="rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-3.5 py-3 bg-[#e6ede4] flex items-center justify-between gap-2">
+            <p className="font-bold text-sm text-[#28432f] flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-white border border-[#3f6b4a] text-[#28432f] flex items-center justify-center text-[10px] font-extrabold shrink-0">{shopInitials(snap.shopName)}</span>
+              {snap.shopName}
+            </p>
+            <span className="text-[10.5px] rounded-full px-2.5 py-1 bg-[#3f6b4a] text-white font-medium">จ่ายแล้ว</span>
           </div>
           <div className="divide-y divide-gray-100">
             {snap.items.map((i) => (
@@ -466,7 +473,7 @@ function CartCheckout() {
             ))}
           </div>
           <div className="px-3.5 py-2.5 flex justify-between text-xs font-semibold">
-            <span>ยอดรวมร้านนี้</span><span>฿{snap.total}</span>
+            <span>ยอดรวมร้านนี้</span><span className="text-[#a85f2c]">฿{snap.total}</span>
           </div>
         </section>
       ))}
@@ -481,9 +488,12 @@ function CartCheckout() {
 
         return (
           <section key={shopId} className="rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-3.5 py-3 bg-orange-50 flex items-center justify-between gap-2">
-              <p className="font-bold text-sm text-gray-900">{shopInfo?.name ?? "กำลังโหลด..."}</p>
-              <span className="text-[10.5px] rounded-full px-2.5 py-1 border border-orange-300 text-orange-700 bg-white font-medium">ยังไม่จ่าย</span>
+            <div className="px-3.5 py-3 bg-[#e6ede4] flex items-center justify-between gap-2">
+              <p className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-white border border-[#3f6b4a] text-[#28432f] flex items-center justify-center text-[10px] font-extrabold shrink-0">{shopInitials(shopInfo?.name)}</span>
+                {shopInfo?.name ?? "กำลังโหลด..."}
+              </p>
+              <span className="text-[10.5px] rounded-full px-2.5 py-1 border border-[#3f6b4a] text-[#28432f] bg-white font-medium">ยังไม่จ่าย</span>
             </div>
 
             {availability?.state === "manual_closed" && <div className="mx-3.5 mt-2 rounded-lg bg-red-50 border border-red-100 p-2 text-xs text-red-600">ร้านปิดรับออเดอร์ชั่วคราว</div>}
@@ -507,7 +517,7 @@ function CartCheckout() {
                   <div className="flex items-center justify-end gap-2">
                     <button type="button" onClick={() => cart.setQty(i.lineId, i.qty - 1)} className="h-8 w-8 rounded-full border border-gray-200 bg-white text-base text-gray-700" aria-label={`ลดจำนวน ${i.name}`}>−</button>
                     <span className="w-7 text-center text-sm font-medium" aria-label={`จำนวน ${i.qty}`}>{i.qty}</span>
-                    <button type="button" onClick={() => cart.setQty(i.lineId, i.qty + 1)} className="h-8 w-8 rounded-full bg-orange-500 text-base text-white" aria-label={`เพิ่มจำนวน ${i.name}`}>+</button>
+                    <button type="button" onClick={() => cart.setQty(i.lineId, i.qty + 1)} className="h-8 w-8 rounded-full bg-[#3f6b4a] text-base text-white" aria-label={`เพิ่มจำนวน ${i.name}`}>+</button>
                     <button type="button" onClick={() => cart.remove(i.lineId)} className="ml-1 h-8 px-2.5 rounded-lg bg-red-50 text-red-500 text-[11px] font-medium" aria-label={`ลบ ${i.name} ออกจากตะกร้า`}>ลบ</button>
                   </div>
                 </div>
@@ -517,12 +527,12 @@ function CartCheckout() {
             <div className="px-3.5 py-3 space-y-3 border-t border-gray-100">
               <div className="flex justify-between text-sm font-semibold">
                 <span>ยอดรวมร้านนี้</span>
-                <span>{st.fulfillment === "delivery" && st.routeQuote ? `฿${subtotal} + ส่ง ฿${st.routeQuote.deliveryFee.toFixed(2)}` : `฿${subtotal}`}</span>
+                <span className="text-[#a85f2c]">{st.fulfillment === "delivery" && st.routeQuote ? `฿${subtotal} + ส่ง ฿${st.routeQuote.deliveryFee.toFixed(2)}` : `฿${subtotal}`}</span>
               </div>
 
               <div className="flex gap-2">
-                {shopInfo?.delivery_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "delivery" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "delivery" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-700"}`}>ส่งถึงบ้าน</button>}
-                {shopInfo?.pickup_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "pickup" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "pickup" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-700"}`}>รับเอง</button>}
+                {shopInfo?.delivery_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "delivery" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "delivery" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>ส่งถึงบ้าน</button>}
+                {shopInfo?.pickup_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "pickup" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "pickup" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>รับเอง</button>}
               </div>
 
               {st.fulfillment === "delivery" && (
@@ -531,7 +541,7 @@ function CartCheckout() {
                   {!st.quotingRoute && st.routeQuote && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">{(st.routeQuote.distanceMeters / 1000).toFixed(2)} กม.</span>
-                      <span className="font-semibold text-green-700">ค่าส่ง ฿{st.routeQuote.deliveryFee.toFixed(2)}</span>
+                      <span className="font-semibold text-[#a85f2c]">ค่าส่ง ฿{st.routeQuote.deliveryFee.toFixed(2)}</span>
                     </div>
                   )}
                   {!st.quotingRoute && !st.routeQuote && !deliveryPoint && <p className="text-gray-500">ยืนยันจุดส่งด้านล่างเพื่อคำนวณค่าส่งร้านนี้</p>}
@@ -542,7 +552,7 @@ function CartCheckout() {
               {shopInfo?.accepts_preorders && availability?.state !== "manual_closed" && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" disabled={!availability?.canOrder} onClick={() => updateShop(shopId, { timing: "now" })} className={`rounded-lg py-2 text-xs disabled:opacity-40 ${st.timing === "now" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-700"}`}>สั่งตอนนี้</button>
+                    <button type="button" disabled={!availability?.canOrder} onClick={() => updateShop(shopId, { timing: "now" })} className={`rounded-lg py-2 text-xs disabled:opacity-40 ${st.timing === "now" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>สั่งตอนนี้</button>
                     <button type="button" onClick={() => updateShop(shopId, { timing: "preorder" })} className={`rounded-lg py-2 text-xs ${st.timing === "preorder" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-700"}`}>สั่งล่วงหน้า</button>
                   </div>
                   {st.timing === "preorder" && (
@@ -552,7 +562,7 @@ function CartCheckout() {
               )}
 
               <div className="flex gap-2">
-                {shopInfo?.payment_cash_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { payment: "cash" })} className={`flex-1 rounded-lg py-2 text-xs ${st.payment === "cash" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-700"}`}>💵 เงินสด</button>}
+                {shopInfo?.payment_cash_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { payment: "cash" })} className={`flex-1 rounded-lg py-2 text-xs ${st.payment === "cash" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>💵 เงินสด</button>}
                 {shopInfo?.payment_qr_enabled && <button type="button" onClick={() => updateShop(shopId, { payment: "qr_transfer" })} className={`flex-1 rounded-lg py-2 text-xs ${st.payment === "qr_transfer" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-700"}`}>📱 QR</button>}
               </div>
               {st.payment === "qr_transfer" && shopInfo?.qr_code_url && <img src={shopInfo.qr_code_url} alt={`QR Code ${shopInfo.name}`} className="w-36 h-36 object-contain mx-auto rounded-lg border border-gray-100" />}
@@ -565,7 +575,7 @@ function CartCheckout() {
                 type="button"
                 onClick={() => void confirmShop(shopId)}
                 disabled={st.submitting || (st.fulfillment === "delivery" && st.quotingRoute) || availability?.state === "manual_closed"}
-                className="w-full rounded-lg bg-orange-500 text-white py-2.5 text-sm font-semibold disabled:opacity-50"
+                className="w-full rounded-lg bg-[#3f6b4a] text-white py-2.5 text-sm font-semibold disabled:opacity-50"
               >
                 {st.submitting ? "กำลังส่ง..." : "ชำระเงินร้านนี้"}
               </button>
@@ -587,21 +597,21 @@ function CartCheckout() {
               <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-gray-800">ที่อยู่ที่เคยใช้</p>
-                  <button type="button" onClick={addNewDeliveryAddress} className="text-xs font-medium text-orange-600">+ เพิ่มที่อยู่ใหม่</button>
+                  <button type="button" onClick={addNewDeliveryAddress} className="text-xs font-medium text-[#3f6b4a]">+ เพิ่มที่อยู่ใหม่</button>
                 </div>
                 {deliveryAddresses.map((address) => (
-                  <div key={address.id} className={`rounded-lg border p-2.5 text-sm ${selectedAddressId === address.id ? "border-orange-300 bg-orange-50" : "border-gray-100 bg-gray-50"}`}>
+                  <div key={address.id} className={`rounded-lg border p-2.5 text-sm ${selectedAddressId === address.id ? "border-[#3f6b4a] bg-[#e6ede4]" : "border-gray-100 bg-gray-50"}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-800">{address.label || (address.kind === "saved" ? "ที่อยู่ที่บันทึกไว้" : "ที่อยู่ล่าสุด")}</p>
                         <p className="mt-1 text-xs leading-5 text-gray-600">{formatDeliveryAddressSummary(address)}</p>
-                        <p className="mt-1 text-[11px] text-green-700">📍 มีหมุดจุดส่งที่ยืนยันแล้ว</p>
+                        <p className="mt-1 text-[11px] text-[#3f6b4a]">📍 มีหมุดจุดส่งที่ยืนยันแล้ว</p>
                         {address.lastUsedAt && <p className="mt-0.5 text-[11px] text-gray-400">ใช้ล่าสุด {new Date(address.lastUsedAt).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" })}</p>}
                       </div>
-                      {address.isDefault && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">หลัก</span>}
+                      {address.isDefault && <span className="shrink-0 rounded-full bg-[#e6ede4] px-2 py-0.5 text-[10px] font-medium text-[#28432f]">หลัก</span>}
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <button type="button" onClick={() => void selectDeliveryAddress(address)} className="flex-1 rounded-lg bg-orange-500 px-3 py-2 text-xs font-medium text-white">ใช้ที่อยู่นี้</button>
+                      <button type="button" onClick={() => void selectDeliveryAddress(address)} className="flex-1 rounded-lg bg-[#3f6b4a] px-3 py-2 text-xs font-medium text-white">ใช้ที่อยู่นี้</button>
                       <a href={googleMapsPreviewUrl({ lat: address.deliveryPinLat, lng: address.deliveryPinLng, placeId: address.placeId })} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-blue-700">เปิดแผนที่</a>
                     </div>
                   </div>
@@ -610,19 +620,19 @@ function CartCheckout() {
             )}
 
             {deliveryPoint && !showDestinationChooser ? (
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-2">
+              <div className="rounded-lg border border-[#3f6b4a]/25 bg-[#e6ede4] p-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-green-800">{deliveryPoint.source === "device_gps" ? "ใช้ตำแหน่งปัจจุบันเป็นจุดส่งแล้ว" : "จุดส่งยืนยันแล้ว"}</p>
-                    {deliveryPoint.source === "device_gps" && <p className="mt-1 text-xs leading-5 text-green-700">ไม่จำเป็นต้องใส่ Google Maps link เพิ่ม</p>}
-                    {deliveryPoint.displayName && <p className="mt-1 text-base font-bold leading-5 text-green-950">{deliveryPoint.displayName}</p>}
-                    {deliveryPoint.formattedAddress && <p className="mt-1 text-xs leading-5 text-green-800">{deliveryPoint.formattedAddress}</p>}
-                    <p className="mt-1 font-mono text-[11px] text-green-700">📍 {deliveryPoint.lat.toFixed(6)}, {deliveryPoint.lng.toFixed(6)}</p>
-                    <p className="mt-1 text-[11px] text-green-700">แหล่งที่มา: {sourceLabel(deliveryPoint)}</p>
+                    <p className="text-sm font-semibold text-[#28432f]">{deliveryPoint.source === "device_gps" ? "ใช้ตำแหน่งปัจจุบันเป็นจุดส่งแล้ว" : "จุดส่งยืนยันแล้ว"}</p>
+                    {deliveryPoint.source === "device_gps" && <p className="mt-1 text-xs leading-5 text-[#3f6b4a]">ไม่จำเป็นต้องใส่ Google Maps link เพิ่ม</p>}
+                    {deliveryPoint.displayName && <p className="mt-1 text-base font-bold leading-5 text-[#28432f]">{deliveryPoint.displayName}</p>}
+                    {deliveryPoint.formattedAddress && <p className="mt-1 text-xs leading-5 text-[#28432f]">{deliveryPoint.formattedAddress}</p>}
+                    <p className="mt-1 font-mono text-[11px] text-[#3f6b4a]">📍 {deliveryPoint.lat.toFixed(6)}, {deliveryPoint.lng.toFixed(6)}</p>
+                    <p className="mt-1 text-[11px] text-[#3f6b4a]">แหล่งที่มา: {sourceLabel(deliveryPoint)}</p>
                   </div>
                   <a href={googleMapsPreviewUrl(deliveryPoint)} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-medium text-blue-700 underline">เปิดแผนที่</a>
                 </div>
-                {deliveryPoint.placeId && <div className="rounded-lg border border-green-200 bg-white/80 p-2 text-xs leading-5 text-green-900">Place identity ใช้เป็นบริบทของสถานที่ ส่วนพิกัดหมุดนี้คือจุดที่ Rider ต้องไปจริง</div>}
+                {deliveryPoint.placeId && <div className="rounded-lg border border-[#3f6b4a]/25 bg-white/80 p-2 text-xs leading-5 text-[#28432f]">Place identity ใช้เป็นบริบทของสถานที่ ส่วนพิกัดหมุดนี้คือจุดที่ Rider ต้องไปจริง</div>}
                 {deliveryPoint.source === "device_gps" && deliveryPoint.accuracy != null && deliveryPoint.accuracy > 30 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">GPS เครื่องนี้คลาดเคลื่อนประมาณ {Math.round(deliveryPoint.accuracy)} ม. ควรตรวจหมุดก่อนสั่ง</div>}
                 <button type="button" onClick={changeDestination} className="text-xs text-gray-500 underline">เปลี่ยนจุดส่ง</button>
               </div>
@@ -644,7 +654,7 @@ function CartCheckout() {
                   )}
                 </div>
                 {fieldErrors.deliveryPoint && <p id="delivery-pin-error" className="text-xs text-red-600">{fieldErrors.deliveryPoint}</p>}
-                {candidatePoint && <button type="button" onClick={() => void confirmDeliveryPoint(candidatePoint)} className="w-full rounded-lg bg-green-600 px-3 py-3 text-sm font-semibold text-white">ยืนยันจุดส่งนี้</button>}
+                {candidatePoint && <button type="button" onClick={() => void confirmDeliveryPoint(candidatePoint)} className="w-full rounded-lg bg-[#3f6b4a] px-3 py-3 text-sm font-semibold text-white">ยืนยันจุดส่งนี้</button>}
               </div>
             )}
           </section>
@@ -682,9 +692,9 @@ function CartCheckout() {
         </>
       )}
 
-      <div className="fixed left-4 right-4 bottom-4 z-20 rounded-xl bg-white border border-gray-200 shadow-lg px-4 py-3 flex items-center justify-between">
-        <span className="text-xs text-gray-500">ยอดรวมทั้งตะกร้า</span>
-        <span className="text-base font-bold text-orange-600">฿{grandTotal}</span>
+      <div className="fixed left-4 right-4 bottom-4 z-20 rounded-xl bg-[#28432f] shadow-lg px-4 py-3 flex items-center justify-between">
+        <span className="text-xs text-white/70">ยอดรวมทั้งตะกร้า</span>
+        <span className="text-base font-bold text-white">฿{grandTotal}</span>
       </div>
     </div>
   );
