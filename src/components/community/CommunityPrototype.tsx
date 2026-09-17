@@ -32,11 +32,6 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
   const [favoriteGroupIds, setFavoriteGroupIds] = useState<string[]>(["group-yoga"]);
   const navRef = useRef<HTMLElement | null>(null);
   const activeCommunity = getCommunityPrototypeCommunity(communityId);
-  const orderedSurfaceNav = useMemo(() => {
-    const active = surfaceNav.find((item) => item.id === surface);
-    if (!active) return surfaceNav;
-    return [active, ...surfaceNav.filter((item) => item.id !== surface)];
-  }, [surface]);
   const posts = useMemo(
     () => COMMUNITY_PROTOTYPE_POSTS.filter((item) => item.communityId === communityId),
     [communityId],
@@ -71,14 +66,23 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
   }
 
   useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: window.scrollX, behavior: "auto" });
+  }, [surface]);
+
+  useLayoutEffect(() => {
     const nav = navRef.current;
     const active = nav?.querySelector<HTMLElement>("[data-community-nav-active='true']");
     if (!nav || !active) return;
-    const nextScrollLeft = active.offsetLeft - (nav.clientWidth - active.clientWidth) / 2;
-    nav.scrollLeft = nextScrollLeft;
-    requestAnimationFrame(() => {
-      nav.scrollLeft = nextScrollLeft;
-    });
+
+    const navRect = nav.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const edgePadding = 16;
+
+    if (activeRect.left < navRect.left + edgePadding) {
+      nav.scrollLeft -= navRect.left + edgePadding - activeRect.left;
+    } else if (activeRect.right > navRect.right - edgePadding) {
+      nav.scrollLeft += activeRect.right - navRect.right + edgePadding;
+    }
   }, [surface]);
 
   return (
@@ -105,13 +109,13 @@ export function CommunityPrototype({ surface }: CommunityPrototypeProps) {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-orange-700">{activeCommunity.relationshipLabel}</p>
-            <h1 className="mt-1 break-words text-2xl font-bold leading-tight">{activeCommunity.name}</h1>
-            <p className="mt-2 break-all text-sm leading-6 text-slate-600">
+            <h1 className="mt-1 break-words text-pretty text-2xl font-bold leading-tight">{activeCommunity.name}</h1>
+            <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">
               {activeCommunity.boundaryLabel} · {activeCommunity.memberSummary}
             </p>
           </div>
           <nav ref={navRef} aria-label="เมนู Community" className="-mx-4 flex max-w-[100vw] gap-2 overflow-x-auto px-4 pb-1">
-            {orderedSurfaceNav.map((item) => (
+            {surfaceNav.map((item) => (
               <Link
                 key={item.id}
                 to={item.href}
@@ -163,8 +167,8 @@ function HomeSurface({ posts }: { posts: typeof COMMUNITY_PROTOTYPE_POSTS }) {
       {pinned && (
         <section className="min-w-0 rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
           <StatusPill label="ปักหมุด" tone="orange" />
-          <h2 className="mt-3 break-words text-lg font-bold">{pinned.title}</h2>
-          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{pinned.body}</p>
+          <h2 className="mt-3 break-words text-pretty text-lg font-bold">{pinned.title}</h2>
+          <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{pinned.body}</p>
         </section>
       )}
       <section className="grid min-w-0 grid-cols-2 gap-3 max-[374px]:grid-cols-1">
@@ -229,7 +233,7 @@ function GroupsSurface({
                   label={group.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เห็นได้ในชุมชน"}
                   tone={group.visibility === "private-group" ? "slate" : "green"}
                 />
-                <h2 className="mt-3 break-words text-lg font-bold">{group.name}</h2>
+                <h2 className="mt-3 break-words text-pretty text-lg font-bold">{group.name}</h2>
               </div>
               <button
                 type="button"
@@ -240,8 +244,8 @@ function GroupsSurface({
                 {isFavorite ? "ปักไว้แล้ว" : "ปักหมุด"}
               </button>
             </div>
-            <p className="mt-2 break-all text-sm leading-6 text-slate-600">{group.description}</p>
-            <p className="mt-3 break-all text-sm text-slate-500">
+            <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{group.description}</p>
+            <p className="mt-3 break-words text-pretty text-sm text-slate-500">
               {group.memberCountLabel} · {group.nextActivityLabel}
             </p>
           </article>
@@ -260,7 +264,7 @@ function EventsSurface({ events }: { events: typeof COMMUNITY_PROTOTYPE_EVENTS }
             label={event.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เฉพาะสมาชิก"}
             tone={event.visibility === "private-group" ? "slate" : "green"}
           />
-          <h2 className="mt-3 break-words text-lg font-bold">{event.title}</h2>
+          <h2 className="mt-3 break-words text-pretty text-lg font-bold">{event.title}</h2>
           <dl className="mt-3 grid gap-2 text-sm text-slate-600">
             <InfoRow label="วันที่" value={event.dateLabel} />
             <InfoRow label="เวลา" value={event.timeLabel} />
@@ -283,9 +287,9 @@ function HelpSurface({ requests }: { requests: typeof COMMUNITY_PROTOTYPE_HELP_R
             <StatusPill label={urgencyLabel(request.urgency)} tone={request.urgency === "high" ? "orange" : "green"} />
             <StatusPill label={helpStatusLabel(request.status)} tone="blue" />
           </div>
-          <h2 className="mt-3 break-words text-lg font-bold">{request.title}</h2>
-          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{request.body}</p>
-          <p className="mt-3 break-all text-sm font-medium text-slate-700">{request.areaLabel}</p>
+          <h2 className="mt-3 break-words text-pretty text-lg font-bold">{request.title}</h2>
+          <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{request.body}</p>
+          <p className="mt-3 break-words text-pretty text-sm font-medium text-slate-700">{request.areaLabel}</p>
         </article>
       ))}
     </section>
@@ -295,7 +299,7 @@ function HelpSurface({ requests }: { requests: typeof COMMUNITY_PROTOTYPE_HELP_R
 function MarketplaceSurface({ listings }: { listings: typeof COMMUNITY_PROTOTYPE_MARKETPLACE }) {
   return (
     <section className="space-y-3">
-      <div className="min-w-0 break-all rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+      <div className="min-w-0 break-words text-pretty rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
         ตลาดชุมชนสำหรับซื้อ ขาย แบ่งปัน และให้ฟรี แยกจากระบบสั่งอาหาร
       </div>
       {listings.map((listing) => (
@@ -304,8 +308,8 @@ function MarketplaceSurface({ listings }: { listings: typeof COMMUNITY_PROTOTYPE
             <StatusPill label={marketCategoryLabel(listing.category)} tone="green" />
             <StatusPill label={marketStatusLabel(listing.status)} tone={listing.status === "active" ? "blue" : "slate"} />
           </div>
-          <h2 className="mt-3 break-words text-lg font-bold">{listing.title}</h2>
-          <p className="mt-2 break-all text-sm leading-6 text-slate-600">{listing.summary}</p>
+          <h2 className="mt-3 break-words text-pretty text-lg font-bold">{listing.title}</h2>
+          <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{listing.summary}</p>
           <p className="mt-3 break-words text-sm font-semibold text-orange-700">{listing.priceLabel}</p>
           <p className="mt-1 text-xs text-slate-500">{listing.ownerLabel}</p>
         </article>
@@ -344,17 +348,17 @@ function MapLayer({
 }) {
   return (
     <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="break-words text-lg font-bold">{title}</h2>
-      <p className="mt-2 break-all text-sm leading-6 text-slate-600">{detail}</p>
+      <h2 className="break-words text-pretty text-lg font-bold">{title}</h2>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{detail}</p>
       <div className="mt-3 space-y-3">
         {entries.length === 0 ? <EmptyState label="ยังไม่มีรายการในส่วนนี้" /> : null}
         {entries.map((entry) => (
           <article key={entry.id} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <h3 className="break-words font-semibold">{entry.name}</h3>
-            <p className="mt-1 break-all text-sm text-slate-600">{entry.category}</p>
-            <p className="mt-2 break-all text-sm text-slate-700">{entry.locationLabel}</p>
-            <p className="mt-1 break-all text-xs font-medium text-slate-500">{entry.precisionLabel}</p>
-            <p className="mt-1 break-all text-xs text-slate-500">{entry.visibilityNote}</p>
+            <h3 className="break-words text-pretty font-semibold">{entry.name}</h3>
+            <p className="mt-1 break-words text-pretty text-sm text-slate-600">{entry.category}</p>
+            <p className="mt-2 break-words text-pretty text-sm text-slate-700">{entry.locationLabel}</p>
+            <p className="mt-1 break-words text-pretty text-xs font-medium text-slate-500">{entry.precisionLabel}</p>
+            <p className="mt-1 break-words text-pretty text-xs text-slate-500">{entry.visibilityNote}</p>
           </article>
         ))}
       </div>
@@ -369,9 +373,9 @@ function PostCard({ post, compact = false }: { post: typeof COMMUNITY_PROTOTYPE_
         <StatusPill label={postKindLabel(post.kind)} tone={post.kind === "safety" ? "orange" : "green"} />
         <StatusPill label="เฉพาะสมาชิก" tone="slate" />
       </div>
-      <h2 className="mt-3 break-words text-lg font-bold">{post.title}</h2>
-      {!compact && <p className="mt-2 break-all text-sm leading-6 text-slate-600">{post.body}</p>}
-      <p className="mt-3 break-all text-xs text-slate-500">
+      <h2 className="mt-3 break-words text-pretty text-lg font-bold">{post.title}</h2>
+      {!compact && <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{post.body}</p>}
+      <p className="mt-3 break-words text-pretty text-xs text-slate-500">
         {post.authorLabel} · {post.postedAtLabel}
       </p>
     </article>
@@ -388,7 +392,7 @@ function LockedAction({ title, detail }: { title: string; detail: string }) {
       >
         {title}ยังไม่เปิดใช้งาน
       </button>
-      <p className="mt-2 break-all text-sm leading-6 text-slate-500">{detail}</p>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-500">{detail}</p>
     </div>
   );
 }
