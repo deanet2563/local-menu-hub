@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CommunityPrototype } from "@/components/community/CommunityPrototype";
+import { CommunitySurfaceRoute } from "@/components/community/CommunityLazyRoute";
 
 export const Route = createFileRoute("/community/marketplace")({
-  component: () => <CommunityPrototype surface="marketplace" />,
+  component: () => <CommunitySurfaceRoute surface="marketplace" />,
 });
-

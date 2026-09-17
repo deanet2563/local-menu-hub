@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CommunityDetail } from "@/components/community/CommunityDetail";
+import { CommunityDetailRoute as CommunityLazyRoute } from "@/components/community/CommunityLazyRoute";
 
 export const Route = createFileRoute("/community/groups_/$groupId")({ component: GroupDetailRoute });
 
 function GroupDetailRoute() {
   const { groupId } = Route.useParams();
-  return <CommunityDetail kind="group" itemId={groupId} />;
+  return <CommunityLazyRoute kind="group" itemId={groupId} />;
 }

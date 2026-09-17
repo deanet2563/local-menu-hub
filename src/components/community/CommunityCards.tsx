@@ -1,13 +1,24 @@
 import { Link } from "@tanstack/react-router";
-import { COMMUNITY_NAV_ITEMS } from "@/components/community/CommunityShell";
 import { CommunityStatePanel, DisabledPrototypeAction } from "@/components/community/CommunityStates";
-import type {
-  CommunityPrototypeEvent,
-  CommunityPrototypeGroup,
-  CommunityPrototypeHelpRequest,
-  CommunityPrototypeMapEntry,
-  CommunityPrototypeMarketplaceListing,
-  CommunityPrototypePost,
+import {
+  COMMUNITY_NAV_ITEMS,
+  eventStatusLabel,
+  groupStatusLabel,
+  groupVisibilityLabel,
+  helpCategoryLabel,
+  helpStatusLabel,
+  mapStatusLabel,
+  marketCategoryLabel,
+  marketStatusLabel,
+  postKindLabel,
+  postStatusLabel,
+  urgencyLabel,
+  type CommunityPrototypeEvent,
+  type CommunityPrototypeGroup,
+  type CommunityPrototypeHelpRequest,
+  type CommunityPrototypeMapEntry,
+  type CommunityPrototypeMarketplaceListing,
+  type CommunityPrototypePost,
 } from "@/lib/communityPrototype";
 
 export function StatusBadge({ label, tone = "slate" }: { label: string; tone?: "orange" | "green" | "blue" | "slate" }) {
@@ -193,15 +204,3 @@ function MapLayer({ title, detail, entries }: { title: string; detail: string; e
     </section>
   );
 }
-
-export const postKindLabel = (kind: CommunityPrototypePost["kind"]) => ({ announcement: "ประกาศ", discussion: "พูดคุย", safety: "เตือนภัย" })[kind];
-export const postStatusLabel = (status: CommunityPrototypePost["status"]) => ({ published: "เผยแพร่แล้ว", "pending-review": "รอตรวจสอบ", removed: "นำออกแล้ว" })[status];
-export const groupStatusLabel = (status: CommunityPrototypeGroup["status"]) => ({ "open-to-community": "เปิดในชุมชน", private: "กลุ่มส่วนตัว", locked: "ล็อกการเข้าถึง" })[status];
-export const groupVisibilityLabel = (group: CommunityPrototypeGroup) => group.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เห็นได้ในชุมชน";
-export const eventStatusLabel = (status: CommunityPrototypeEvent["status"]) => ({ open: "เปิดรับสมาชิก", full: "เต็มแล้ว", cancelled: "ยกเลิกแล้ว" })[status];
-export const helpCategoryLabel = (category: CommunityPrototypeHelpRequest["category"]) => ({ "neighbor-help": "ช่วยเพื่อนบ้าน", "lost-found": "ของหาย/พบของ", safety: "ความปลอดภัย", maintenance: "พื้นที่ส่วนกลาง" })[category];
-export const urgencyLabel = (urgency: CommunityPrototypeHelpRequest["urgency"]) => ({ low: "ด่วนต่ำ", medium: "ด่วนปานกลาง", high: "ด่วนสูง" })[urgency];
-export const helpStatusLabel = (status: CommunityPrototypeHelpRequest["status"]) => ({ open: "เปิดรับความช่วยเหลือ", "in-progress": "กำลังดำเนินการ", resolved: "แก้ไขแล้ว" })[status];
-export const marketCategoryLabel = (category: CommunityPrototypeMarketplaceListing["category"]) => ({ buy: "ต้องการซื้อ", sell: "ขาย", share: "แบ่งปัน/ยืม", free: "ฟรี" })[category];
-export const marketStatusLabel = (status: CommunityPrototypeMarketplaceListing["status"]) => ({ active: "ยังเปิดอยู่", reserved: "จองแล้ว", sold: "ปิดรายการแล้ว" })[status];
-export const mapStatusLabel = (status: CommunityPrototypeMapEntry["status"]) => ({ "public-approved": "อนุมัติให้แสดงสาธารณะ", "private-approximate": "ตำแหน่งโดยประมาณ", unavailable: "ไม่พร้อมใช้งาน" })[status];

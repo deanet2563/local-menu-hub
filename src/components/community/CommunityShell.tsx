@@ -2,21 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   COMMUNITY_PROTOTYPE_COMMUNITIES,
+  COMMUNITY_NAV_ITEMS,
+  COMMUNITY_PREVIEW_BANNER,
   getCommunityPrototypeCommunity,
   type CommunityPrototypeSurface,
 } from "@/lib/communityPrototype";
-
-const COMMUNITY_NAV: { id: CommunityPrototypeSurface; label: string; href: string }[] = [
-  { id: "home", label: "หน้าแรก", href: "/community" },
-  { id: "feed", label: "ฟีด", href: "/community/feed" },
-  { id: "groups", label: "กลุ่ม", href: "/community/groups" },
-  { id: "events", label: "กิจกรรม", href: "/community/events" },
-  { id: "help", label: "ช่วยเหลือ", href: "/community/help" },
-  { id: "marketplace", label: "ตลาดชุมชน", href: "/community/marketplace" },
-  { id: "map", label: "แผนที่", href: "/community/map" },
-];
-
-export const COMMUNITY_NAV_ITEMS = COMMUNITY_NAV;
 
 export function CommunityShell({
   surface,
@@ -54,14 +44,14 @@ export function CommunityShell({
     <div className="min-h-screen bg-[#f7f5ef] pb-20 text-slate-950">
       <a
         href="#community-main"
-        className="fixed left-3 top-3 z-50 -translate-y-20 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-orange-300"
+        className="fixed left-3 top-3 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-orange-300"
       >
         ข้ามไปเนื้อหาหลัก
       </a>
       <header className="border-b border-orange-100 bg-white">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3 sm:gap-4 sm:py-4">
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
-            หน้าทดลอง Community - ข้อมูลทั้งหมดเป็นตัวอย่างและไม่มีการบันทึกข้อมูลจริง
+            {COMMUNITY_PREVIEW_BANNER}
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <label className="text-xs font-semibold text-slate-600" htmlFor="community-switcher">เลือกวงชุมชน</label>
@@ -84,7 +74,7 @@ export function CommunityShell({
             </p>
           </div>
           <nav ref={navRef} aria-label="เมนู Community" className="-mx-4 flex max-w-[100vw] gap-2 overflow-x-auto px-4 pb-1">
-            {COMMUNITY_NAV.map((item) => (
+            {COMMUNITY_NAV_ITEMS.map((item) => (
               <Link
                 key={item.id}
                 to={item.href}

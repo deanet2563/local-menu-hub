@@ -15,24 +15,28 @@ export function CommunityStatePanel({
   title,
   detail,
   onRetry,
+  headingLevel = 2,
 }: {
   tone: StateTone;
   title: string;
   detail: string;
   onRetry?: () => void;
+  headingLevel?: 2 | 3;
 }) {
   const isLoading = tone === "loading";
+  const isUrgent = tone === "error" || tone === "locked";
+  const Heading = headingLevel === 3 ? "h3" : "h2";
   return (
     <section
-      aria-live={isLoading ? "polite" : undefined}
+      aria-live={isUrgent ? "assertive" : "polite"}
       aria-busy={isLoading || undefined}
-      role={tone === "error" ? "alert" : tone === "loading" ? "status" : undefined}
+      role={isUrgent ? "alert" : "status"}
       className="min-w-0 rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center"
     >
       <span aria-hidden="true" className="mx-auto flex size-10 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-700">
         {STATE_MARKS[tone]}
       </span>
-      <h2 className="mt-3 text-pretty text-lg font-bold text-slate-900">{title}</h2>
+      <Heading className="mt-3 text-pretty text-lg font-bold text-slate-900">{title}</Heading>
       <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{detail}</p>
       {onRetry ? (
         <button
@@ -47,7 +51,7 @@ export function CommunityStatePanel({
   );
 }
 
-export function CommunityPrototypeErrorState({ title, detail }: { title: string; detail: string }) {
+export function CommunityPrototypeErrorState({ title, detail, headingLevel = 2 }: { title: string; detail: string; headingLevel?: 2 | 3 }) {
   const [retried, setRetried] = useState(false);
   if (retried) {
     return (
@@ -55,10 +59,11 @@ export function CommunityPrototypeErrorState({ title, detail }: { title: string;
         tone="empty"
         title="รีเซ็ตสถานะตัวอย่างแล้ว"
         detail="ไม่มีการติดต่อเซิร์ฟเวอร์หรือบันทึกข้อมูล กรุณากลับมาดูอีกครั้งเมื่อข้อมูลพร้อม"
+        headingLevel={headingLevel}
       />
     );
   }
-  return <CommunityStatePanel tone="error" title={title} detail={detail} onRetry={() => setRetried(true)} />;
+  return <CommunityStatePanel tone="error" title={title} detail={detail} headingLevel={headingLevel} onRetry={() => setRetried(true)} />;
 }
 
 export function DisabledPrototypeAction({ label }: { label: string }) {

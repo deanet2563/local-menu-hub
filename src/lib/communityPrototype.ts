@@ -108,6 +108,19 @@ export type CommunityPrototypeDetail =
   | CommunityPrototypeMarketplaceListing
   | CommunityPrototypeMapEntry;
 
+export const COMMUNITY_NAV_ITEMS: { id: CommunityPrototypeSurface; label: string; href: string }[] = [
+  { id: "home", label: "หน้าแรก", href: "/community" },
+  { id: "feed", label: "ฟีด", href: "/community/feed" },
+  { id: "groups", label: "กลุ่ม", href: "/community/groups" },
+  { id: "events", label: "กิจกรรม", href: "/community/events" },
+  { id: "help", label: "ช่วยเหลือ", href: "/community/help" },
+  { id: "marketplace", label: "ตลาดชุมชน", href: "/community/marketplace" },
+  { id: "map", label: "แผนที่", href: "/community/map" },
+];
+
+export const COMMUNITY_MARKETPLACE_BOUNDARY = "separate-from-food-order-and-cart" as const;
+export const COMMUNITY_PREVIEW_BANNER = "หน้าทดลอง MyTree Community — ข้อมูลทั้งหมดเป็นตัวอย่างและไม่มีการบันทึกข้อมูลจริง";
+
 export const COMMUNITY_PROTOTYPE_COMMUNITIES: CommunityPrototypeCommunity[] = [
   {
     id: "sammakorn",
@@ -153,7 +166,7 @@ export const COMMUNITY_PROTOTYPE_POSTS: CommunityPrototypePost[] = [
     kind: "discussion",
     title: "ชวนคุยเรื่องตลาดนัดเล็ก ๆ วันเสาร์",
     body: "อยากสำรวจว่าลูกบ้านสนใจพื้นที่แลกเปลี่ยนของใช้หรืออาหารโฮมเมดแบบไม่รบกวนเพื่อนบ้านไหม",
-    authorLabel: "สมาชิกบ้านเลขที่ปิดบัง",
+    authorLabel: "สมาชิกที่ยืนยันแล้ว",
     postedAtLabel: "เมื่อวาน 18:20",
     visibility: "member-only",
     status: "published",
@@ -471,4 +484,131 @@ export function getCommunityPrototypeDetail(
   };
 
   return collections[kind].find((item) => item.id === id && item.communityId === communityId);
+}
+
+export function canAccessCommunityPrototypeDetail(
+  kind: CommunityPrototypeDetailKind,
+  item: CommunityPrototypeDetail,
+): boolean {
+  return kind !== "group" || (item as CommunityPrototypeGroup).hasAccess;
+}
+
+export function getCommunityPrototypeDetailDescription(
+  kind: CommunityPrototypeDetailKind,
+  item: CommunityPrototypeDetail,
+): string {
+  if (kind === "post") {
+    const post = item as CommunityPrototypePost;
+    return post.status === "removed"
+      ? "เนื้อหาเดิมไม่แสดง เนื่องจากรายการถูกนำออกตามกติกาชุมชน"
+      : post.body;
+  }
+  if (kind === "group") return (item as CommunityPrototypeGroup).description;
+  if (kind === "event") return `จัดโดย ${(item as CommunityPrototypeEvent).organizerLabel}`;
+  if (kind === "help") return (item as CommunityPrototypeHelpRequest).body;
+  if (kind === "marketplace") {
+    const listing = item as CommunityPrototypeMarketplaceListing;
+    return `${listing.summary} · ${listing.priceLabel}`;
+  }
+  return (item as CommunityPrototypeMapEntry).visibilityNote;
+}
+
+export function getCommunityPrototypeMapLocation(entry: CommunityPrototypeMapEntry): {
+  isExact: boolean;
+  precision: "exact" | "approximate" | "unavailable";
+  label: string;
+} {
+  const isExact = entry.layer === "public-directory"
+    && entry.status === "public-approved"
+    && entry.exactLocationOptIn;
+  if (isExact) {
+    return {
+      isExact: true,
+      precision: "exact",
+      label: `${entry.locationLabel} · เจ้าของอนุญาตให้แสดงตำแหน่งจริง`,
+    };
+  }
+  return {
+    isExact: false,
+    precision: entry.status === "unavailable" ? "unavailable" : "approximate",
+    label: `${entry.locationLabel} · ${entry.precisionLabel}`,
+  };
+}
+
+export const postKindLabel = (kind: CommunityPrototypePost["kind"]) => ({
+  announcement: "ประกาศ",
+  discussion: "พูดคุย",
+  safety: "เตือนภัย",
+})[kind];
+
+export const postStatusLabel = (status: CommunityPrototypePost["status"]) => ({
+  published: "เผยแพร่แล้ว",
+  "pending-review": "รอตรวจสอบ",
+  removed: "นำออกแล้ว",
+})[status];
+
+export const groupStatusLabel = (status: CommunityPrototypeGroup["status"]) => ({
+  "open-to-community": "เปิดในชุมชน",
+  private: "กลุ่มส่วนตัว",
+  locked: "ล็อกการเข้าถึง",
+})[status];
+
+export const groupVisibilityLabel = (group: CommunityPrototypeGroup) => (
+  group.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เห็นได้ในชุมชน"
+);
+
+export const eventStatusLabel = (status: CommunityPrototypeEvent["status"]) => ({
+  open: "เปิดรับสมาชิก",
+  full: "เต็มแล้ว",
+  cancelled: "ยกเลิกแล้ว",
+})[status];
+
+export const helpCategoryLabel = (category: CommunityPrototypeHelpRequest["category"]) => ({
+  "neighbor-help": "ช่วยเพื่อนบ้าน",
+  "lost-found": "ของหาย/พบของ",
+  safety: "ความปลอดภัย",
+  maintenance: "พื้นที่ส่วนกลาง",
+})[category];
+
+export const urgencyLabel = (urgency: CommunityPrototypeHelpRequest["urgency"]) => ({
+  low: "ด่วนต่ำ",
+  medium: "ด่วนปานกลาง",
+  high: "ด่วนสูง",
+})[urgency];
+
+export const helpStatusLabel = (status: CommunityPrototypeHelpRequest["status"]) => ({
+  open: "เปิดรับความช่วยเหลือ",
+  "in-progress": "กำลังดำเนินการ",
+  resolved: "แก้ไขแล้ว",
+})[status];
+
+export const marketCategoryLabel = (category: CommunityPrototypeMarketplaceListing["category"]) => ({
+  buy: "ต้องการซื้อ",
+  sell: "ขาย",
+  share: "แบ่งปัน/ยืม",
+  free: "ฟรี",
+})[category];
+
+export const marketStatusLabel = (status: CommunityPrototypeMarketplaceListing["status"]) => ({
+  active: "ยังเปิดอยู่",
+  reserved: "จองแล้ว",
+  sold: "ปิดรายการแล้ว",
+})[status];
+
+export const mapStatusLabel = (status: CommunityPrototypeMapEntry["status"]) => ({
+  "public-approved": "อนุมัติให้แสดงสาธารณะ",
+  "private-approximate": "ตำแหน่งโดยประมาณ",
+  unavailable: "ไม่พร้อมใช้งาน",
+})[status];
+
+export function getCommunityPrototypeStatusLabel(kind: CommunityPrototypeDetailKind, status: string): string | undefined {
+  const labels: Record<CommunityPrototypeDetailKind, Record<string, string>> = {
+    post: { published: "เผยแพร่แล้ว", "pending-review": "รอตรวจสอบ", removed: "นำออกแล้ว" },
+    group: { "open-to-community": "เปิดในชุมชน", private: "กลุ่มส่วนตัว", locked: "ล็อกการเข้าถึง" },
+    event: { open: "เปิดรับสมาชิก", full: "เต็มแล้ว", cancelled: "ยกเลิกแล้ว" },
+    help: { open: "เปิดรับความช่วยเหลือ", "in-progress": "กำลังดำเนินการ", resolved: "แก้ไขแล้ว" },
+    marketplace: { active: "ยังเปิดอยู่", reserved: "จองแล้ว", sold: "ปิดรายการแล้ว" },
+    map: { "public-approved": "อนุมัติให้แสดงสาธารณะ", "private-approximate": "ตำแหน่งโดยประมาณ", unavailable: "ไม่พร้อมใช้งาน" },
+  };
+  return labels[kind][status];
 }

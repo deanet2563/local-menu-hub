@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CommunityDetail } from "@/components/community/CommunityDetail";
+import { CommunityDetailRoute as CommunityLazyRoute } from "@/components/community/CommunityLazyRoute";
 
 export const Route = createFileRoute("/community/marketplace_/$listingId")({ component: MarketplaceDetailRoute });
 
 function MarketplaceDetailRoute() {
   const { listingId } = Route.useParams();
-  return <CommunityDetail kind="marketplace" itemId={listingId} />;
+  return <CommunityLazyRoute kind="marketplace" itemId={listingId} />;
 }
