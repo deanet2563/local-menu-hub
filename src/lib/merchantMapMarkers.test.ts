@@ -11,6 +11,9 @@ import {
 } from "@/lib/merchantMapMarkers";
 import {
   isCheckoutMapDebugRouteAllowedHost,
+  isLocalCommunityPrototypeHost,
+  isLocalCommunityPrototypePath,
+  isPrivateLanIpv4Hostname,
   isPreviewCheckoutMapAuthBypassLocation,
 } from "@/lib/previewDebugRoute";
 
@@ -82,6 +85,22 @@ export const merchantMapMarkersCompileChecks = {
       hostname: "mytree.cc",
       pathname: "/debug/checkout-map",
     }) === false,
+    communityPrototypeHostGate: {
+      localhostAllowed: isLocalCommunityPrototypeHost("localhost") === true,
+      loopbackAllowed: isLocalCommunityPrototypeHost("127.0.0.1") === true,
+      tenRangeAllowed: isPrivateLanIpv4Hostname("10.20.30.40") === true,
+      private172LowerBoundAllowed: isPrivateLanIpv4Hostname("172.16.0.1") === true,
+      private172UpperBoundAllowed: isPrivateLanIpv4Hostname("172.31.255.254") === true,
+      private192Allowed: isPrivateLanIpv4Hostname("192.168.1.25") === true,
+      public172Rejected: isPrivateLanIpv4Hostname("172.32.0.1") === false,
+      publicIpv4Rejected: isPrivateLanIpv4Hostname("8.8.8.8") === false,
+      malformedIpv4Rejected: isPrivateLanIpv4Hostname("192.168.1.999") === false,
+      publicHostnameRejected: isLocalCommunityPrototypeHost("local-menu-hub.pages.dev") === false,
+      communityRootAllowed: isLocalCommunityPrototypePath("/community") === true,
+      communityChildAllowed: isLocalCommunityPrototypePath("/community/feed") === true,
+      customerRouteRejected: isLocalCommunityPrototypePath("/") === false,
+      communityLookalikeRejected: isLocalCommunityPrototypePath("/community-preview") === false,
+    },
   },
   visibleShopNames: normalizeMerchantMapRows(rows).map((shop) => shop.name),
   logoUrl: normalizeMerchantMapRows(rows)[0]?.logoUrl,
