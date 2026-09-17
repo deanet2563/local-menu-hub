@@ -1,100 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase, isOrderingPreview } from "@/lib/supabase";
-import { getCurrentLocation } from "@/lib/geolocation";
-import { useCart, cartCount, cartTotal } from "@/lib/cart";
+import { isOrderingPreview } from "@/lib/supabase";
+import { useCart } from "@/lib/cart";
+import { useCustomerCatalog } from "@/hooks/useCustomerCatalog";
+import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 
 // ============================================================
 // MyTree — Food-first hub. Public catalog browsing must not trigger LINE login.
 // Nearby shops are automatically refreshed on first load and after the app
-// returns to the foreground if the previous GPS fix is older than 2 minutes.
+// returns to the foreground if the previous GPS fix is older than 2 minutes
+// (see useCustomerCatalog).
 // ============================================================
 
-type Shop = { shop_id: string; name: string; category: string | null; logo_url: string | null };
-type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
-type LocationState = "idle" | "loading" | "ready" | "error";
-
-const LOCATION_REFRESH_MS = 2 * 60 * 1000;
-
 export function HubHome() {
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items, loading, orderedShops, locationState, refreshNearbyShops, cats, shopName } = useCustomerCatalog();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string | null>(null);
-  const [nearOrder, setNearOrder] = useState<string[] | null>(null);
-  const [locationState, setLocationState] = useState<LocationState>("idle");
-  const lastLocationAt = useRef(0);
-  const locating = useRef(false);
   const c = useCart();
   const staging = isOrderingPreview();
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: s }, { data: m }] = await Promise.all([
-        publicSupabase.from("shops").select("shop_id,name,category,logo_url").eq("is_open", true).eq("is_approved", true).eq("is_banned", false),
-        publicSupabase
-          .from("menu_items")
-          .select("item_id,shop_id,name,price,image_url,category, shops!inner(is_open,is_approved,is_banned)")
-          .eq("is_available", true)
-          .eq("shops.is_open", true)
-          .eq("shops.is_approved", true)
-          .eq("shops.is_banned", false),
-      ]);
-      setShops((s as Shop[]) ?? []);
-      setItems((m as Item[]) ?? []);
-      setLoading(false);
-    })();
-  }, []);
-
-  useEffect(() => {
-    void refreshNearbyShops();
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastLocationAt.current < LOCATION_REFRESH_MS) return;
-      void refreshNearbyShops();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
-
-  const shopName = (id: string) => shops.find((x) => x.shop_id === id)?.name ?? "";
-  const cats = useMemo(
-    () => Array.from(new Set(items.map((i) => i.category).filter(Boolean))) as string[],
-    [items]
-  );
   const filtered = items.filter(
     (i) => (!cat || i.category === cat) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
   );
-  const orderedShops = useMemo(() => {
-    if (!nearOrder) return shops;
-    const rank = new Map(nearOrder.map((shopId, index) => [shopId, index]));
-    return [...shops].sort((a, b) => {
-      const aRank = rank.get(a.shop_id) ?? Number.MAX_SAFE_INTEGER;
-      const bRank = rank.get(b.shop_id) ?? Number.MAX_SAFE_INTEGER;
-      return aRank - bRank;
-    });
-  }, [shops, nearOrder]);
-
-  async function refreshNearbyShops() {
-    if (locating.current) return;
-    locating.current = true;
-    setLocationState("loading");
-    try {
-      const loc = await getCurrentLocation();
-      const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
-      if (error) throw error;
-      if (data) setNearOrder((data as { shop_id: string }[]).map((r) => r.shop_id));
-      lastLocationAt.current = Date.now();
-      setLocationState("ready");
-    } catch {
-      setLocationState("error");
-    } finally {
-      locating.current = false;
-    }
-  }
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
@@ -188,15 +115,7 @@ export function HubHome() {
         ))}
       </div>
 
-      {cartCount(c) > 0 && (
-        <Link
-          to="/cart"
-          className="fixed left-4 right-4 bottom-20 rounded-xl bg-[#28432f] text-white px-4 py-3 flex justify-between text-sm font-medium"
-        >
-          <span>ตะกร้า ({cartCount(c)})</span>
-          <span>฿{cartTotal(c)}</span>
-        </Link>
-      )}
+      <FloatingCartBar cart={c} />
     </div>
   );
 }

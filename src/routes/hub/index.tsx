@@ -1,14 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { FoodHub } from "@/components/customer/FoodHub";
 
 export const Route = createFileRoute("/hub/")({
-  component: HubPage,
+  component: FoodHub,
 });
-
-function HubPage() {
-  return (
-    <div className="p-4 pb-24">
-      <h1>Hub — Customer LIFF</h1>
-      <p>หน้าสั่งอาหาร</p>
-    </div>
-  );
-}
