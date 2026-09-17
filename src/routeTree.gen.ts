@@ -35,6 +35,12 @@ import { Route as SweetPosRouteImport } from './routes/sweet/pos'
 import { Route as SweetRidersRouteImport } from './routes/sweet/riders'
 import { Route as SweetShopRouteImport } from './routes/sweet/shop'
 import { Route as SweetSignupRouteImport } from './routes/sweet/signup'
+import { Route as CommunityEventsEventIdRouteImport } from './routes/community/events_.$eventId'
+import { Route as CommunityFeedPostIdRouteImport } from './routes/community/feed_.$postId'
+import { Route as CommunityGroupsGroupIdRouteImport } from './routes/community/groups_.$groupId'
+import { Route as CommunityHelpRequestIdRouteImport } from './routes/community/help_.$requestId'
+import { Route as CommunityMapEntryIdRouteImport } from './routes/community/map_.$entryId'
+import { Route as CommunityMarketplaceListingIdRouteImport } from './routes/community/marketplace_.$listingId'
 import { Route as ShopOrdersIndexRouteImport } from './routes/shop/orders/index'
 import { Route as ShopOrdersSubIdRouteImport } from './routes/shop/orders/$subId'
 import { Route as SweetPrintSubIdRouteImport } from './routes/sweet/print/$subId'
@@ -169,6 +175,37 @@ const SweetSignupRoute = SweetSignupRouteImport.update({
   path: '/sweet/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunityEventsEventIdRoute = CommunityEventsEventIdRouteImport.update({
+  id: '/community/events_/$eventId',
+  path: '/community/events/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityFeedPostIdRoute = CommunityFeedPostIdRouteImport.update({
+  id: '/community/feed_/$postId',
+  path: '/community/feed/$postId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityGroupsGroupIdRoute = CommunityGroupsGroupIdRouteImport.update({
+  id: '/community/groups_/$groupId',
+  path: '/community/groups/$groupId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityHelpRequestIdRoute = CommunityHelpRequestIdRouteImport.update({
+  id: '/community/help_/$requestId',
+  path: '/community/help/$requestId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityMapEntryIdRoute = CommunityMapEntryIdRouteImport.update({
+  id: '/community/map_/$entryId',
+  path: '/community/map/$entryId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityMarketplaceListingIdRoute =
+  CommunityMarketplaceListingIdRouteImport.update({
+    id: '/community/marketplace_/$listingId',
+    path: '/community/marketplace/$listingId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ShopOrdersIndexRoute = ShopOrdersIndexRouteImport.update({
   id: '/shop/orders/',
   path: '/shop/orders/',
@@ -212,6 +249,12 @@ export interface FileRoutesByFullPath {
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
+  '/community/events/$eventId': typeof CommunityEventsEventIdRoute
+  '/community/feed/$postId': typeof CommunityFeedPostIdRoute
+  '/community/groups/$groupId': typeof CommunityGroupsGroupIdRoute
+  '/community/help/$requestId': typeof CommunityHelpRequestIdRoute
+  '/community/map/$entryId': typeof CommunityMapEntryIdRoute
+  '/community/marketplace/$listingId': typeof CommunityMarketplaceListingIdRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
   '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders/': typeof ShopOrdersIndexRoute
@@ -243,6 +286,12 @@ export interface FileRoutesByTo {
   '/rider': typeof RiderIndexRoute
   '/shop': typeof ShopIndexRoute
   '/sweet': typeof SweetIndexRoute
+  '/community/events/$eventId': typeof CommunityEventsEventIdRoute
+  '/community/feed/$postId': typeof CommunityFeedPostIdRoute
+  '/community/groups/$groupId': typeof CommunityGroupsGroupIdRoute
+  '/community/help/$requestId': typeof CommunityHelpRequestIdRoute
+  '/community/map/$entryId': typeof CommunityMapEntryIdRoute
+  '/community/marketplace/$listingId': typeof CommunityMarketplaceListingIdRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
   '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders': typeof ShopOrdersIndexRoute
@@ -275,6 +324,12 @@ export interface FileRoutesById {
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/sweet/': typeof SweetIndexRoute
+  '/community/events_/$eventId': typeof CommunityEventsEventIdRoute
+  '/community/feed_/$postId': typeof CommunityFeedPostIdRoute
+  '/community/groups_/$groupId': typeof CommunityGroupsGroupIdRoute
+  '/community/help_/$requestId': typeof CommunityHelpRequestIdRoute
+  '/community/map_/$entryId': typeof CommunityMapEntryIdRoute
+  '/community/marketplace_/$listingId': typeof CommunityMarketplaceListingIdRoute
   '/shop/orders/$subId': typeof ShopOrdersSubIdRoute
   '/sweet/print/$subId': typeof SweetPrintSubIdRoute
   '/shop/orders/': typeof ShopOrdersIndexRoute
@@ -308,6 +363,12 @@ export interface FileRouteTypes {
     | '/rider/'
     | '/shop/'
     | '/sweet/'
+    | '/community/events/$eventId'
+    | '/community/feed/$postId'
+    | '/community/groups/$groupId'
+    | '/community/help/$requestId'
+    | '/community/map/$entryId'
+    | '/community/marketplace/$listingId'
     | '/shop/orders/$subId'
     | '/sweet/print/$subId'
     | '/shop/orders/'
@@ -339,6 +400,12 @@ export interface FileRouteTypes {
     | '/rider'
     | '/shop'
     | '/sweet'
+    | '/community/events/$eventId'
+    | '/community/feed/$postId'
+    | '/community/groups/$groupId'
+    | '/community/help/$requestId'
+    | '/community/map/$entryId'
+    | '/community/marketplace/$listingId'
     | '/shop/orders/$subId'
     | '/sweet/print/$subId'
     | '/shop/orders'
@@ -370,6 +437,12 @@ export interface FileRouteTypes {
     | '/rider/'
     | '/shop/'
     | '/sweet/'
+    | '/community/events_/$eventId'
+    | '/community/feed_/$postId'
+    | '/community/groups_/$groupId'
+    | '/community/help_/$requestId'
+    | '/community/map_/$entryId'
+    | '/community/marketplace_/$listingId'
     | '/shop/orders/$subId'
     | '/sweet/print/$subId'
     | '/shop/orders/'
@@ -402,6 +475,12 @@ export interface RootRouteChildren {
   RiderIndexRoute: typeof RiderIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
   SweetIndexRoute: typeof SweetIndexRoute
+  CommunityEventsEventIdRoute: typeof CommunityEventsEventIdRoute
+  CommunityFeedPostIdRoute: typeof CommunityFeedPostIdRoute
+  CommunityGroupsGroupIdRoute: typeof CommunityGroupsGroupIdRoute
+  CommunityHelpRequestIdRoute: typeof CommunityHelpRequestIdRoute
+  CommunityMapEntryIdRoute: typeof CommunityMapEntryIdRoute
+  CommunityMarketplaceListingIdRoute: typeof CommunityMarketplaceListingIdRoute
   ShopOrdersSubIdRoute: typeof ShopOrdersSubIdRoute
   SweetPrintSubIdRoute: typeof SweetPrintSubIdRoute
   ShopOrdersIndexRoute: typeof ShopOrdersIndexRoute
@@ -591,6 +670,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SweetSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/community/events_/$eventId': {
+      id: '/community/events_/$eventId'
+      path: '/community/events/$eventId'
+      fullPath: '/community/events/$eventId'
+      preLoaderRoute: typeof CommunityEventsEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/feed_/$postId': {
+      id: '/community/feed_/$postId'
+      path: '/community/feed/$postId'
+      fullPath: '/community/feed/$postId'
+      preLoaderRoute: typeof CommunityFeedPostIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/groups_/$groupId': {
+      id: '/community/groups_/$groupId'
+      path: '/community/groups/$groupId'
+      fullPath: '/community/groups/$groupId'
+      preLoaderRoute: typeof CommunityGroupsGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/help_/$requestId': {
+      id: '/community/help_/$requestId'
+      path: '/community/help/$requestId'
+      fullPath: '/community/help/$requestId'
+      preLoaderRoute: typeof CommunityHelpRequestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/map_/$entryId': {
+      id: '/community/map_/$entryId'
+      path: '/community/map/$entryId'
+      fullPath: '/community/map/$entryId'
+      preLoaderRoute: typeof CommunityMapEntryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/marketplace_/$listingId': {
+      id: '/community/marketplace_/$listingId'
+      path: '/community/marketplace/$listingId'
+      fullPath: '/community/marketplace/$listingId'
+      preLoaderRoute: typeof CommunityMarketplaceListingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop/orders/': {
       id: '/shop/orders/'
       path: '/shop/orders'
@@ -642,6 +763,12 @@ const rootRouteChildren: RootRouteChildren = {
   RiderIndexRoute: RiderIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
   SweetIndexRoute: SweetIndexRoute,
+  CommunityEventsEventIdRoute: CommunityEventsEventIdRoute,
+  CommunityFeedPostIdRoute: CommunityFeedPostIdRoute,
+  CommunityGroupsGroupIdRoute: CommunityGroupsGroupIdRoute,
+  CommunityHelpRequestIdRoute: CommunityHelpRequestIdRoute,
+  CommunityMapEntryIdRoute: CommunityMapEntryIdRoute,
+  CommunityMarketplaceListingIdRoute: CommunityMarketplaceListingIdRoute,
   ShopOrdersSubIdRoute: ShopOrdersSubIdRoute,
   SweetPrintSubIdRoute: SweetPrintSubIdRoute,
   ShopOrdersIndexRoute: ShopOrdersIndexRoute,
