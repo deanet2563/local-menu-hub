@@ -11,12 +11,12 @@ const CommunityDetail = lazy(() => import("@/components/community/CommunityDetai
 
 function CommunityRouteLoading() {
   return (
-    <main className="min-h-screen bg-[#f7f5ef] px-4 py-8 text-slate-950">
+    <main className="min-h-screen bg-cream px-4 py-8 font-community text-ink">
       <div
         role="status"
         aria-live="polite"
         aria-busy="true"
-        className="mx-auto max-w-3xl rounded-lg border border-slate-200 bg-white p-5 text-center text-sm font-medium text-slate-700"
+        className="mx-auto max-w-3xl rounded-lg border border-[#e7e4dc] bg-white p-5 text-center text-sm font-medium text-ink-soft"
       >
         กำลังเปิด Community...
       </div>

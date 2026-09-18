@@ -19,19 +19,67 @@ const {
   getCommunityPrototypeDetail,
 } = community;
 
-test("keeps the seven Community navigation items in product order", () => {
+test("keeps the six Community navigation items in the approved wireframe order", () => {
   assert.deepEqual(
-    community.COMMUNITY_NAV_ITEMS?.map(({ label, href }) => ({ label, href })),
+    community.COMMUNITY_NAV_ITEMS?.map(({ id, label, href }) => ({ id, label, href })),
     [
-      { label: "หน้าแรก", href: "/community" },
-      { label: "ฟีด", href: "/community/feed" },
-      { label: "กลุ่ม", href: "/community/groups" },
-      { label: "กิจกรรม", href: "/community/events" },
-      { label: "ช่วยเหลือ", href: "/community/help" },
-      { label: "ตลาดชุมชน", href: "/community/marketplace" },
-      { label: "แผนที่", href: "/community/map" },
+      { id: "feed", label: "ฟีด", href: "/community/feed" },
+      { id: "events", label: "กิจกรรม", href: "/community/events" },
+      { id: "help", label: "ขอความช่วยเหลือ", href: "/community/help" },
+      { id: "marketplace", label: "ซื้อ-ขาย-แจก", href: "/community/marketplace" },
+      { id: "groups", label: "กลุ่ม", href: "/community/groups" },
+      { id: "map", label: "แผนที่", href: "/community/map" },
     ],
   );
+  assert.equal(community.COMMUNITY_NAV_ITEMS?.some(({ id }) => id === "home"), false);
+});
+
+test("uses the Feed experience for the /community landing route", async () => {
+  const source = await readFile(new URL("../routes/community/index.tsx", import.meta.url), "utf8");
+  assert.match(source, /CommunitySurfaceRoute surface="feed"/);
+  assert.doesNotMatch(source, /surface="home"/);
+});
+
+test("keeps the Community chip navigation scrollable without a visible scrollbar", async () => {
+  const shell = await readFile(new URL("../components/community/CommunityShell.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../index.css", import.meta.url), "utf8");
+  assert.match(shell, /community-nav-scrollbar/);
+  assert.match(shell, /overflow-x-auto/);
+  assert.match(styles, /\.community-nav-scrollbar::\-webkit-scrollbar/);
+  assert.match(styles, /scrollbar-width:\s*none/);
+});
+
+test("selects at most two upcoming events from the active community", () => {
+  const otherCommunityEvent = { ...COMMUNITY_PROTOTYPE_EVENTS[0], id: "event-other", communityId: "office-rama9" };
+  const selected = community.selectUpcomingCommunityEvents?.(
+    [...COMMUNITY_PROTOTYPE_EVENTS, otherCommunityEvent],
+    "sammakorn",
+  );
+  assert.equal(selected?.length, 2);
+  assert.deepEqual(selected?.map(({ id }) => id), ["event-cleanup", "event-parents"]);
+  assert.equal(selected?.every(({ communityId }) => communityId === "sammakorn"), true);
+});
+
+test("selects joined groups only from favorites in the active community", () => {
+  const otherCommunityGroup = { ...COMMUNITY_PROTOTYPE_GROUPS[0], id: "group-other", communityId: "office-rama9" };
+  const selected = community.selectJoinedCommunityGroups?.(
+    [...COMMUNITY_PROTOTYPE_GROUPS, otherCommunityGroup],
+    ["group-yoga", "group-parents", "group-other"],
+    "sammakorn",
+  );
+  assert.deepEqual(selected?.map(({ id }) => id), ["group-yoga", "group-parents"]);
+  assert.equal(selected?.every(({ communityId }) => communityId === "sammakorn"), true);
+});
+
+test("community switching scopes feed selections and locks an open detail from another community", () => {
+  const switchedCommunity = community.getCommunityPrototypeCommunity?.("office-rama9");
+  const openPost = getCommunityPrototypeDetail("post", "post-pinned-safety", "sammakorn");
+  assert.equal(switchedCommunity?.id, "office-rama9");
+  assert.deepEqual(community.selectUpcomingCommunityEvents?.(COMMUNITY_PROTOTYPE_EVENTS, switchedCommunity.id), []);
+  assert.deepEqual(community.selectJoinedCommunityGroups?.(COMMUNITY_PROTOTYPE_GROUPS, ["group-yoga"], switchedCommunity.id), []);
+  assert.ok(openPost);
+  assert.equal(community.isCommunityDetailScopeMismatch?.(openPost, switchedCommunity.id), true);
+  assert.equal(community.isCommunityDetailScopeMismatch?.(openPost, "sammakorn"), false);
 });
 
 test("accepts valid detail IDs and rejects invalid or cross-community IDs", () => {

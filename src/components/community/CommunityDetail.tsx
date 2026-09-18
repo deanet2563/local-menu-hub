@@ -14,6 +14,7 @@ import {
   groupStatusLabel,
   helpCategoryLabel,
   helpStatusLabel,
+  isCommunityDetailScopeMismatch,
   mapStatusLabel,
   marketCategoryLabel,
   marketStatusLabel,
@@ -69,15 +70,15 @@ export function CommunityDetail({ kind, itemId }: { kind: CommunityPrototypeDeta
 
   return (
     <CommunityShell surface={config.surface} communityId={communityId} onCommunityChange={setCommunityId}>
-      <Link to={config.backTo} className="inline-flex min-h-11 items-center rounded-lg border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-800 focus:outline-none focus:ring-2 focus:ring-orange-300">
+      <Link to={config.backTo} className="inline-flex min-h-11 items-center rounded-lg border border-moss-soft bg-white px-4 py-2 text-sm font-semibold text-moss-deep focus:outline-none focus:ring-2 focus:ring-clay">
         {config.backLabel}
       </Link>
       {loading ? <CommunityStatePanel tone="loading" title="กำลังเตรียมรายละเอียดตัวอย่าง" detail="กำลังอ่านข้อมูลตัวอย่างภายในหน้านี้ โดยไม่มีการติดต่อเซิร์ฟเวอร์" /> : null}
       {!loading && !item ? <CommunityStatePanel tone="not-found" title="ไม่พบรายการนี้" detail="รหัสรายการไม่อยู่ในข้อมูลตัวอย่าง หรือรายการไม่อยู่ในชุมชนนี้" /> : null}
-      {!loading && item && item.communityId !== communityId ? (
+      {!loading && item && isCommunityDetailScopeMismatch(item, communityId) ? (
         <CommunityStatePanel tone="locked" title="รายการนี้อยู่คนละชุมชน" detail="ข้อมูลจากชุมชนเดิมจะไม่แสดงภายใต้วงชุมชนที่เพิ่งเลือก กรุณากลับไปหน้า Community" />
       ) : null}
-      {!loading && item && item.communityId === communityId ? <DetailContent kind={kind} item={item} actionLabel={config.actionLabel} /> : null}
+      {!loading && item && !isCommunityDetailScopeMismatch(item, communityId) ? <DetailContent kind={kind} item={item} actionLabel={config.actionLabel} /> : null}
     </CommunityShell>
   );
 }
@@ -88,11 +89,11 @@ function DetailContent({ kind, item, actionLabel }: { kind: CommunityPrototypeDe
   const isLockedGroup = !canAccessCommunityPrototypeDetail(kind, item);
   const isUnavailableMap = kind === "map" && (item as CommunityPrototypeMapEntry).status === "unavailable";
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <article className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap gap-2"><StatusBadge label={detail.typeLabel} tone="green" /><StatusBadge label={detail.statusLabel} tone="blue" /><StatusBadge label={detail.privacyLabel} /></div>
       <h2 className="mt-4 break-words text-pretty text-2xl font-bold">{detail.title}</h2>
-      {!isLockedGroup && !isUnavailableMap ? <p className="mt-3 break-words text-pretty text-sm leading-6 text-slate-700">{detail.description}</p> : null}
-      <dl className="mt-5 grid gap-3 border-t border-slate-100 pt-4 text-sm">
+      {!isLockedGroup && !isUnavailableMap ? <p className="mt-3 break-words text-pretty text-sm leading-6 text-ink-soft">{detail.description}</p> : null}
+      <dl className="mt-5 grid gap-3 border-t border-[#e7e4dc] pt-4 text-sm">
         <DetailRow label="ชุมชน" value={community.name} />
         <DetailRow label="ขอบเขตความเป็นส่วนตัว" value={detail.privacyLabel} />
         <DetailRow label="ผู้โพสต์/ผู้ดูแล" value={detail.actorLabel} />
@@ -112,7 +113,7 @@ function DetailContent({ kind, item, actionLabel }: { kind: CommunityPrototypeDe
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
-  return <div className="grid min-w-0 gap-1 sm:grid-cols-[10rem_minmax(0,1fr)]"><dt className="font-semibold text-slate-600">{label}</dt><dd className="min-w-0 break-words text-pretty text-slate-900">{value}</dd></div>;
+  return <div className="grid min-w-0 gap-1 sm:grid-cols-[10rem_minmax(0,1fr)]"><dt className="font-semibold text-ink-soft">{label}</dt><dd className="min-w-0 break-words text-pretty text-ink">{value}</dd></div>;
 }
 
 function buildDetailViewModel(kind: CommunityPrototypeDetailKind, item: CommunityPrototypeDetail): DetailViewModel {

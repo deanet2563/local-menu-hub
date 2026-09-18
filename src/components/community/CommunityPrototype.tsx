@@ -4,7 +4,6 @@ import {
   FeedSurface,
   GroupsSurface,
   HelpSurface,
-  HomeSurface,
   MapSurface,
   MarketplaceSurface,
 } from "@/components/community/CommunityCards";
@@ -35,9 +34,16 @@ export function CommunityPrototype({ surface }: { surface: CommunityPrototypeSur
   }
 
   return (
-    <CommunityShell surface={surface} communityId={communityId} onCommunityChange={setCommunityId}>
-      {surface === "home" ? <HomeSurface posts={posts} /> : null}
-      {surface === "feed" ? <FeedSurface posts={posts} /> : null}
+    <CommunityShell surface={surface} communityId={communityId} onCommunityChange={setCommunityId} showCreatePostAction={surface === "feed"}>
+      {surface === "feed" ? (
+        <FeedSurface
+          posts={posts}
+          events={events}
+          groups={groups}
+          favoriteGroupIds={favoriteGroupIds}
+          communityId={communityId}
+        />
+      ) : null}
       {surface === "groups" ? <GroupsSurface groups={groups} favorites={favoriteGroupIds} onToggleFavorite={toggleFavorite} /> : null}
       {surface === "events" ? <EventsSurface events={events} /> : null}
       {surface === "help" ? <HelpSurface requests={helpRequests} /> : null}

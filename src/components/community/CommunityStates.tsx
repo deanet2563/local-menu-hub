@@ -31,18 +31,18 @@ export function CommunityStatePanel({
       aria-live={isUrgent ? "assertive" : "polite"}
       aria-busy={isLoading || undefined}
       role={isUrgent ? "alert" : "status"}
-      className="min-w-0 rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center"
+      className="min-w-0 rounded-lg border border-dashed border-ink-faint bg-white p-5 text-center"
     >
-      <span aria-hidden="true" className="mx-auto flex size-10 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-700">
+      <span aria-hidden="true" className="mx-auto flex size-10 items-center justify-center rounded-full bg-moss-soft text-lg font-bold text-moss-deep">
         {STATE_MARKS[tone]}
       </span>
-      <Heading className="mt-3 text-pretty text-lg font-bold text-slate-900">{title}</Heading>
-      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{detail}</p>
+      <Heading className="mt-3 text-pretty text-lg font-bold text-ink">{title}</Heading>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{detail}</p>
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 min-h-11 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+          className="mt-4 min-h-11 rounded-lg border border-moss bg-white px-4 py-2 text-sm font-semibold text-moss-deep focus:outline-none focus:ring-2 focus:ring-clay"
         >
           ลองใหม่ในหน้าทดลอง
         </button>
@@ -71,7 +71,7 @@ export function DisabledPrototypeAction({ label }: { label: string }) {
     <button
       type="button"
       disabled
-      className="min-h-11 w-full rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed"
+      className="min-h-11 w-full rounded-lg border border-[#e7e4dc] bg-cream px-4 py-2 text-sm font-semibold text-ink-soft disabled:cursor-not-allowed"
     >
       {label} - ยังไม่เปิดใช้งานในหน้าทดลอง
     </button>

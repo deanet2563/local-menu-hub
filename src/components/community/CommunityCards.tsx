@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { CommunityStatePanel, DisabledPrototypeAction } from "@/components/community/CommunityStates";
+import { CommunityStatePanel } from "@/components/community/CommunityStates";
 import {
-  COMMUNITY_NAV_ITEMS,
   eventStatusLabel,
   groupStatusLabel,
   groupVisibilityLabel,
@@ -12,6 +11,8 @@ import {
   marketStatusLabel,
   postKindLabel,
   postStatusLabel,
+  selectJoinedCommunityGroups,
+  selectUpcomingCommunityEvents,
   urgencyLabel,
   type CommunityPrototypeEvent,
   type CommunityPrototypeGroup,
@@ -23,10 +24,10 @@ import {
 
 export function StatusBadge({ label, tone = "slate" }: { label: string; tone?: "orange" | "green" | "blue" | "slate" }) {
   const classes = {
-    orange: "border-orange-200 bg-orange-50 text-orange-800",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    blue: "border-blue-200 bg-blue-50 text-blue-800",
-    slate: "border-slate-200 bg-slate-100 text-slate-700",
+    orange: "border-clay bg-clay-soft text-clay-deep",
+    green: "border-moss bg-moss-soft text-moss-deep",
+    blue: "border-moss-soft bg-moss-soft text-moss-deep",
+    slate: "border-[#e7e4dc] bg-cream text-ink-soft",
   }[tone];
   return <span aria-label={`สถานะ ${label}`} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
 }
@@ -36,57 +37,94 @@ function DetailLink({ to, params, label }: { to: string; params: Record<string, 
     <Link
       to={to}
       params={params}
-      className="inline-flex min-h-11 items-center rounded-lg px-1 text-sm font-semibold text-orange-700 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-orange-300 hover:underline"
+      className="inline-flex min-h-11 items-center rounded-lg px-1 text-sm font-semibold text-moss underline-offset-4 focus:outline-none focus:ring-2 focus:ring-clay hover:underline"
     >
       {label}
     </Link>
   );
 }
 
-export function HomeSurface({ posts }: { posts: CommunityPrototypePost[] }) {
-  const pinned = posts.find((post) => post.isPinned);
+export function FeedSurface({
+  posts,
+  events,
+  groups,
+  favoriteGroupIds,
+  communityId,
+}: {
+  posts: CommunityPrototypePost[];
+  events: CommunityPrototypeEvent[];
+  groups: CommunityPrototypeGroup[];
+  favoriteGroupIds: string[];
+  communityId: string;
+}) {
+  const upcomingEvents = selectUpcomingCommunityEvents(events, communityId);
+  const joinedGroups = selectJoinedCommunityGroups(groups, favoriteGroupIds, communityId);
   return (
-    <>
-      {pinned ? <PostCard post={pinned} compact /> : <CommunityStatePanel tone="empty" title="ยังไม่มีประกาศปักหมุด" detail="เมื่อมีประกาศสำคัญ รายการจะแสดงในส่วนนี้" />}
-      <section aria-label="ทางลัด Community" className="grid min-w-0 grid-cols-2 gap-3 max-[374px]:grid-cols-1">
-        {COMMUNITY_NAV_ITEMS.filter((item) => item.id !== "home").map((item) => (
-          <Link key={item.id} to={item.href} className="min-h-11 min-w-0 rounded-lg border border-orange-100 bg-white p-3 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300">
-            {item.label}<span className="mt-2 block text-xs font-normal leading-5 text-slate-500">ดูตัวอย่าง</span>
-          </Link>
-        ))}
+    <div className="space-y-6">
+      <FeedSectionHeading title="กิจกรรมที่กำลังจะมาถึง" href="/community/events" icon="📅" />
+      <section aria-label="กิจกรรมที่กำลังจะมาถึง" className="space-y-2">
+        {upcomingEvents.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีกิจกรรมที่กำลังจะมาถึง" detail="กิจกรรมของชุมชนนี้จะแสดงในส่วนนี้" headingLevel={3} /> : upcomingEvents.map((event) => <EventPreviewCard key={event.id} event={event} />)}
       </section>
-      <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="min-w-0 break-words text-base font-bold">ตัวอย่างฟีดล่าสุด</h2>
-          <Link to="/community/feed" className="min-h-11 shrink-0 content-center text-sm font-semibold text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300">ดูทั้งหมด</Link>
-        </div>
-        <div className="mt-3 space-y-3">{posts.filter((post) => post.status === "published").slice(0, 2).map((post) => <PostCard key={post.id} post={post} compact />)}</div>
+
+      <section aria-labelledby="community-latest-posts" className="space-y-3">
+        <h2 id="community-latest-posts" className="text-base font-bold text-ink">โพสต์ล่าสุดในชุมชน</h2>
+        {posts.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีโพสต์ในชุมชนนี้" detail="เมื่อมีโพสต์ที่มองเห็นได้ รายการจะแสดงที่นี่" /> : posts.map((post) => <PostCard key={post.id} post={post} />)}
       </section>
-    </>
+
+      <FeedSectionHeading title="กลุ่มที่คุณเข้าร่วม" href="/community/groups" icon="👥" />
+      <section aria-label="กลุ่มที่คุณเข้าร่วม" className="space-y-2">
+        {joinedGroups.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีกลุ่มที่ปักไว้" detail="ปักหมุดกลุ่มที่สนใจ แล้วรายการจะปรากฏในส่วนนี้" headingLevel={3} /> : joinedGroups.map((group) => <JoinedGroupPreviewCard key={group.id} group={group} />)}
+      </section>
+    </div>
   );
 }
 
-export function FeedSurface({ posts }: { posts: CommunityPrototypePost[] }) {
+function FeedSectionHeading({ title, href, icon }: { title: string; href: string; icon: string }) {
   return (
-    <section className="space-y-3">
-      <DisabledPrototypeAction label="สร้างโพสต์" />
-      {posts.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีโพสต์ในชุมชนนี้" detail="เมื่อมีโพสต์ที่มองเห็นได้ รายการจะแสดงที่นี่" /> : null}
-      {posts.map((post) => <PostCard key={post.id} post={post} />)}
-    </section>
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      <h2 className="min-w-0 break-words text-pretty text-base font-bold text-ink"><span aria-hidden="true">{icon}</span> {title}</h2>
+      <Link to={href} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-1 text-sm font-semibold text-moss focus:outline-none focus:ring-2 focus:ring-clay">ดูทั้งหมด</Link>
+    </div>
+  );
+}
+
+function EventPreviewCard({ event }: { event: CommunityPrototypeEvent }) {
+  return (
+    <Link to="/community/events/$eventId" params={{ eventId: event.id }} className="flex min-h-16 min-w-0 items-center gap-3 rounded-lg border border-[#e7e4dc] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-clay">
+      <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-clay-soft text-xl">📅</span>
+      <span className="min-w-0 flex-1">
+        <span className="block break-words text-sm font-bold text-ink">{event.title}</span>
+        <span className="mt-1 block break-words text-xs leading-5 text-ink-soft">{event.dateLabel} · {event.timeLabel} · {eventStatusLabel(event.status)}</span>
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-ink-faint">›</span>
+    </Link>
+  );
+}
+
+function JoinedGroupPreviewCard({ group }: { group: CommunityPrototypeGroup }) {
+  return (
+    <Link to="/community/groups/$groupId" params={{ groupId: group.id }} className="flex min-h-16 min-w-0 items-center gap-3 rounded-lg border border-[#e7e4dc] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-clay">
+      <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-moss-soft text-xl">👥</span>
+      <span className="min-w-0 flex-1">
+        <span className="block break-words text-sm font-bold text-ink">{group.name}</span>
+        <span className="mt-1 block break-words text-xs leading-5 text-ink-soft">{group.memberCountLabel} · {groupVisibilityLabel(group)} · {groupStatusLabel(group.status)}</span>
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-ink-faint">›</span>
+    </Link>
   );
 }
 
 export function PostCard({ post, compact = false }: { post: CommunityPrototypePost; compact?: boolean }) {
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2">
         <StatusBadge label={postKindLabel(post.kind)} tone={post.kind === "safety" ? "orange" : "green"} />
         <StatusBadge label="เฉพาะสมาชิก" />
         <StatusBadge label={postStatusLabel(post.status)} tone={post.status === "published" ? "blue" : "orange"} />
       </div>
       <h2 className="mt-3 break-words text-pretty text-lg font-bold">{post.title}</h2>
-      {!compact ? <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{post.body}</p> : null}
-      <p className="mt-3 break-words text-pretty text-xs text-slate-500">{post.authorLabel} · {post.postedAtLabel}</p>
+      {!compact ? <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{post.body}</p> : null}
+      <p className="mt-3 break-words text-pretty text-xs text-ink-faint">{post.authorLabel} · {post.postedAtLabel}</p>
       <DetailLink to="/community/feed/$postId" params={{ postId: post.id }} label="ดูรายละเอียดโพสต์" />
     </article>
   );
@@ -99,18 +137,18 @@ export function GroupsSurface({ groups, favorites, onToggleFavorite }: { groups:
       {groups.map((group) => {
         const favorite = favorites.includes(group.id);
         return (
-          <article key={group.id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <article key={group.id} className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
             <div className="flex min-w-0 flex-col gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap gap-2"><StatusBadge label={groupVisibilityLabel(group)} tone={group.hasAccess ? "green" : "slate"} /><StatusBadge label={groupStatusLabel(group.status)} /></div>
                 <h2 className="mt-3 break-words text-pretty text-lg font-bold">{group.name}</h2>
               </div>
-              <button type="button" aria-label={`${favorite ? "เลิกปักหมุด" : "ปักหมุด"} ${group.name}`} onClick={() => onToggleFavorite(group.id)} className="min-h-11 shrink-0 self-start rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300">
+              <button type="button" aria-label={`${favorite ? "เลิกปักหมุด" : "ปักหมุด"} ${group.name}`} onClick={() => onToggleFavorite(group.id)} className="min-h-11 shrink-0 self-start rounded-lg border border-moss-soft px-3 py-2 text-sm font-semibold text-moss focus:outline-none focus:ring-2 focus:ring-clay">
                 {favorite ? "ปักไว้แล้ว" : "ปักหมุด"}
               </button>
             </div>
-            <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{group.description}</p>
-            <p className="mt-3 break-words text-pretty text-sm text-slate-500">{group.memberCountLabel} · {group.nextActivityLabel}</p>
+            <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{group.description}</p>
+            <p className="mt-3 break-words text-pretty text-sm text-ink-faint">{group.memberCountLabel} · {group.nextActivityLabel}</p>
             <DetailLink to="/community/groups/$groupId" params={{ groupId: group.id }} label="ดูรายละเอียดกลุ่ม" />
           </article>
         );
@@ -125,11 +163,11 @@ export function EventsSurface({ events }: { events: CommunityPrototypeEvent[] })
 
 function EventCard({ event }: { event: CommunityPrototypeEvent }) {
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2"><StatusBadge label={event.visibility === "private-group" ? "กลุ่มส่วนตัว" : "เฉพาะสมาชิก"} /><StatusBadge label={eventStatusLabel(event.status)} tone={event.status === "cancelled" ? "orange" : "blue"} /></div>
       <h2 className="mt-3 break-words text-pretty text-lg font-bold">{event.title}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{event.dateLabel} · {event.timeLabel}</p>
-      <p className="text-sm leading-6 text-slate-600">{event.placeLabel} · {event.organizerLabel}</p>
+      <p className="mt-2 text-sm leading-6 text-ink-soft">{event.dateLabel} · {event.timeLabel}</p>
+      <p className="text-sm leading-6 text-ink-soft">{event.placeLabel} · {event.organizerLabel}</p>
       <DetailLink to="/community/events/$eventId" params={{ eventId: event.id }} label="ดูรายละเอียดกิจกรรม" />
     </article>
   );
@@ -141,11 +179,11 @@ export function HelpSurface({ requests }: { requests: CommunityPrototypeHelpRequ
 
 function HelpCard({ request }: { request: CommunityPrototypeHelpRequest }) {
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2"><StatusBadge label={helpCategoryLabel(request.category)} /><StatusBadge label={urgencyLabel(request.urgency)} tone={request.urgency === "high" ? "orange" : "green"} /><StatusBadge label={helpStatusLabel(request.status)} tone="blue" /></div>
       <h2 className="mt-3 break-words text-pretty text-lg font-bold">{request.title}</h2>
-      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{request.body}</p>
-      <p className="mt-3 break-words text-pretty text-sm font-medium text-slate-700">{request.areaLabel}</p>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{request.body}</p>
+      <p className="mt-3 break-words text-pretty text-sm font-medium text-ink">{request.areaLabel}</p>
       <DetailLink to="/community/help/$requestId" params={{ requestId: request.id }} label="ดูรายละเอียดคำขอ" />
     </article>
   );
@@ -154,7 +192,7 @@ function HelpCard({ request }: { request: CommunityPrototypeHelpRequest }) {
 export function MarketplaceSurface({ listings }: { listings: CommunityPrototypeMarketplaceListing[] }) {
   return (
     <section className="space-y-3">
-      <div className="min-w-0 break-words text-pretty rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">ตลาดชุมชนสำหรับซื้อ ขาย แบ่งปัน และให้ฟรี แยกจากระบบสั่งอาหาร</div>
+      <div className="min-w-0 break-words text-pretty rounded-lg border border-[#e7e4dc] bg-white p-4 text-sm leading-6 text-ink-soft">ตลาดชุมชนสำหรับซื้อ ขาย แบ่งปัน และให้ฟรี แยกจากระบบสั่งอาหาร</div>
       {listings.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีรายการตลาดชุมชน" detail="รายการซื้อ ขาย แบ่งปัน และให้ฟรีจะปรากฏที่นี่" /> : listings.map((listing) => <MarketplaceCard key={listing.id} listing={listing} />)}
     </section>
   );
@@ -162,12 +200,12 @@ export function MarketplaceSurface({ listings }: { listings: CommunityPrototypeM
 
 function MarketplaceCard({ listing }: { listing: CommunityPrototypeMarketplaceListing }) {
   return (
-    <article className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-2"><StatusBadge label={marketCategoryLabel(listing.category)} tone="green" /><StatusBadge label={marketStatusLabel(listing.status)} tone={listing.status === "active" ? "blue" : "slate"} /></div>
       <h2 className="mt-3 break-words text-pretty text-lg font-bold">{listing.title}</h2>
-      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{listing.summary}</p>
-      <p className="mt-3 break-words text-sm font-semibold text-orange-700">{listing.priceLabel}</p>
-      <p className="mt-1 text-xs text-slate-500">{listing.ownerLabel}</p>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{listing.summary}</p>
+      <p className="mt-3 break-words text-sm font-semibold text-clay-deep">{listing.priceLabel}</p>
+      <p className="mt-1 text-xs text-ink-faint">{listing.ownerLabel}</p>
       <DetailLink to="/community/marketplace/$listingId" params={{ listingId: listing.id }} label="ดูรายละเอียดรายการ" />
     </article>
   );
@@ -186,17 +224,17 @@ export function MapSurface({ entries }: { entries: CommunityPrototypeMapEntry[] 
 
 function MapLayer({ title, detail, entries }: { title: string; detail: string; entries: CommunityPrototypeMapEntry[] }) {
   return (
-    <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="min-w-0 rounded-lg border border-[#e7e4dc] bg-white p-4 shadow-sm">
       <h2 className="break-words text-pretty text-lg font-bold">{title}</h2>
-      <p className="mt-2 break-words text-pretty text-sm leading-6 text-slate-600">{detail}</p>
+      <p className="mt-2 break-words text-pretty text-sm leading-6 text-ink-soft">{detail}</p>
       <div className="mt-3 space-y-3">
         {entries.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีรายการ" detail="สถานที่ที่ผ่านเงื่อนไขจะแสดงในส่วนนี้" /> : entries.map((entry) => (
-          <article key={entry.id} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-3">
+          <article key={entry.id} className="min-w-0 rounded-lg border border-[#e7e4dc] bg-cream p-3">
             <div className="flex flex-wrap gap-2"><StatusBadge label={mapStatusLabel(entry.status)} tone={entry.status === "unavailable" ? "orange" : "green"} /><StatusBadge label={entry.layer === "public-directory" ? "สาธารณะ" : "เฉพาะสมาชิก"} /></div>
             <h3 className="mt-3 break-words text-pretty font-semibold">{entry.name}</h3>
-            <p className="mt-1 break-words text-pretty text-sm text-slate-600">{entry.category}</p>
-            <p className="mt-2 break-words text-pretty text-sm text-slate-700">{entry.locationLabel}</p>
-            <p className="mt-1 break-words text-pretty text-xs text-slate-500">{entry.precisionLabel}</p>
+            <p className="mt-1 break-words text-pretty text-sm text-ink-soft">{entry.category}</p>
+            <p className="mt-2 break-words text-pretty text-sm text-ink">{entry.locationLabel}</p>
+            <p className="mt-1 break-words text-pretty text-xs text-ink-faint">{entry.precisionLabel}</p>
             <DetailLink to="/community/map/$entryId" params={{ entryId: entry.id }} label="ดูรายละเอียดสถานที่" />
           </article>
         ))}

@@ -1,5 +1,4 @@
 export type CommunityPrototypeSurface =
-  | "home"
   | "feed"
   | "groups"
   | "events"
@@ -109,12 +108,11 @@ export type CommunityPrototypeDetail =
   | CommunityPrototypeMapEntry;
 
 export const COMMUNITY_NAV_ITEMS: { id: CommunityPrototypeSurface; label: string; href: string }[] = [
-  { id: "home", label: "หน้าแรก", href: "/community" },
   { id: "feed", label: "ฟีด", href: "/community/feed" },
-  { id: "groups", label: "กลุ่ม", href: "/community/groups" },
   { id: "events", label: "กิจกรรม", href: "/community/events" },
-  { id: "help", label: "ช่วยเหลือ", href: "/community/help" },
-  { id: "marketplace", label: "ตลาดชุมชน", href: "/community/marketplace" },
+  { id: "help", label: "ขอความช่วยเหลือ", href: "/community/help" },
+  { id: "marketplace", label: "ซื้อ-ขาย-แจก", href: "/community/marketplace" },
+  { id: "groups", label: "กลุ่ม", href: "/community/groups" },
   { id: "map", label: "แผนที่", href: "/community/map" },
 ];
 
@@ -146,6 +144,30 @@ export const COMMUNITY_PROTOTYPE_COMMUNITIES: CommunityPrototypeCommunity[] = [
 ];
 
 export const COMMUNITY_PROTOTYPE_DEFAULT_COMMUNITY = COMMUNITY_PROTOTYPE_COMMUNITIES[0] as CommunityPrototypeCommunity;
+
+export function selectUpcomingCommunityEvents(
+  events: CommunityPrototypeEvent[],
+  communityId: string,
+): CommunityPrototypeEvent[] {
+  return events
+    .filter((event) => event.communityId === communityId && event.status !== "cancelled")
+    .slice(0, 2);
+}
+
+export function selectJoinedCommunityGroups(
+  groups: CommunityPrototypeGroup[],
+  favoriteGroupIds: string[],
+  communityId: string,
+): CommunityPrototypeGroup[] {
+  return groups.filter((group) => group.communityId === communityId && favoriteGroupIds.includes(group.id));
+}
+
+export function isCommunityDetailScopeMismatch(
+  item: CommunityPrototypeDetail,
+  activeCommunityId: string,
+): boolean {
+  return item.communityId !== activeCommunityId;
+}
 
 export const COMMUNITY_PROTOTYPE_POSTS: CommunityPrototypePost[] = [
   {
