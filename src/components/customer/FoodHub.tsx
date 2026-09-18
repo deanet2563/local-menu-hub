@@ -5,7 +5,13 @@ import { useCustomerCatalog, type CatalogItem } from "@/hooks/useCustomerCatalog
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { SponsorCard } from "@/components/customer/SponsorCard";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
-import { ALL_BUCKET_KEY, CATEGORY_TILES, bucketKeyForCategory } from "@/lib/foodHubCategories";
+import {
+  ALL_BUCKET_KEY,
+  bucketBelongsToSegment,
+  bucketKeyForCategory,
+  tilesForSegment,
+  type FoodHubSegment,
+} from "@/lib/foodHubCategories";
 
 // ============================================================
 // MyTree — Food Hub (`/hub`). Food-only browsing, split out from the
@@ -14,25 +20,34 @@ import { ALL_BUCKET_KEY, CATEGORY_TILES, bucketKeyForCategory } from "@/lib/food
 // the shops/menu-items query — see the reuse notes below and in the
 // task report.
 //
-// ร้านอาหาร / เครื่องดื่ม-ขนม segment toggle: the shops/menu_items
-// schema has no food-vs-drink field (only a free-text `category`),
-// so this is visual-only for now — it does not filter the grid.
-// Wire it for real once such a field exists.
+// ร้านอาหาร / เครื่องดื่ม-ขนม segment toggle: reuses the same category
+// buckets as the chip grid (foodHubCategories.ts) grouped into two
+// coarser sets — no schema change, just which existing buckets each
+// segment shows/filters to.
 // ============================================================
-
-type Segment = "food" | "drink";
 
 export function FoodHub() {
   const { items, loading, orderedShops, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
   const [q, setQ] = useState("");
   const [bucket, setBucket] = useState<string | null>(null);
-  const [segment, setSegment] = useState<Segment>("food");
+  const [segment, setSegment] = useState<FoodHubSegment>("food");
   const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
   const c = useCart();
 
-  const filtered = items.filter(
-    (i) => (!bucket || bucketKeyForCategory(i.category) === bucket) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
-  );
+  const segmentTiles = tilesForSegment(segment);
+
+  function selectSegment(next: FoodHubSegment) {
+    setSegment(next);
+    setBucket(null);
+  }
+
+  const filtered = items.filter((i) => {
+    const itemBucket = bucketKeyForCategory(i.category);
+    const inSegment = bucketBelongsToSegment(itemBucket, segment);
+    const matchesBucket = !bucket || itemBucket === bucket;
+    const matchesQuery = !q || i.name.includes(q) || shopName(i.shop_id).includes(q);
+    return inSegment && matchesBucket && matchesQuery;
+  });
 
   function quickAdd(input: {
     product: ConfigurableProduct;
@@ -78,14 +93,14 @@ export function FoodHub() {
         <div className="grid grid-cols-2 gap-2 rounded-full bg-[#e6ede4] p-1">
           <button
             type="button"
-            onClick={() => setSegment("food")}
+            onClick={() => selectSegment("food")}
             className={`rounded-full py-1.5 text-sm font-medium transition ${segment === "food" ? "bg-[#3f6b4a] text-white" : "text-[#28432f]"}`}
           >
             ร้านอาหาร
           </button>
           <button
             type="button"
-            onClick={() => setSegment("drink")}
+            onClick={() => selectSegment("drink")}
             className={`rounded-full py-1.5 text-sm font-medium transition ${segment === "drink" ? "bg-[#3f6b4a] text-white" : "text-[#28432f]"}`}
           >
             เครื่องดื่ม-ขนม
@@ -95,7 +110,7 @@ export function FoodHub() {
         <div>
           <h2 className="text-sm font-bold text-[#28432f] mb-2">หมวดอาหาร</h2>
           <div className="grid grid-cols-4 gap-2">
-            {CATEGORY_TILES.map((tile) => {
+            {segmentTiles.map((tile) => {
               const active = tile.key === ALL_BUCKET_KEY ? bucket === null : bucket === tile.key;
               return (
                 <button

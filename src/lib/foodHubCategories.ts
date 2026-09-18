@@ -37,14 +37,39 @@ export const CATEGORY_BUCKETS: CategoryBucket[] = [
 
 export const ALL_BUCKET_KEY = "all";
 
-export const CATEGORY_TILES: CategoryBucket[] = [
-  ...CATEGORY_BUCKETS,
-  { key: ALL_BUCKET_KEY, label: "ทั้งหมด", icon: "🍽️", matches: [] },
-];
+const ALL_TILE: CategoryBucket = { key: ALL_BUCKET_KEY, label: "ทั้งหมด", icon: "🍽️", matches: [] };
+
+export const CATEGORY_TILES: CategoryBucket[] = [...CATEGORY_BUCKETS, ALL_TILE];
 
 /** The bucket key a raw menu_items.category value belongs to, or null if
  * it isn't in any bucket's synonym list (still shown under "ทั้งหมด"). */
 export function bucketKeyForCategory(category: string | null): string | null {
   if (!category) return null;
   return CATEGORY_BUCKETS.find((b) => b.matches.includes(category))?.key ?? null;
+}
+
+// ============================================================
+// ร้านอาหาร / เครื่องดื่ม-ขนม segment split — reuses the same buckets
+// above, just grouped into two coarser sets. Still no schema change:
+// this only decides which of the existing buckets each segment shows.
+// ============================================================
+
+export type FoodHubSegment = "food" | "drink";
+
+export const SEGMENT_BUCKET_KEYS: Record<FoodHubSegment, string[]> = {
+  food: ["single-dish", "noodles", "dimsum"],
+  drink: ["drinks", "desserts", "bakery", "snacks"],
+};
+
+/** The category tiles to show for a segment: only that segment's buckets,
+ * plus "ทั้งหมด" (which sweeps the whole selected segment, not everything). */
+export function tilesForSegment(segment: FoodHubSegment): CategoryBucket[] {
+  const keys = new Set(SEGMENT_BUCKET_KEYS[segment]);
+  return [...CATEGORY_BUCKETS.filter((b) => keys.has(b.key)), ALL_TILE];
+}
+
+/** Whether a raw category's bucket belongs to the given segment. A
+ * category with no bucket match (null) belongs to neither segment. */
+export function bucketBelongsToSegment(bucketKey: string | null, segment: FoodHubSegment): boolean {
+  return !!bucketKey && SEGMENT_BUCKET_KEYS[segment].includes(bucketKey);
 }
