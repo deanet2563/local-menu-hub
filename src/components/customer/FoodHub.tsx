@@ -5,6 +5,7 @@ import { useCustomerCatalog, type CatalogItem } from "@/hooks/useCustomerCatalog
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { SponsorCard } from "@/components/customer/SponsorCard";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
+import { ALL_BUCKET_KEY, CATEGORY_TILES, bucketKeyForCategory } from "@/lib/foodHubCategories";
 
 // ============================================================
 // MyTree — Food Hub (`/hub`). Food-only browsing, split out from the
@@ -22,15 +23,15 @@ import { ProductConfigurator, type ConfigurableProduct } from "@/components/cust
 type Segment = "food" | "drink";
 
 export function FoodHub() {
-  const { items, loading, orderedShops, locationState, refreshNearbyShops, cats, shopName } = useCustomerCatalog();
+  const { items, loading, orderedShops, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState<string | null>(null);
+  const [bucket, setBucket] = useState<string | null>(null);
   const [segment, setSegment] = useState<Segment>("food");
   const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
   const c = useCart();
 
   const filtered = items.filter(
-    (i) => (!cat || i.category === cat) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
+    (i) => (!bucket || bucketKeyForCategory(i.category) === bucket) && (!q || i.name.includes(q) || shopName(i.shop_id).includes(q))
   );
 
   function quickAdd(input: {
@@ -64,7 +65,7 @@ export function FoodHub() {
       <div className="p-4 space-y-3 bg-white">
         <div>
           <h1 className="text-xl font-bold text-[#28432f]">🍜 อาหาร</h1>
-          <p className="text-xs text-gray-500">เลือกเมนูและร้านอาหารใกล้คุณ</p>
+          <p className="text-xs text-gray-500">ร้านอาหารและเครื่องดื่มใกล้คุณ</p>
         </div>
 
         <input
@@ -91,22 +92,24 @@ export function FoodHub() {
           </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setCat(null)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs ${!cat ? "bg-[#3f6b4a] text-white" : "bg-white border border-gray-200"}`}
-          >
-            ทั้งหมด
-          </button>
-          {cats.map((cc) => (
-            <button
-              key={cc}
-              onClick={() => setCat(cc)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs ${cat === cc ? "bg-[#3f6b4a] text-white" : "bg-white border border-gray-200"}`}
-            >
-              {cc}
-            </button>
-          ))}
+        <div>
+          <h2 className="text-sm font-bold text-[#28432f] mb-2">หมวดอาหาร</h2>
+          <div className="grid grid-cols-4 gap-2">
+            {CATEGORY_TILES.map((tile) => {
+              const active = tile.key === ALL_BUCKET_KEY ? bucket === null : bucket === tile.key;
+              return (
+                <button
+                  type="button"
+                  key={tile.key}
+                  onClick={() => setBucket(tile.key === ALL_BUCKET_KEY ? null : tile.key)}
+                  className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[11px] font-medium ${active ? "bg-[#3f6b4a] text-white" : "bg-white border border-gray-200 text-[#28432f]"}`}
+                >
+                  <span className="text-lg leading-none">{tile.icon}</span>
+                  <span className="truncate">{tile.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
