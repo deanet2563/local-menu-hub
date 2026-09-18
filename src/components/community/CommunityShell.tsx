@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { CommunityBottomNav } from "@/components/community/CommunityBottomNav";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   COMMUNITY_PROTOTYPE_COMMUNITIES,
@@ -116,6 +117,7 @@ export function CommunityShell({
       <main id="community-main" tabIndex={-1} className="mx-auto w-full max-w-3xl space-y-4 px-4 py-4 outline-none">
         {children}
       </main>
+      <CommunityBottomNav />
     </div>
   );
 }
