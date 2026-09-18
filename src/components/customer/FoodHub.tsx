@@ -70,7 +70,11 @@ export function FoodHub() {
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
-  const nearbyShops = orderedShops;
+  const shopIdsInSegment = new Set(
+    items.filter((i) => bucketBelongsToSegment(bucketKeyForCategory(i.category), segment)).map((i) => i.shop_id)
+  );
+  const nearbyShops = orderedShops.filter((s) => shopIdsInSegment.has(s.shop_id));
+  const nearbyShopsHeading = segment === "food" ? "ร้านอาหารใกล้คุณ" : "ร้านขนมใกล้คุณ";
   const midpoint = Math.ceil(nearbyShops.length / 2);
   const shopsBeforeSponsor = nearbyShops.slice(0, midpoint);
   const shopsAfterSponsor = nearbyShops.slice(midpoint);
@@ -160,7 +164,7 @@ export function FoodHub() {
 
       <div className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-bold text-[#28432f]">ร้านใกล้คุณ</p>
+          <p className="text-sm font-bold text-[#28432f]">{nearbyShopsHeading}</p>
           <button
             type="button"
             onClick={() => void refreshNearbyShops()}
