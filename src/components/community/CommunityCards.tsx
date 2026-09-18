@@ -11,6 +11,7 @@ import {
   marketStatusLabel,
   postKindLabel,
   postStatusLabel,
+  selectCommunitySponsorCard,
   selectJoinedCommunityGroups,
   selectUpcomingCommunityEvents,
   urgencyLabel,
@@ -20,6 +21,7 @@ import {
   type CommunityPrototypeMapEntry,
   type CommunityPrototypeMarketplaceListing,
   type CommunityPrototypePost,
+  type CommunityPrototypeSponsorCard,
 } from "@/lib/communityPrototype";
 
 export function StatusBadge({ label, tone = "slate" }: { label: string; tone?: "orange" | "green" | "blue" | "slate" }) {
@@ -50,15 +52,19 @@ export function FeedSurface({
   groups,
   favoriteGroupIds,
   communityId,
+  sponsorCards,
 }: {
   posts: CommunityPrototypePost[];
   events: CommunityPrototypeEvent[];
   groups: CommunityPrototypeGroup[];
   favoriteGroupIds: string[];
   communityId: string;
+  sponsorCards: CommunityPrototypeSponsorCard[];
 }) {
   const upcomingEvents = selectUpcomingCommunityEvents(events, communityId);
   const joinedGroups = selectJoinedCommunityGroups(groups, favoriteGroupIds, communityId);
+  const sponsorTop = selectCommunitySponsorCard(sponsorCards, communityId, "feed-top");
+  const sponsorMid = selectCommunitySponsorCard(sponsorCards, communityId, "feed-mid");
   return (
     <div className="space-y-6">
       <FeedSectionHeading title="กิจกรรมที่กำลังจะมาถึง" href="/community/events" icon="📅" />
@@ -66,16 +72,53 @@ export function FeedSurface({
         {upcomingEvents.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีกิจกรรมที่กำลังจะมาถึง" detail="กิจกรรมของชุมชนนี้จะแสดงในส่วนนี้" headingLevel={3} /> : upcomingEvents.map((event) => <EventPreviewCard key={event.id} event={event} />)}
       </section>
 
+      {sponsorTop ? <SponsorCard card={sponsorTop} /> : null}
+
       <section aria-labelledby="community-latest-posts" className="space-y-3">
         <h2 id="community-latest-posts" className="text-base font-bold text-ink">โพสต์ล่าสุดในชุมชน</h2>
         {posts.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีโพสต์ในชุมชนนี้" detail="เมื่อมีโพสต์ที่มองเห็นได้ รายการจะแสดงที่นี่" /> : posts.map((post) => <PostCard key={post.id} post={post} />)}
       </section>
+
+      {sponsorMid ? <SponsorCard card={sponsorMid} /> : null}
 
       <FeedSectionHeading title="กลุ่มที่คุณเข้าร่วม" href="/community/groups" icon="👥" />
       <section aria-label="กลุ่มที่คุณเข้าร่วม" className="space-y-2">
         {joinedGroups.length === 0 ? <CommunityStatePanel tone="empty" title="ยังไม่มีกลุ่มที่ปักไว้" detail="ปักหมุดกลุ่มที่สนใจ แล้วรายการจะปรากฏในส่วนนี้" headingLevel={3} /> : joinedGroups.map((group) => <JoinedGroupPreviewCard key={group.id} group={group} />)}
       </section>
     </div>
+  );
+}
+
+function SponsorCard({ card }: { card: CommunityPrototypeSponsorCard }) {
+  if (card.variant === "banner") {
+    return (
+      <aside aria-label={`เนื้อหาสนับสนุนโดย ${card.title}`} className="min-w-0 overflow-hidden rounded-lg border border-clay-soft bg-white shadow-sm">
+        <div className="relative flex h-20 items-center justify-center bg-gradient-to-br from-clay-soft to-white text-3xl" aria-hidden="true">
+          {card.sponsorInitials}
+          <span className="absolute left-2 top-2 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-clay-deep shadow-sm">สนับสนุนโดย</span>
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-3 px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="break-words text-pretty text-sm font-bold text-ink">{card.title}</p>
+            <p className="mt-0.5 break-words text-pretty text-xs text-ink-soft">{card.subtitle}</p>
+          </div>
+          <span className="min-h-11 shrink-0 content-center rounded-lg bg-clay-deep px-3 py-2 text-xs font-bold text-white">{card.ctaLabel}</span>
+        </div>
+      </aside>
+    );
+  }
+  return (
+    <aside aria-label={`เนื้อหาสนับสนุนโดย ${card.title}`} className="relative flex min-w-0 items-center gap-3 rounded-lg border border-clay-soft bg-white p-3 pl-4 shadow-sm before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-l-lg before:bg-clay before:content-['']">
+      <div aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-clay-soft text-sm font-extrabold text-clay-deep">
+        {card.sponsorInitials}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-clay-deep">สนับสนุนโดย</p>
+        <p className="mt-0.5 break-words text-pretty text-sm font-bold text-ink">{card.title}</p>
+        <p className="mt-0.5 break-words text-pretty text-xs text-ink-soft">{card.subtitle}</p>
+      </div>
+      <span className="min-h-11 shrink-0 content-center rounded-lg bg-clay-deep px-3 py-2 text-xs font-bold text-white">{card.ctaLabel}</span>
+    </aside>
   );
 }
 

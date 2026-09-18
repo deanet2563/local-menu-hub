@@ -16,6 +16,7 @@ import {
   COMMUNITY_PROTOTYPE_MAP_ENTRIES,
   COMMUNITY_PROTOTYPE_MARKETPLACE,
   COMMUNITY_PROTOTYPE_POSTS,
+  COMMUNITY_PROTOTYPE_SPONSOR_CARDS,
   type CommunityPrototypeSurface,
 } from "@/lib/communityPrototype";
 
@@ -42,6 +43,7 @@ export function CommunityPrototype({ surface }: { surface: CommunityPrototypeSur
           groups={groups}
           favoriteGroupIds={favoriteGroupIds}
           communityId={communityId}
+          sponsorCards={COMMUNITY_PROTOTYPE_SPONSOR_CARDS}
         />
       ) : null}
       {surface === "groups" ? <GroupsSurface groups={groups} favorites={favoriteGroupIds} onToggleFavorite={toggleFavorite} /> : null}

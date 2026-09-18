@@ -8,6 +8,26 @@ export type CommunityPrototypeSurface =
 
 export type CommunityPrototypeVisibility = "public-directory" | "member-only" | "private-group";
 
+// Sponsored content — Revenue Model / Ads Model from the North Star master plan:
+// must be clearly labeled, shown only to communities it is authorized for, and
+// must never alter organic ranking. Advertisers target by community/radius/
+// district/category but never see the member list — targeting here is just
+// `communityIds`, matched the same way a real backend would match audience
+// without exposing membership.
+export type CommunityPrototypeSponsorPlacement = "feed-top" | "feed-mid";
+export type CommunityPrototypeSponsorVariant = "horizontal" | "banner";
+
+export type CommunityPrototypeSponsorCard = {
+  id: string;
+  communityIds: string[];
+  placement: CommunityPrototypeSponsorPlacement;
+  variant: CommunityPrototypeSponsorVariant;
+  sponsorInitials: string;
+  title: string;
+  subtitle: string;
+  ctaLabel: string;
+};
+
 export type CommunityPrototypeCommunity = {
   id: string;
   name: string;
@@ -162,12 +182,43 @@ export function selectJoinedCommunityGroups(
   return groups.filter((group) => group.communityId === communityId && favoriteGroupIds.includes(group.id));
 }
 
+export function selectCommunitySponsorCard(
+  sponsorCards: CommunityPrototypeSponsorCard[],
+  communityId: string,
+  placement: CommunityPrototypeSponsorPlacement,
+): CommunityPrototypeSponsorCard | undefined {
+  return sponsorCards.find((card) => card.placement === placement && card.communityIds.includes(communityId));
+}
+
 export function isCommunityDetailScopeMismatch(
   item: CommunityPrototypeDetail,
   activeCommunityId: string,
 ): boolean {
   return item.communityId !== activeCommunityId;
 }
+
+export const COMMUNITY_PROTOTYPE_SPONSOR_CARDS: CommunityPrototypeSponsorCard[] = [
+  {
+    id: "sponsor-ratri-sammakorn",
+    communityIds: ["sammakorn"],
+    placement: "feed-top",
+    variant: "horizontal",
+    sponsorInitials: "RJ",
+    title: "RATRI ชาถั่วคุโรมาเมะ — ลองฟรี 1 แก้ว",
+    subtitle: "แจกที่บูธหน้าสวนกลาง เสาร์นี้",
+    ctaLabel: "ดูเพิ่ม",
+  },
+  {
+    id: "sponsor-fitness-sammakorn",
+    communityIds: ["sammakorn"],
+    placement: "feed-mid",
+    variant: "banner",
+    sponsorInitials: "FT",
+    title: "ฟิตเนสสัมมากร",
+    subtitle: "สมัครสมาชิกใหม่ ลด 30% เดือนนี้",
+    ctaLabel: "ดูโปร",
+  },
+];
 
 export const COMMUNITY_PROTOTYPE_POSTS: CommunityPrototypePost[] = [
   {
