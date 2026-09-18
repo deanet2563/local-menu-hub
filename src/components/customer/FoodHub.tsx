@@ -60,7 +60,7 @@ export function FoodHub() {
   const shopsAfterSponsor = nearbyShops.slice(midpoint);
 
   return (
-    <div className="pb-24 bg-[#e6ede4]/40 min-h-screen">
+    <div className="pb-24 bg-[#e6ede4]/40">
       <div className="p-4 space-y-3 bg-white">
         <div>
           <h1 className="text-xl font-bold text-[#28432f]">🍜 อาหาร</h1>
