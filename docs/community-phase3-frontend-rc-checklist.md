@@ -84,12 +84,13 @@ Community is no longer included in the initial customer JavaScript path beyond t
 
 ## Public Preview Plan
 
-1. Create an HTTPS branch preview from the reviewed RC commit only after explicit deployment approval.
-2. Use the existing public Supabase URL and anonymous key only for application bootstrap; do not add service-role credentials or fixture persistence.
-3. Keep the Community DEV bypass disabled on the public hostname. Add a separately reviewed fixture-only preview access mechanism if the hosting environment still requires LINE authentication.
-4. Run route, privacy, copy, accessibility, network, mobile, and physical-phone checks against the preview URL.
-5. Verify no Community action sends a request and no Community route redirects to LINE, Supabase mutation endpoints, or Worker mutation endpoints.
-6. Record the preview commit and URL; do not promote it to production during this gate.
+1. Build with `VITE_COMMUNITY_FIXTURE_PREVIEW=true` in the process environment and deploy only to the `community-rc` Pages preview branch.
+2. Allow fixture access only on `community-rc.local-menu-hub.pages.dev` and `/community` routes. Redirect every other path on that host to `/community`.
+3. Keep `local-menu-hub.pages.dev`, `mytree.cc`, and every other hostname on the existing authentication behavior.
+4. Use the existing public Supabase URL and anonymous key only when the build requires them; never add service-role credentials or fixture persistence.
+5. Add `noindex, nofollow` only while the exact RC preview gate is active. Cloudflare preview response headers remain an additional safeguard.
+6. Verify no Community action sends a request and no Community route redirects to LINE, Supabase mutation endpoints, or Worker mutation endpoints.
+7. Record the preview commit and URL; do not promote it to production during this gate.
 
 ## Known Limitations
 
@@ -101,7 +102,7 @@ Community is no longer included in the initial customer JavaScript path beyond t
 
 ## Rollback Procedure
 
-1. Disable or remove the branch preview without changing production deployment state.
+1. Delete or supersede only the `community-rc` preview deployment without changing production deployment state.
 2. Revert the single Round 2.1 frontend commit on the feature branch; do not rewrite or amend earlier commits.
 3. Rebuild and verify that the seven list routes and six detail routes return to the prior Round 2 behavior.
 4. Confirm no database rollback is needed because this round creates no migration, schema, Worker, or stored-data change.

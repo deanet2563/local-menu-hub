@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import * as community from "./communityPrototype.ts";
+import {
+  COMMUNITY_RC_PREVIEW_HOSTNAME,
+  getCommunityFixturePreviewDecision,
+  isLocalCommunityPrototypeAuthBypassLocation,
+} from "./previewDebugRoute.ts";
 
 const {
   COMMUNITY_PROTOTYPE_EVENTS,
@@ -86,6 +91,70 @@ test("uses the approved fixture-only preview disclosure", () => {
   assert.equal(
     community.COMMUNITY_PREVIEW_BANNER,
     "หน้าทดลอง MyTree Community — ข้อมูลทั้งหมดเป็นตัวอย่างและไม่มีการบันทึกข้อมูลจริง",
+  );
+});
+
+test("denies the public Community preview when its build flag is off", () => {
+  assert.equal(
+    getCommunityFixturePreviewDecision({
+      fixturePreviewEnabled: false,
+      hostname: COMMUNITY_RC_PREVIEW_HOSTNAME,
+      pathname: "/community",
+    }),
+    "deny",
+  );
+});
+
+test("denies wrong, production, and custom production hostnames", () => {
+  for (const hostname of ["other.local-menu-hub.pages.dev", "local-menu-hub.pages.dev", "mytree.cc", "www.mytree.cc"]) {
+    assert.equal(
+      getCommunityFixturePreviewDecision({ fixturePreviewEnabled: true, hostname, pathname: "/community" }),
+      "deny",
+    );
+  }
+});
+
+test("allows only Community paths on the exact RC preview hostname", () => {
+  assert.equal(
+    getCommunityFixturePreviewDecision({
+      fixturePreviewEnabled: true,
+      hostname: COMMUNITY_RC_PREVIEW_HOSTNAME,
+      pathname: "/community/feed/post-pinned-safety",
+    }),
+    "allow",
+  );
+  assert.equal(
+    getCommunityFixturePreviewDecision({
+      fixturePreviewEnabled: true,
+      hostname: COMMUNITY_RC_PREVIEW_HOSTNAME,
+      pathname: "/",
+    }),
+    "redirect-community",
+  );
+  assert.equal(
+    getCommunityFixturePreviewDecision({
+      fixturePreviewEnabled: true,
+      hostname: COMMUNITY_RC_PREVIEW_HOSTNAME,
+      pathname: "/sweet/admin",
+    }),
+    "redirect-community",
+  );
+});
+
+test("preserves localhost and private-LAN Community DEV bypasses", () => {
+  for (const hostname of ["localhost", "127.0.0.1", "192.168.1.20", "10.0.0.8", "172.16.0.4", "172.31.255.9"]) {
+    assert.equal(
+      isLocalCommunityPrototypeAuthBypassLocation({ hostname, pathname: "/community/map" }, true),
+      true,
+    );
+  }
+  assert.equal(
+    isLocalCommunityPrototypeAuthBypassLocation({ hostname: "192.168.1.20", pathname: "/account" }, true),
+    false,
+  );
+  assert.equal(
+    isLocalCommunityPrototypeAuthBypassLocation({ hostname: "192.168.1.20", pathname: "/community" }, false),
+    false,
   );
 });
 
