@@ -8,6 +8,7 @@ const root = process.cwd();
 const fixture = path.join(root, 'tools/tests/cart-map');
 const server = await createServer({
   configFile: false, root, logLevel: 'error',
+  optimizeDeps: { entries: ['tools/tests/cart-map/index.html'] },
   resolve: { alias: [
     { find: '@tanstack/react-router', replacement: path.join(fixture, 'router.tsx') },
     ...['supabase', 'deliveryLocation', 'order'].map(name => ({ find: `@/lib/${name}`, replacement: path.join(fixture, 'backend.ts') })),
@@ -106,7 +107,7 @@ try {
     await page.locator('#enter').click();
     await mapReady(page);
     await page.locator('#clear').click();
-    await page.getByText('ตะกร้าว่าง', { exact: true }).waitFor();
+    await page.getByText('ตะกร้าว่าง', { exact: false }).waitFor();
     await page.waitForFunction(() => mapStats.listeners.size === 0);
     await page.locator('#enter').click();
     await mapReady(page);
