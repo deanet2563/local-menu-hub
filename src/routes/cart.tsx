@@ -223,6 +223,9 @@ function CartCheckout() {
     setShowDestinationChooser(false);
   }, [deliveryPoint]);
 
+  // จุดส่งยืนยันแล้ว = ซ่อนตัวเลือกจุดส่ง (ไม่ใช่ unmount — ดู comment ที่ JSX)
+  const destinationConfirmed = Boolean(deliveryPoint) && !showDestinationChooser;
+
   const handleCandidateChange = useCallback((point: ConfirmedDeliveryPoint) => {
     setCandidatePoint(point);
     setDeliveryPoint(null);
@@ -642,7 +645,14 @@ function CartCheckout() {
               </div>
             )}
 
-            {deliveryPoint && !showDestinationChooser ? (
+            {/* แผนที่ต้องไม่ถูก unmount ระหว่างที่ยังอยู่ในหน้านี้: Google Maps ถือ
+                observer/callback ไว้บน div ของตัวเองและไม่มี destroy API ถ้า React
+                เอา div ออกไป callback ถัดไปจะเรียก getDiv() ได้ undefined แล้วพังด้วย
+                "undefined is not an object (evaluating 'a.getRootNode')" บน WebKit — เจอ
+                จริงบน LINE webview ตอนเปิด /cart ที่มีที่อยู่บันทึกไว้ (สมุดที่อยู่ set
+                deliveryPoint ให้อัตโนมัติขณะแผนที่ยัง init ไม่เสร็จ) จึงสลับด้วยการ
+                ซ่อน ไม่ใช่สลับกิ่ง. */}
+            {destinationConfirmed && deliveryPoint && (
               <div className="rounded-lg border border-[#3f6b4a]/25 bg-[#e6ede4] p-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -659,8 +669,8 @@ function CartCheckout() {
                 {deliveryPoint.source === "device_gps" && deliveryPoint.accuracy != null && deliveryPoint.accuracy > 30 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">GPS เครื่องนี้คลาดเคลื่อนประมาณ {Math.round(deliveryPoint.accuracy)} ม. ควรตรวจหมุดก่อนสั่ง</div>}
                 <button type="button" onClick={changeDestination} className="text-xs text-gray-500 underline">เปลี่ยนจุดส่ง</button>
               </div>
-            ) : (
-              <div className="space-y-3">
+            )}
+            <div className={destinationConfirmed ? "hidden" : "space-y-3"}>
                 <DeliveryLocationPicker shopId={shopIds[0] ?? null} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
                 <button type="button" onClick={captureDeliveryPoint} disabled={locating} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-800 disabled:opacity-50">{locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบัน"}</button>
                 <div className="rounded-lg border border-gray-200 bg-white">
@@ -678,8 +688,7 @@ function CartCheckout() {
                 </div>
                 {fieldErrors.deliveryPoint && <p id="delivery-pin-error" className="text-xs text-red-600">{fieldErrors.deliveryPoint}</p>}
                 {candidatePoint && <button type="button" onClick={() => void confirmDeliveryPoint(candidatePoint)} className="w-full rounded-lg bg-[#3f6b4a] px-3 py-3 text-sm font-semibold text-white">ยืนยันจุดส่งนี้</button>}
-              </div>
-            )}
+            </div>
           </section>
 
           <div className="rounded-lg border border-gray-200 p-3 space-y-2">
