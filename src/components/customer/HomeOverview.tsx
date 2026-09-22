@@ -4,8 +4,10 @@ import { publicSupabase } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { useCart } from "@/lib/cart";
 import { SponsorCard } from "@/components/customer/SponsorCard";
+import { PromoBanner } from "@/components/customer/PromoBanner";
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { HOME_SPONSOR_CARDS, selectHomeSponsorCard } from "@/lib/homeSponsorCards";
+import { HOME_PROMO_BANNER } from "@/lib/homePromoBanner";
 import { HOME_COMMUNITY_EVENTS, HOME_COMMUNITY_POSTS } from "@/lib/homeCommunityPreviewFixture";
 
 // ============================================================
@@ -100,6 +102,15 @@ export function HomeOverview() {
             );
           })}
         </div>
+      </div>
+
+      <div className="pt-3">
+        <PromoBanner
+          emoji={HOME_PROMO_BANNER.emoji}
+          title={HOME_PROMO_BANNER.title}
+          subtitle={HOME_PROMO_BANNER.subtitle}
+          ctaLabel={HOME_PROMO_BANNER.ctaLabel}
+        />
       </div>
 
       {topSponsor && (
