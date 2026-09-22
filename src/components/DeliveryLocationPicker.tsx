@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createRetainedMapHost } from "@/lib/retainedMapHost";
 import "./DeliveryLocationPicker.css";
 import {
   DELIVERY_PLACE_SEARCH_MIN_LENGTH,
@@ -88,7 +89,10 @@ type Props = {
   onCandidateChange: (point: ConfirmedDeliveryPoint) => void;
   onSafeFormattedAddress?: (formattedAddress: string) => void;
   debug?: boolean;
+  active?: boolean;
 };
+
+const checkoutMapHost = createRetainedMapHost<GoogleMap>();
 
 const DEFAULT_CENTER = { lat: 13.777, lng: 100.674 };
 let mapsLoadPromise: Promise<GoogleMapsApi> | null = null;
@@ -237,13 +241,15 @@ function legacyMerchantMarkerIcon(): { url: string; scaledSize: unknown; anchor:
   };
 }
 
-export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false }: Props) {
+export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, onSafeFormattedAddress, debug = false, active = true }: Props) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const advancedMarkerRef = useRef<GoogleMarkerLibrary["AdvancedMarkerElement"] | null>(null);
   const markerRef = useRef<GoogleMarker | null>(null);
   const mapListenersRef = useRef<Array<{ remove(): void }>>([]);
-  const markerListenersRef = useRef<Array<{ remove(): void }>>([]);
+  const candidateMarkerCleanupRef = useRef<(() => void) | null>(null);
+  const onCandidateChangeRef = useRef(onCandidateChange);
+  const [mapVisible, setMapVisible] = useState(false);
   const merchantMarkersRef = useRef<MarkerHandle[]>([]);
   const cartShopMarkerRef = useRef<MarkerHandle | null>(null);
   const merchantRequestSeqRef = useRef(0);
@@ -271,9 +277,24 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
   const [searchError, setSearchError] = useState<string | null>(null);
   const [results, setResults] = useState<DeliveryPlaceSearchResult[]>([]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     candidateRef.current = candidate;
-  }, [candidate]);
+    onCandidateChangeRef.current = onCandidateChange;
+  }, [candidate, onCandidateChange]);
+
+  // Do not construct or fit a map in a hidden/zero-sized checkout section.
+  useLayoutEffect(() => {
+    const element = mapElementRef.current;
+    if (!element) return;
+    const measure = () => {
+      const size = element.getBoundingClientRect();
+      setMapVisible(active && size.width > 0 && size.height > 0);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [active]);
 
   function clearMerchantMarkers() {
     merchantMarkersRef.current.forEach(({ listeners, clear }) => {
@@ -290,35 +311,44 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     cartShopMarkerRef.current = null;
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!mapVisible) return;
     let disposed = false;
+    let lease: ReturnType<typeof checkoutMapHost.acquire> | null = null;
+    initialFitDoneRef.current = false;
+    setInitialFitExecuted(false);
     void loadGoogleMaps()
       .then((google) => {
-        if (disposed || !mapElementRef.current || mapRef.current) return;
+        if (disposed || !mapElementRef.current?.isConnected || mapRef.current) return;
         const initialCandidate = candidateRef.current;
         const mapId = getMapsMapId();
         setMapConfigStatus(mapId ? null : "ยังไม่ได้ตั้งค่า Google Maps Map ID สำหรับหมุดร้านค้า MyTree");
-        const map = new google.maps.Map(mapElementRef.current, {
-          center: initialCandidate
-            ? { lat: initialCandidate.lat, lng: initialCandidate.lng }
-            : cartShop
-              ? { lat: cartShop.lat, lng: cartShop.lng }
-              : DEFAULT_CENTER,
-          zoom: initialCandidate ? 17 : cartShop ? CHECKOUT_MAP_SINGLE_POINT_ZOOM : 14,
+        const center = initialCandidate
+          ? { lat: initialCandidate.lat, lng: initialCandidate.lng }
+          : cartShop ? { lat: cartShop.lat, lng: cartShop.lng } : DEFAULT_CENTER;
+        const zoom = initialCandidate ? 17 : cartShop ? CHECKOUT_MAP_SINGLE_POINT_ZOOM : 14;
+        lease = checkoutMapHost.acquire(mapElementRef.current, (element) => new google.maps.Map(element, {
+          center,
+          zoom,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
           ...(mapId ? { mapId } : {}),
-        });
+        }));
+        const map = lease.map;
+        // Reused map: restore this checkout's camera, never the previous user's pin.
+        map.setCenter(center);
+        map.setZoom(zoom);
         mapRef.current = map;
         setMapReady(true);
         const clickListener = map.addListener("click", (event) => {
           const latLng = event.latLng;
-          if (!latLng) return;
+          if (disposed || !latLng) return;
           setSelectedMerchant(null);
-          onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
+          onCandidateChangeRef.current(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
         });
         const idleListener = map.addListener("idle", () => {
+          if (disposed) return;
           const viewport = viewportFromMap(map);
           if (viewport) void loadMerchantShops(viewport);
         });
@@ -340,23 +370,22 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     return () => {
       disposed = true;
       merchantRequestSeqRef.current += 1;
-      cartShopRequestSeqRef.current += 1;
       mapListenersRef.current.forEach((listener) => listener.remove());
       mapListenersRef.current = [];
-      markerListenersRef.current.forEach((listener) => listener.remove());
-      markerListenersRef.current = [];
+      candidateMarkerCleanupRef.current?.();
       clearMerchantMarkers();
       clearCartShopMarker();
       mapRef.current = null;
       advancedMarkerRef.current = null;
-      markerRef.current = null;
+      // Park the Google-owned DOM while the React slot is still connected.
+      lease?.release();
       setMapReady(false);
       setMarkerLibraryState("not_requested");
       setAdvancedMarkerAvailable(false);
       setLegacyFallbackUsed(false);
       setCartShopMarkerCreated(false);
     };
-  }, [onCandidateChange]);
+  }, [mapVisible]);
 
   useEffect(() => {
     if (!shopId) {
@@ -429,7 +458,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     const map = mapRef.current;
     const AdvancedMarkerElement = advancedMarkerRef.current;
     if (!map || !mapReady) return;
-    if (!AdvancedMarkerElement) {
+    if (!AdvancedMarkerElement || !getMapsMapId()) {
       if (merchantShops.length > 0) setMerchantError("AdvancedMarkerElement ยังไม่พร้อม จึงแสดงหมุดร้านค้า MyTree ไม่ได้");
       return;
     }
@@ -462,7 +491,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
     clearCartShopMarker();
     const AdvancedMarkerElement = advancedMarkerRef.current;
-    if (AdvancedMarkerElement) {
+    if (AdvancedMarkerElement && getMapsMapId()) {
       const marker = new AdvancedMarkerElement({
         map,
         position: { lat: cartShop.lat, lng: cartShop.lng },
@@ -514,24 +543,40 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     map.setZoom(CHECKOUT_MAP_SINGLE_POINT_ZOOM);
   }, [cartShop, candidate, mapReady]);
 
+  const hasCandidate = Boolean(candidate);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !candidate || !window.google) return;
+    const currentCandidate = candidateRef.current;
+    if (!map || !mapReady || !currentCandidate || !window.google) return;
+    const marker = new window.google.maps.Marker({
+      map, position: { lat: currentCandidate.lat, lng: currentCandidate.lng }, draggable: true,
+    });
+    let disposed = false;
+    const dragListener = marker.addListener("dragend", (event) => {
+      if (disposed || !event.latLng) return;
+      onCandidateChangeRef.current(adjustedPoint(candidateRef.current, {
+        lat: event.latLng.lat(), lng: event.latLng.lng(),
+      }));
+    });
+    markerRef.current = marker;
+    const cleanup = () => {
+      if (disposed) return;
+      disposed = true;
+      dragListener.remove();
+      marker.setMap(null);
+      if (markerRef.current === marker) markerRef.current = null;
+      if (candidateMarkerCleanupRef.current === cleanup) candidateMarkerCleanupRef.current = null;
+    };
+    candidateMarkerCleanupRef.current = cleanup;
+    return cleanup;
+  }, [hasCandidate, mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !candidate) return;
     const position = { lat: candidate.lat, lng: candidate.lng };
-    map.setCenter(position);
-    if (!markerRef.current) {
-      const marker = new window.google.maps.Marker({ map, position, draggable: true });
-      const dragListener = marker.addListener("dragend", (event) => {
-        const latLng = event.latLng;
-        if (!latLng) return;
-        onCandidateChange(adjustedPoint(candidateRef.current, { lat: latLng.lat(), lng: latLng.lng() }));
-      });
-      markerListenersRef.current = [dragListener];
-      markerRef.current = marker;
-    } else {
-      markerRef.current.setPosition(position);
-    }
-  }, [candidate, mapReady, onCandidateChange]);
+    mapRef.current?.setCenter(position);
+    markerRef.current?.setPosition(position);
+  }, [candidate?.lat, candidate?.lng, mapReady]);
 
   useEffect(() => {
     const trimmed = query.trim();

@@ -41,6 +41,7 @@ type CheckoutErrors = Partial<Record<"customerName" | "customerPhone" | "premise
 /** Per-shop checkout state. One shop's pay button only ever touches its own entry here. */
 type ShopCartState = {
   shopInfo: ShopCheckout | null;
+  shopLoadError: string | null;
   fulfillment: "delivery" | "pickup";
   payment: "cash" | "qr_transfer";
   timing: OrderTiming;
@@ -60,6 +61,7 @@ type CompletedShopSnapshot = { shopName: string; items: CartItem[]; total: numbe
 
 const DEFAULT_SHOP_STATE: ShopCartState = {
   shopInfo: null,
+  shopLoadError: null,
   fulfillment: "delivery",
   payment: "cash",
   timing: "now",
@@ -133,7 +135,12 @@ function CartCheckout() {
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const lastQuotedPointKeyRef = useRef<Record<string, string>>({});
 
-  const hasDeliveryShop = shopIds.some((id) => (shopStates[id]?.fulfillment ?? "delivery") === "delivery");
+  // Unknown shop capabilities are loading, never an assumed delivery request.
+  const deliveryShopId = shopIds.find((id) => {
+    const state = shopStates[id];
+    return state?.shopInfo && state.shopInfo.delivery_enabled !== false && state.fulfillment === "delivery";
+  }) ?? null;
+  const hasDeliveryShop = deliveryShopId !== null;
 
   function updateShop(shopId: string, patch: Partial<ShopCartState>) {
     setShopStates((current) => ({ ...current, [shopId]: { ...(current[shopId] ?? DEFAULT_SHOP_STATE), ...patch } }));
@@ -150,11 +157,12 @@ function CartCheckout() {
     });
     (async () => {
       for (const shopId of missing) {
-        const { data } = await publicSupabase
+        const { data, error } = await publicSupabase
           .from("shops")
           .select("name,delivery_enabled,pickup_enabled,payment_cash_enabled,payment_qr_enabled,qr_code_url,accepts_preorders,is_open,business_hours")
           .eq("shop_id", shopId)
-          .maybeSingle();
+          .maybeSingle()
+          .then((result) => result, () => ({ data: null, error: true }));
         const row = data as ShopCheckout | null;
         setShopStates((current) => {
           const existing = current[shopId] ?? DEFAULT_SHOP_STATE;
@@ -163,7 +171,7 @@ function CartCheckout() {
           const payment = !row?.payment_cash_enabled && row?.payment_qr_enabled ? "qr_transfer" : existing.payment;
           const timing = availability?.state === "schedule_closed" && row?.accepts_preorders && availability.nextOpeningAt ? "preorder" : existing.timing;
           const requestedForLocal = timing === "preorder" && availability?.nextOpeningAt ? toBangkokInput(availability.nextOpeningAt) : existing.requestedForLocal;
-          return { ...current, [shopId]: { ...existing, shopInfo: row, fulfillment, payment, timing, requestedForLocal } };
+          return { ...current, [shopId]: { ...existing, shopInfo: error ? null : row, shopLoadError: error || !row ? "โหลดข้อมูลร้านไม่สำเร็จ" : null, fulfillment, payment, timing, requestedForLocal } };
         });
       }
     })();
@@ -194,7 +202,7 @@ function CartCheckout() {
     const pointKey = `${deliveryPoint.lat.toFixed(6)},${deliveryPoint.lng.toFixed(6)}`;
     for (const shopId of shopIds) {
       const st = shopStates[shopId];
-      if (!st || st.fulfillment !== "delivery" || st.done) continue;
+      if (!st?.shopInfo || st.shopInfo.delivery_enabled === false || st.fulfillment !== "delivery" || st.done) continue;
       if (lastQuotedPointKeyRef.current[shopId] === pointKey) continue;
       lastQuotedPointKeyRef.current[shopId] = pointKey;
       updateShop(shopId, { quotingRoute: true, quoteError: null });
@@ -330,7 +338,7 @@ function CartCheckout() {
 
   async function confirmShop(shopId: string) {
     const st = shopStates[shopId];
-    if (!st) return;
+    if (!st?.shopInfo || st.submitting) return;
     const items = groupedByShop.get(shopId) ?? [];
     if (items.length === 0) return;
     const shopInfo = st.shopInfo;
@@ -513,10 +521,21 @@ function CartCheckout() {
             <div className="px-3.5 py-3 bg-[#e6ede4] flex items-center justify-between gap-2">
               <p className="font-bold text-sm text-gray-900 flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-white border border-[#3f6b4a] text-[#28432f] flex items-center justify-center text-[10px] font-extrabold shrink-0">{shopInitials(shopInfo?.name)}</span>
-                {shopInfo?.name ?? "กำลังโหลด..."}
+                {shopInfo?.name ?? (st.shopLoadError ? "โหลดข้อมูลร้านไม่สำเร็จ" : "กำลังโหลด...")}
               </p>
               <span className="text-[10.5px] rounded-full px-2.5 py-1 border border-[#3f6b4a] text-[#28432f] bg-white font-medium">ยังไม่จ่าย</span>
             </div>
+
+            {st.shopLoadError && (
+              <div role="alert" className="mx-3.5 mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">
+                {st.shopLoadError}
+                <button type="button" className="ml-2 underline" onClick={() => setShopStates((current) => {
+                  const next = { ...current };
+                  delete next[shopId];
+                  return next;
+                })}>ลองใหม่</button>
+              </div>
+            )}
 
             {availability?.state === "manual_closed" && <div className="mx-3.5 mt-2 rounded-lg bg-red-50 border border-red-100 p-2 text-xs text-red-600">ร้านปิดรับออเดอร์ชั่วคราว</div>}
             {availability?.state === "schedule_closed" && (
@@ -557,8 +576,8 @@ function CartCheckout() {
               </div>
 
               <div className="flex gap-2">
-                {shopInfo?.delivery_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "delivery" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "delivery" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>ส่งถึงบ้าน</button>}
-                {shopInfo?.pickup_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "pickup" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "pickup" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>รับเอง</button>}
+                {shopInfo && shopInfo.delivery_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "delivery" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "delivery" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>ส่งถึงบ้าน</button>}
+                {shopInfo && shopInfo.pickup_enabled !== false && <button type="button" onClick={() => updateShop(shopId, { fulfillment: "pickup" })} className={`flex-1 rounded-lg py-2 text-xs ${st.fulfillment === "pickup" ? "bg-[#3f6b4a] text-white" : "bg-gray-100 text-gray-700"}`}>รับเอง</button>}
               </div>
 
               {st.fulfillment === "delivery" && (
@@ -600,7 +619,7 @@ function CartCheckout() {
               <button
                 type="button"
                 onClick={() => void confirmShop(shopId)}
-                disabled={st.submitting || (st.fulfillment === "delivery" && st.quotingRoute) || availability?.state === "manual_closed"}
+                disabled={!shopInfo || st.submitting || (st.fulfillment === "delivery" && st.quotingRoute) || availability?.state === "manual_closed"}
                 className="w-full rounded-lg bg-[#3f6b4a] text-white py-2.5 text-sm font-semibold disabled:opacity-50"
               >
                 {st.submitting ? "กำลังส่ง..." : "ชำระเงินร้านนี้"}
@@ -611,8 +630,7 @@ function CartCheckout() {
       })}
 
       {/* Shared delivery destination + recipient — reused by every shop currently set to delivery. */}
-      {hasDeliveryShop && (
-        <>
+      <div className={hasDeliveryShop ? "space-y-3" : "hidden"}>
           <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-3 space-y-3">
             <div>
               <p className="text-sm font-semibold text-gray-900">📍 จุดส่งสินค้า <span className="text-red-600" aria-hidden="true">*</span></p>
@@ -645,13 +663,8 @@ function CartCheckout() {
               </div>
             )}
 
-            {/* แผนที่ต้องไม่ถูก unmount ระหว่างที่ยังอยู่ในหน้านี้: Google Maps ถือ
-                observer/callback ไว้บน div ของตัวเองและไม่มี destroy API ถ้า React
-                เอา div ออกไป callback ถัดไปจะเรียก getDiv() ได้ undefined แล้วพังด้วย
-                "undefined is not an object (evaluating 'a.getRootNode')" บน WebKit — เจอ
-                จริงบน LINE webview ตอนเปิด /cart ที่มีที่อยู่บันทึกไว้ (สมุดที่อยู่ set
-                deliveryPoint ให้อัตโนมัติขณะแผนที่ยัง init ไม่เสร็จ) จึงสลับด้วยการ
-                ซ่อน ไม่ใช่สลับกิ่ง. */}
+            {/* Keep the picker stable across fulfillment and confirmation changes.
+                Its active flag suspends Maps until the section is actually visible. */}
             {destinationConfirmed && deliveryPoint && (
               <div className="rounded-lg border border-[#3f6b4a]/25 bg-[#e6ede4] p-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
@@ -671,7 +684,7 @@ function CartCheckout() {
               </div>
             )}
             <div className={destinationConfirmed ? "hidden" : "space-y-3"}>
-                <DeliveryLocationPicker shopId={shopIds[0] ?? null} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
+                <DeliveryLocationPicker active={hasDeliveryShop && !destinationConfirmed} shopId={deliveryShopId} candidate={candidatePoint} onCandidateChange={handleCandidateChange} onSafeFormattedAddress={applyFormattedAddressSuggestion} />
                 <button type="button" onClick={captureDeliveryPoint} disabled={locating} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-800 disabled:opacity-50">{locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่งปัจจุบัน"}</button>
                 <div className="rounded-lg border border-gray-200 bg-white">
                   <button type="button" onClick={() => setFallbackExpanded((current) => !current)} className="flex w-full items-center justify-between px-3 py-3 text-left text-sm font-medium text-gray-800">
@@ -721,8 +734,7 @@ function CartCheckout() {
               </div>
             )}
           </div>
-        </>
-      )}
+      </div>
 
       <div className="fixed left-4 right-4 bottom-4 z-20 rounded-xl bg-[#28432f] shadow-lg px-4 py-3 flex items-center justify-between">
         <span className="text-xs text-white/70">ยอดรวมทั้งตะกร้า</span>
