@@ -1,112 +1,118 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase } from "@/lib/supabase";
-import { getCurrentLocation } from "@/lib/geolocation";
-import { useCart } from "@/lib/cart";
-import { SponsorCard } from "@/components/customer/SponsorCard";
-import { PromoBanner } from "@/components/customer/PromoBanner";
+import { cart, useCart } from "@/lib/cart";
+import { useCustomerCatalog, type CatalogItem, type CatalogShop } from "@/hooks/useCustomerCatalog";
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
-import { HOME_SPONSOR_CARDS, selectHomeSponsorCard } from "@/lib/homeSponsorCards";
-import { HOME_PROMO_BANNER } from "@/lib/homePromoBanner";
-import { CURRENT_COMMUNITY_NAME, HOME_COMMUNITY_EVENTS, HOME_COMMUNITY_POSTS } from "@/lib/homeCommunityPreviewFixture";
+import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
+import { bucketKeyForCategory } from "@/lib/foodHubCategories";
 
-type QuickAccessTile = { key: string; label: string; icon: ReactNode; to?: "/hub" | "/community" | "/map" };
+const FOOD_CATEGORIES = [
+  { key: "single-dish", label: "อาหารจานเดียว", icon: "🍛" },
+  { key: "noodles", label: "ก๋วยเตี๋ยว", icon: "🍜" },
+  { key: "snacks", label: "ของว่าง", icon: "🥟" },
+  { key: "bakery", label: "เบเกอรี่", icon: "🥐" },
+  { key: "desserts", label: "ของหวาน", icon: "🍨" },
+  { key: "drinks", label: "เครื่องดื่ม", icon: "🥤" },
+  { key: "other", label: "อื่น ๆ", icon: "🍽️" },
+] as const;
 
-function LineIcon({ children }: { children: ReactNode }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">{children}</svg>;
+function SearchIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>;
 }
 
-const QUICK_ACCESS_TILES: QuickAccessTile[] = [
-  { key: "food", label: "อาหาร", to: "/hub", icon: <LineIcon><path d="M4 11h16M6 11a6 6 0 0 1 12 0M12 5V3M4 15h16M7 15l1 5h8l1-5" /></LineIcon> },
-  { key: "secondhand", label: "ตลาดมือสอง", to: "/community", icon: <LineIcon><path d="M5 8h14l-1 12H6L5 8Z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></LineIcon> },
-  { key: "services", label: "ช่างและบริการ", icon: <LineIcon><path d="m14 7 3-3 3 3-3 3M13 8 5 16a2 2 0 1 0 3 3l8-8" /><path d="m5 5 4 4" /></LineIcon> },
-  { key: "health", label: "สุขภาพ", icon: <LineIcon><path d="M12 21s-7-4.6-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 6.4-7 11-7 11Z" /><path d="M9 12h6M12 9v6" /></LineIcon> },
-  { key: "education", label: "การศึกษา", icon: <LineIcon><path d="m3 8 9-4 9 4-9 4-9-4Z" /><path d="M7 10.2V16c2.8 2 7.2 2 10 0v-5.8M21 8v7" /></LineIcon> },
-  { key: "beauty", label: "ความงาม", icon: <LineIcon><path d="M7 20h10M9 20l1-9h4l1 9M10 11V5a2 2 0 0 1 4 0v6" /><path d="M10 8h4" /></LineIcon> },
-  { key: "events", label: "กิจกรรม", to: "/community", icon: <LineIcon><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M8 3v4M16 3v4M4 10h16" /><path d="m9 15 2 2 4-4" /></LineIcon> },
-  { key: "all", label: "ดูทั้งหมด", to: "/map", icon: <LineIcon><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></LineIcon> },
-];
+function ArrowIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>;
+}
 
-type NearbyShopRow = { shop_id: string; name: string; category: string | null; distance_km: number | string | null };
-type NearbyState = "idle" | "loading" | "ready" | "error";
-const NEARBY_LIMIT = 12;
+function ImageWithFallback({ src, alt, kind }: { src: string | null; alt: string; kind: "shop" | "food" }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className="flex h-full w-full items-center justify-center bg-[#EEF4EB] text-2xl" role="img" aria-label={`${alt} ไม่มีรูป`}>{kind === "shop" ? "🏪" : "🍽️"}</div>;
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover" />;
+}
 
-function shopInitials(name: string): string { return name.trim().slice(0, 2).toUpperCase() || "?"; }
-function ArrowIcon() { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>; }
+function ShopCard({ shop }: { shop: CatalogShop }) {
+  const content = <>
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageWithFallback src={shop.logo_url} alt={shop.name} kind="shop" /></div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${shop.is_open ? "bg-[#E5F6E9] text-[#087A31]" : "bg-[#F0F1EF] text-[#747B76]"}`}>{shop.is_open ? "เปิดอยู่" : "ปิดอยู่"}</span></div>
+        <p className="mt-1 truncate text-xs text-[#77837B]">{shop.category || "ร้านอาหารใกล้บ้าน"}</p>
+        <p className="mt-1 text-[11px] font-semibold text-[#506459]">{shop.distance_km == null ? "ดูรายละเอียดร้าน" : `${shop.distance_km.toFixed(1)} กม.`}</p>
+      </div>
+      {shop.is_open && <span className="text-[#9AA59E] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>}
+    </>;
+  const className = `group flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)] ${shop.is_open ? "" : "cursor-not-allowed grayscale-[20%]"}`;
+  return shop.is_open
+    ? <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className={className}>{content}</Link>
+    : <div className={className} aria-disabled="true" title="ร้านยังไม่เปิดรับออเดอร์">{content}</div>;
+}
+
+function MenuCard({ item, shopName, onAdd }: { item: CatalogItem; shopName: string; onAdd: () => void }) {
+  return (
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-[#E5EBE4] bg-white shadow-[0_5px_16px_rgba(37,69,46,0.05)]">
+      <Link to="/shop/$shopId" params={{ shopId: item.shop_id }} className="block aspect-[4/3] overflow-hidden"><ImageWithFallback src={item.image_url} alt={item.name} kind="food" /></Link>
+      <div className="p-3"><h3 className="truncate text-sm font-extrabold text-[#203D2A]">{item.name}</h3><p className="mt-0.5 truncate text-xs text-[#7A867E]">{shopName}</p><div className="mt-3 flex items-center justify-between gap-2"><p className="text-sm font-black text-[#B64C0D]">฿{Number(item.price).toLocaleString("th-TH")}</p><button type="button" onClick={onAdd} aria-label={`เพิ่ม ${item.name} ลงตะกร้า`} className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EB681B] text-xl font-bold leading-none text-white shadow-sm active:scale-95">+</button></div></div>
+    </article>
+  );
+}
 
 export function HomeOverview() {
-  const c = useCart();
-  const [comingSoonLabel, setComingSoonLabel] = useState<string | null>(null);
-  const [nearby, setNearby] = useState<NearbyShopRow[]>([]);
-  const [nearbyState, setNearbyState] = useState<NearbyState>("idle");
+  const { items, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
+  const currentCart = useCart();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
+  const normalizedQuery = query.trim().toLocaleLowerCase("th");
 
-  useEffect(() => { void loadNearby(); }, []);
+  const visibleShops = useMemo(() => allOrderedShops.filter((shop) => !normalizedQuery || shop.name.toLocaleLowerCase("th").includes(normalizedQuery) || (shop.category ?? "").toLocaleLowerCase("th").includes(normalizedQuery)), [allOrderedShops, normalizedQuery]);
+  const visibleItems = useMemo(() => items.filter((item) => {
+    const itemBucket = bucketKeyForCategory(item.category);
+    const matchesCategory = !category || (category === "other" ? itemBucket === null : itemBucket === category);
+    const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)}`.toLocaleLowerCase("th");
+    return matchesCategory && (!normalizedQuery || haystack.includes(normalizedQuery));
+  }), [items, category, normalizedQuery, shopName]);
 
-  async function loadNearby() {
-    setNearbyState("loading");
-    try {
-      const loc = await getCurrentLocation();
-      const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
-      if (error) throw error;
-      setNearby(((data as NearbyShopRow[]) ?? []).slice(0, NEARBY_LIMIT));
-      setNearbyState("ready");
-    } catch { setNearbyState("error"); }
+  function addConfigured(input: { product: ConfigurableProduct; qty: number; options: Parameters<typeof cart.add>[0]["options"]; note: string | null }) {
+    const payload = { itemId: input.product.itemId, shopId: input.product.shopId, name: input.product.name, price: input.product.price, imageUrl: input.product.imageUrl, options: input.options, note: input.note };
+    const firstResult = cart.add(payload);
+    if (firstResult === "different_shop") {
+      if (!window.confirm("ในตะกร้ามีสินค้าจากร้านอื่น ต้องการล้างตะกร้าเดิมและเพิ่มเมนูจากร้านนี้หรือไม่?")) return;
+      cart.add(payload, { force: true });
+    }
+    for (let n = 1; n < input.qty; n += 1) cart.add(payload);
+    setConfiguring(null);
   }
 
-  const topSponsor = selectHomeSponsorCard(HOME_SPONSOR_CARDS, "top");
-  const midSponsor = selectHomeSponsorCard(HOME_SPONSOR_CARDS, "mid");
+  const openShops = visibleShops.filter((shop) => shop.is_open);
+  const closedShops = visibleShops.filter((shop) => !shop.is_open);
 
   return (
-    <div className="min-h-screen bg-[#F7FAF5] pb-28 text-[#0A3B20]">
-      <header className="relative overflow-hidden rounded-b-[32px] bg-gradient-to-br from-[#075B28] via-[#087A31] to-[#0A9638] px-5 pb-7 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] text-white shadow-[0_12px_32px_rgba(5,95,39,0.22)]">
-        <div className="absolute -right-12 -top-14 h-40 w-40 rounded-full bg-[#FF7417]/25" />
-        <div className="absolute -bottom-12 left-8 h-28 w-28 rounded-full border-[20px] border-white/5" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div><p className="text-xs font-semibold tracking-[0.18em] text-[#FFE1C7]">MYTREE COMMUNITY</p><h1 className="mt-1 text-[28px] font-black leading-tight tracking-tight">ทุกเรื่องใกล้บ้าน<br />อยู่ที่นี่</h1></div>
-          <div className="relative h-20 w-20 shrink-0" aria-hidden="true"><span className="absolute inset-2 rounded-full bg-white/15 blur-lg" /><img src="/brand/mytree-logo.png" alt="" className="relative h-full w-full object-contain drop-shadow-[0_7px_8px_rgba(0,0,0,0.22)]" /></div>
-        </div>
-        <Link to="/map" className="relative mt-5 flex min-h-12 items-center gap-3 rounded-2xl bg-white px-4 text-[#28432F] shadow-sm">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5 text-[#FF7417]" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
-          <span className="flex-1 text-sm text-[#657369]">ค้นหาร้านค้า บริการ หรือสิ่งที่ต้องการ</span><span className="rounded-full bg-[#FFF0E4] px-2.5 py-1 text-[10px] font-bold text-[#BB4B00]">ใกล้ฉัน</span>
-        </Link>
-      </header>
+    <div className="min-h-screen bg-[#F7F8F3] pb-32 text-[#183B27]">
+      <div className="mx-auto max-w-6xl">
+        <header className="border-b border-[#E4EAE2] bg-[#FFFDF8] px-4 pb-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-6">
+          <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2.5"><img src="/brand/mytree-logo.png" alt="MyTree" className="h-11 w-11 shrink-0 object-contain" /><div className="min-w-0"><p className="text-lg font-black leading-tight text-[#075B28]">MyTree</p><Link to="/map" className="flex min-h-6 items-center gap-1 text-xs font-semibold text-[#65736A]" aria-label="เปลี่ยนพื้นที่บนแผนที่"><span className="truncate">สัมมากร</span><span className="text-[#EB681B]">เปลี่ยนพื้นที่</span></Link></div></div><Link to="/account" aria-label="บัญชีของฉัน" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DEE7DD] bg-white text-[#087A31]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-6 w-6"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg></Link></div>
+          <label className="mt-3 flex min-h-12 items-center gap-3 rounded-2xl border border-[#DDE7DC] bg-white px-4 shadow-[0_4px_14px_rgba(41,74,50,0.05)] focus-within:border-[#77B888] focus-within:ring-2 focus-within:ring-[#D9F0DE]"><span className="text-[#EB681B]"><SearchIcon /></span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาร้าน เมนู หรือประเภทอาหาร" className="min-w-0 flex-1 bg-transparent text-sm text-[#203D2A] outline-none placeholder:text-[#919B94]" />{query && <button type="button" onClick={() => setQuery("")} className="min-h-9 px-1 text-xs font-bold text-[#6D786F]">ล้าง</button>}</label>
+        </header>
 
-      <main className="space-y-6 px-4 pt-5">
-        <section aria-labelledby="quick-access-title">
-          <div className="mb-3 flex items-center justify-between"><h2 id="quick-access-title" className="text-lg font-extrabold">ค้นหาได้ทันที</h2><span className="text-xs font-medium text-[#738078]">ใกล้บ้านคุณ</span></div>
-          <div className="grid grid-cols-4 gap-x-2 gap-y-4 rounded-3xl bg-white px-2 py-5 shadow-[0_8px_28px_rgba(34,70,47,0.07)] ring-1 ring-[#E8ECE6]">
-            {QUICK_ACCESS_TILES.map((tile, index) => {
-              const content = <><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${index % 3 === 1 ? "bg-[#FFF0E4] text-[#D65300]" : "bg-[#E7F8EA] text-[#078433]"}`}>{tile.icon}</span><span className="mt-2 w-full truncate text-center text-[11px] font-semibold text-[#31513C]">{tile.label}</span></>;
-              const className = "flex min-w-0 flex-col items-center rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7417]";
-              return tile.to ? <Link key={tile.key} to={tile.to} className={className}>{content}</Link> : <button key={tile.key} type="button" onClick={() => setComingSoonLabel(tile.label)} className={className}>{content}</button>;
-            })}
-          </div>
-        </section>
+        <main className="space-y-7 px-4 py-5 sm:px-6 lg:px-8">
+          <section aria-labelledby="food-category-title"><div className="mb-3 flex items-center justify-between"><h2 id="food-category-title" className="text-lg font-black">เลือกตามหมวด</h2><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูทั้งหมด <ArrowIcon /></Link></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:px-0">{FOOD_CATEGORIES.map((entry) => <button key={entry.key} type="button" onClick={() => setCategory(category === entry.key ? null : entry.key)} className={`flex min-w-[82px] snap-start flex-col items-center gap-2 rounded-2xl border px-3 py-3 text-xs font-bold transition ${category === entry.key ? "border-[#72B685] bg-[#E5F6E9] text-[#075B28]" : "border-[#E3E9E1] bg-white text-[#3E5547]"}`}><span className="text-2xl">{entry.icon}</span><span className="whitespace-nowrap">{entry.label}</span></button>)}</div></section>
 
-        <PromoBanner emoji={HOME_PROMO_BANNER.emoji} title={HOME_PROMO_BANNER.title} subtitle={HOME_PROMO_BANNER.subtitle} ctaLabel={HOME_PROMO_BANNER.ctaLabel} />
-        {topSponsor && <SponsorCard label={topSponsor.sponsorLabel} title={topSponsor.title} subtitle={topSponsor.subtitle} ctaLabel={topSponsor.ctaLabel} />}
+          {catalogState === "loading" && <section aria-label="กำลังโหลดข้อมูล" className="space-y-3"><div className="h-5 w-44 animate-pulse rounded bg-[#E6ECE4]" /><div className="grid gap-3 md:grid-cols-2"><div className="h-24 animate-pulse rounded-2xl bg-white" /><div className="h-24 animate-pulse rounded-2xl bg-white" /></div></section>}
+          {catalogState === "error" && <section className="rounded-3xl border border-[#F2CDAF] bg-[#FFF5EC] p-5"><h2 className="font-extrabold text-[#79340F]">โหลดร้านอาหารไม่สำเร็จ</h2><p className="mt-1 text-sm text-[#89583C]">{catalogError || "กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"}</p><button type="button" onClick={() => void reloadCatalog()} className="mt-4 min-h-11 rounded-xl bg-[#EB681B] px-5 text-sm font-bold text-white">ลองอีกครั้ง</button></section>}
 
-        <section aria-labelledby="community-title">
-          <div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D65300]">เรื่องราวรอบตัว</p><h2 id="community-title" className="mt-0.5 text-lg font-extrabold">ชุมชนของคุณ</h2></div><Link to="/community" className="flex min-h-11 items-center gap-1 text-sm font-bold text-[#078433]">ดูทั้งหมด <ArrowIcon /></Link></div>
-          <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#064B23] to-[#087A31] p-4 text-white shadow-[0_10px_26px_rgba(5,95,39,0.18)]">
-            <div className="flex items-center gap-2 border-b border-white/15 pb-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">🏘️</span><div className="min-w-0"><p className="text-[10px] font-medium text-[#BFD5C5]">ชุมชนปัจจุบัน</p><p className="truncate text-sm font-bold">{CURRENT_COMMUNITY_NAME}</p></div></div>
-            <div className="mt-3 grid gap-2">{HOME_COMMUNITY_EVENTS.slice(0, 2).map((evt) => <Link key={evt.id} to="/community" className="flex items-center gap-3 rounded-2xl bg-white/10 p-3 transition-colors hover:bg-white/15"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FF7417] text-sm font-black">{evt.whenLabel.slice(0, 2)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{evt.title}</span><span className="mt-0.5 block truncate text-[11px] text-[#D7E4DA]">{evt.whenLabel} · {evt.locationLabel}</span></span><ArrowIcon /></Link>)}</div>
-          </div>
-          <div className="mt-3 flex snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{HOME_COMMUNITY_POSTS.slice(0, 3).map((post) => <Link key={post.id} to="/community" className="w-[82%] shrink-0 snap-start rounded-2xl border border-[#E5EAE4] bg-white p-4 shadow-[0_5px_16px_rgba(35,66,45,0.05)]"><div className="flex items-center gap-2 text-xs font-bold text-[#078433]"><span className="h-2 w-2 rounded-full bg-[#FF7417]" />{post.author}</div><p className="mt-2 line-clamp-2 text-sm leading-6 text-[#55665B]">{post.excerpt}</p></Link>)}</div>
-        </section>
+          {catalogState === "ready" && <>
+            <section aria-labelledby="open-nearby-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="open-nearby-title" className="text-lg font-black">ร้านเปิดใกล้คุณ</h2><p className="mt-0.5 text-xs text-[#738078]">เลือกร้านที่พร้อมรับออเดอร์ตอนนี้</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="min-h-10 shrink-0 text-xs font-bold text-[#087A31] disabled:opacity-50">{locationState === "loading" ? "กำลังหาตำแหน่ง…" : "อัปเดตตำแหน่ง"}</button></div><div className="grid gap-3 md:grid-cols-2">{openShops.slice(0, 6).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div>{openShops.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">{query ? "ไม่พบร้านเปิดที่ตรงกับคำค้น" : "ขณะนี้ยังไม่มีร้านเปิดรับออเดอร์"}</div>}{locationState === "error" && <p className="mt-2 text-xs text-[#7A847D]">ยังไม่สามารถอ่านตำแหน่งได้ จึงแสดงร้านโดยไม่เรียงระยะทาง</p>}</section>
 
-        {midSponsor && <SponsorCard label={midSponsor.sponsorLabel} title={midSponsor.title} subtitle={midSponsor.subtitle} ctaLabel={midSponsor.ctaLabel} />}
+            <section className="overflow-hidden rounded-3xl border border-[#CFE2D1] bg-[#EDF7ED] p-5 md:flex md:items-center md:justify-between md:gap-5"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#EB681B]">MYTREE LOCAL MAP</p><h2 className="mt-1 text-xl font-black text-[#075B28]">ดูร้านอาหารใกล้ฉันบนแผนที่</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#53675A]">ค้นหาร้านในพื้นที่ พร้อมพัฒนาข้อมูลซอย ทางเข้า และจุดสังเกตที่คนในพื้นที่ใช้จริง</p></div><Link to="/map" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-[#087A31] px-5 text-sm font-bold text-white md:mt-0 md:shrink-0">เปิดแผนที่</Link></section>
 
-        <section aria-labelledby="nearby-title">
-          <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D65300]">เดินทางไม่นาน</p><h2 id="nearby-title" className="mt-0.5 text-lg font-extrabold">ใกล้คุณตอนนี้</h2></div>{nearbyState === "ready" && <span className="rounded-full bg-[#E7F8EA] px-2.5 py-1 text-[10px] font-bold text-[#078433]">เรียงตามระยะทาง</span>}</div>
-          {nearbyState === "loading" && <div className="rounded-2xl bg-white p-5 text-center text-sm text-[#7B887F]">กำลังค้นหาร้านใกล้คุณ...</div>}
-          {nearbyState === "error" && <div className="rounded-2xl border border-[#FFD0AD] bg-[#FFF7F0] p-4"><p className="text-sm font-semibold text-[#8A3D0B]">เปิดตำแหน่งเพื่อดูร้านที่ใกล้ที่สุด</p><button type="button" onClick={() => void loadNearby()} className="mt-2 min-h-11 rounded-xl bg-[#FF7417] px-4 text-sm font-bold text-white">ลองอีกครั้ง</button></div>}
-          {nearbyState === "ready" && <div className="space-y-2">{nearby.map((s) => { const km = s.distance_km == null ? null : Number(s.distance_km); return <Link key={s.shop_id} to="/shop/$shopId" params={{ shopId: s.shop_id }} className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-[#E5EAE4] bg-white p-2.5 shadow-[0_4px_14px_rgba(35,66,45,0.04)]"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#FFF1E2] to-[#F8D5AE] text-sm font-black text-[#B65B11]">{shopInitials(s.name)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-[#263F31]">{s.name}</p><p className="mt-0.5 truncate text-xs text-[#839087]">{s.category || "ร้านค้าใกล้บ้าน"}</p></div><span className="shrink-0 rounded-full bg-[#EEF5ED] px-2.5 py-1 text-[11px] font-bold text-[#34704A]">{km != null && !Number.isNaN(km) ? `${km.toFixed(1)} กม.` : "ใกล้คุณ"}</span></Link>; })}{nearby.length === 0 && <div className="rounded-2xl bg-white py-8 text-center text-sm text-[#839087]">ยังไม่พบร้านใกล้คุณ</div>}</div>}
-        </section>
-      </main>
+            <section aria-labelledby="menu-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="menu-title" className="text-lg font-black">{category ? `เมนู ${FOOD_CATEGORIES.find((entry) => entry.key === category)?.label ?? category}` : "เมนูน่าสั่งตอนนี้"}</h2><p className="mt-0.5 text-xs text-[#738078]">เมนูที่พร้อมขายจากร้านที่เปิดอยู่</p></div><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูเพิ่ม <ArrowIcon /></Link></div><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{visibleItems.slice(0, 8).map((item) => <MenuCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} onAdd={() => setConfiguring(item)} />)}</div>{visibleItems.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">ไม่พบเมนูที่ตรงกับคำค้นหรือหมวดนี้</div>}</section>
 
-      <FloatingCartBar cart={c} />
-      {comingSoonLabel && <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[#062614]/60 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" onClick={() => setComingSoonLabel(null)}><div className="w-full max-w-sm rounded-[28px] bg-white p-5 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF0E4] text-2xl">🌱</span><p className="mt-3 text-lg font-extrabold text-[#0A3B20]">{comingSoonLabel}</p><p className="mt-1 text-sm text-[#77857C]">กำลังเตรียมพื้นที่นี้ให้พร้อมใช้งาน</p><button type="button" onClick={() => setComingSoonLabel(null)} className="mt-5 min-h-12 w-full rounded-2xl bg-[#087A31] text-sm font-bold text-white">รับทราบ</button></div></div>}
+            {closedShops.length > 0 && <section aria-labelledby="closed-shop-title"><h2 id="closed-shop-title" className="mb-3 text-base font-black">ร้านอื่นในพื้นที่</h2><div className="grid gap-3 opacity-90 md:grid-cols-2">{closedShops.slice(0, 4).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div></section>}
+            <section className="rounded-3xl border border-[#E4E9E1] bg-white p-5"><h2 className="font-black text-[#203D2A]">มีร้านอาหาร?</h2><p className="mt-1 text-sm leading-6 text-[#6D7A71]">สมัครเข้าร่วม MyTree ยืนยันตำแหน่งร้าน และใช้ MyTree POS ฟรีตามเงื่อนไขของระบบ</p><Link to="/sweet/signup" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[#EB681B] px-4 text-sm font-bold text-[#B94A0C]">สมัครร้านค้ากับ MyTree</Link></section>
+          </>}
+        </main>
+      </div>
+      <FloatingCartBar cart={currentCart} />
+      {configuring && <ProductConfigurator product={{ itemId: configuring.item_id, shopId: configuring.shop_id, name: configuring.name, price: configuring.price, imageUrl: configuring.image_url }} onClose={() => setConfiguring(null)} onConfirm={addConfigured} />}
     </div>
   );
 }

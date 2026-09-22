@@ -37,7 +37,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
 export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+  return import.meta.env.VITE_ALLOW_ANONYMOUS_PREVIEW === "true"
+    || window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
 function isAiOfficeRoute(): boolean {
