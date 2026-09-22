@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "./DeliveryLocationPicker.css";
 import {
   DELIVERY_PLACE_SEARCH_MIN_LENGTH,
   searchDeliveryPlaces,
@@ -603,126 +604,78 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
         </div>
       )}
 
-      {mapsError ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">{mapsError}</div>
-      ) : (
-        <div className="relative h-[320px] min-h-[320px] overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
-          <div ref={mapElementRef} className="h-full w-full" />
-          <style>{`
-            .mytree-merchant-marker {
-              position: relative;
-              display: grid;
-              width: 44px;
-              height: 52px;
-              place-items: start center;
-              overflow: visible;
-              cursor: pointer;
-            }
-            .mytree-merchant-marker-visual {
-              display: grid;
-              width: 40px;
-              height: 40px;
-              place-items: center;
-              overflow: hidden;
-              border: 2px solid #14532d;
-              border-radius: 999px;
-              background: #dcfce7;
-              box-shadow: 0 8px 20px rgba(20, 83, 45, 0.28);
-              color: #052e16;
-              font-size: 17px;
-              font-weight: 800;
-              line-height: 1;
-            }
-            .mytree-merchant-marker-logo {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-            }
-            .mytree-merchant-marker-fallback {
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            }
-            .mytree-merchant-marker::after {
-              position: absolute;
-              left: 50%;
-              bottom: 7px;
-              width: 10px;
-              height: 10px;
-              border-right: 2px solid #14532d;
-              border-bottom: 2px solid #14532d;
-              background: #dcfce7;
-              content: "";
-              transform: translateX(-50%) rotate(45deg);
-            }
-            .mytree-cart-shop-marker .mytree-merchant-marker-visual {
-              border-color: #9a3412;
-              background: #ffedd5;
-              box-shadow: 0 10px 24px rgba(154, 52, 18, 0.34);
-              color: #9a3412;
-            }
-            .mytree-cart-shop-marker::after {
-              border-color: #9a3412;
-              background: #ffedd5;
-            }
-          `}</style>
-          {debugEnabled && (
-            <div className="absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-lg bg-gray-950/90 p-2 font-mono text-[10px] leading-4 text-white shadow-lg">
-              <p>build: {import.meta.env.VITE_COMMIT_SHA || import.meta.env.VITE_BUILD_ID || "unknown"}</p>
-              <p>shopId: {shopId || "missing"}</p>
-              <p>cartShopQuery: {cartShopQueryState}</p>
-              <p>cartShop: {cartShop ? `${cartShop.name} @ ${cartShop.lat.toFixed(6)},${cartShop.lng.toFixed(6)}` : "none"}</p>
-              <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
-              <p>markerLibrary: {markerLibraryState}</p>
-              <p>advancedMarker: {advancedMarkerAvailable ? "yes" : "no"}</p>
-              <p>legacyFallback: {legacyFallbackUsed ? "yes" : "no"}</p>
-              <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
-              <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
-              <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
-            </div>
-          )}
-          {(merchantLoading || merchantError || cartShopStatus || mapConfigStatus) && (
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
-              {mapConfigStatus ?? cartShopStatus ?? (merchantLoading ? "กำลังโหลดหมุดร้านค้า MyTree..." : merchantError)}
-            </div>
-          )}
-          {selectedMerchant && (
-            <div className="absolute inset-x-3 bottom-3 max-h-[45%] overflow-auto rounded-lg border border-green-200 bg-white p-3 text-left shadow-lg">
-              <div className="flex items-start gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-green-700 bg-green-50 text-sm font-black text-green-900">
-                  {selectedMerchant.logoUrl ? (
-                    <img src={selectedMerchant.logoUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <span aria-hidden="true">{merchantFallbackIcon(selectedMerchant.category)}</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold leading-5 text-gray-900">{selectedMerchant.name}</p>
-                  {(selectedMerchant.category || selectedMerchant.description) && (
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-gray-600">{selectedMerchant.category || selectedMerchant.description}</p>
-                  )}
-                  {merchantStatusLabel(selectedMerchant) && (
-                    <p className={`mt-1 text-[11px] font-semibold ${selectedMerchant.isOpen ? "text-green-700" : "text-gray-500"}`}>
-                      {merchantStatusLabel(selectedMerchant)}
-                    </p>
-                  )}
-                </div>
+      {/* map container ต้อง render เสมอ ห้ามเอาไปไว้ในกิ่ง conditional:
+          Google Maps สร้างและถือ DOM node ไว้เองใน mapElementRef (รวมถึง
+          AdvancedMarkerElement) ถ้า React unmount คอนเทนเนอร์ทิ้งตอน mapsError
+          ถูก set ขณะที่ Maps ยังถือ reference อยู่ จะเกิด DOM mismatch แบบ
+          เดียวกับที่ทำให้ getRootNode พังบน WebKit — error จึงแสดงเป็น overlay
+          ทับด้านบน ไม่ใช่ render แทนที่. */}
+      <div className="relative h-[320px] min-h-[320px] overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+        <div ref={mapElementRef} className="h-full w-full" />
+        {mapsError && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-amber-50/95 p-3">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">{mapsError}</p>
+          </div>
+        )}
+        {/* ย้าย marker CSS ไป DeliveryLocationPicker.css แล้ว — ห้ามใส่ <style> กลับมาใน JSX (ดูเหตุผลในไฟล์ .css) */}
+        {debugEnabled && (
+          <div className="absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-lg bg-gray-950/90 p-2 font-mono text-[10px] leading-4 text-white shadow-lg">
+            <p>build: {import.meta.env.VITE_COMMIT_SHA || import.meta.env.VITE_BUILD_ID || "unknown"}</p>
+            <p>shopId: {shopId || "missing"}</p>
+            <p>cartShopQuery: {cartShopQueryState}</p>
+            <p>cartShop: {cartShop ? `${cartShop.name} @ ${cartShop.lat.toFixed(6)},${cartShop.lng.toFixed(6)}` : "none"}</p>
+            <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
+            <p>markerLibrary: {markerLibraryState}</p>
+            <p>advancedMarker: {advancedMarkerAvailable ? "yes" : "no"}</p>
+            <p>legacyFallback: {legacyFallbackUsed ? "yes" : "no"}</p>
+            <p>markerCreated: {cartShopMarkerCreated ? "yes" : "no"}</p>
+            <p>mapInitialized: {mapReady ? "yes" : "no"}</p>
+            <p>initialFit: {initialFitExecuted ? "yes" : "no"}</p>
+          </div>
+        )}
+        {(merchantLoading || merchantError || cartShopStatus || mapConfigStatus) && (
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
+            {mapConfigStatus ?? cartShopStatus ?? (merchantLoading ? "กำลังโหลดหมุดร้านค้า MyTree..." : merchantError)}
+          </div>
+        )}
+        {selectedMerchant && (
+          <div className="absolute inset-x-3 bottom-3 max-h-[45%] overflow-auto rounded-lg border border-green-200 bg-white p-3 text-left shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-green-700 bg-green-50 text-sm font-black text-green-900">
+                {selectedMerchant.logoUrl ? (
+                  <img src={selectedMerchant.logoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span aria-hidden="true">{merchantFallbackIcon(selectedMerchant.category)}</span>
+                )}
               </div>
-              <div className="mt-3 flex gap-2">
-                <a href={`/shop/${encodeURIComponent(selectedMerchant.shopId)}`} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-semibold text-white">
-                  ดูร้านค้า
-                </a>
-                <button type="button" onClick={() => setSelectedMerchant(null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600">
-                  ปิด
-                </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold leading-5 text-gray-900">{selectedMerchant.name}</p>
+                {(selectedMerchant.category || selectedMerchant.description) && (
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-gray-600">{selectedMerchant.category || selectedMerchant.description}</p>
+                )}
+                {merchantStatusLabel(selectedMerchant) && (
+                  <p className={`mt-1 text-[11px] font-semibold ${selectedMerchant.isOpen ? "text-green-700" : "text-gray-500"}`}>
+                    {merchantStatusLabel(selectedMerchant)}
+                  </p>
+                )}
               </div>
             </div>
-          )}
-          {!candidate && (
-            <div className="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
-              ค้นหาแล้วเลือกผลลัพธ์ หรือแตะแผนที่เพื่อวางหมุด
+            <div className="mt-3 flex gap-2">
+              <a href={`/shop/${encodeURIComponent(selectedMerchant.shopId)}`} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-semibold text-white">
+                ดูร้านค้า
+              </a>
+              <button type="button" onClick={() => setSelectedMerchant(null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600">
+                ปิด
+              </button>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+        {!candidate && (
+          <div className="pointer-events-none absolute inset-x-3 top-3 rounded-lg bg-white/95 p-2 text-xs leading-4 text-gray-600 shadow-sm">
+            ค้นหาแล้วเลือกผลลัพธ์ หรือแตะแผนที่เพื่อวางหมุด
+          </div>
+        )}
+      </div>
 
       {candidate && (
         <div className="rounded-lg border border-gray-200 bg-white p-2.5 text-xs leading-5 text-gray-700">
