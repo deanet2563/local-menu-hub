@@ -36,6 +36,12 @@ const QUICK_ACCESS_TILES: QuickAccessTile[] = [
 type NearbyShopRow = { shop_id: string; name: string; category: string | null; distance_km: number | string | null };
 type NearbyState = "idle" | "loading" | "ready" | "error";
 
+// fn_shops_near_location(p_lat, p_lng) รับแค่พิกัด ไม่มี parameter limit
+// และคืนร้านที่เปิด/อนุมัติแล้วทั้งหมด เรียงตามระยะทางใกล้→ไกล
+// ตัดจำนวนฝั่ง client จึงเป็นทางที่กระทบน้อยสุด (Home เป็นหน้ารวม
+// ไม่ใช่หน้าค้นหา — เกิน 12 ร้านให้ไปต่อที่ lane ของหมวดนั้น).
+const NEARBY_LIMIT = 12;
+
 function shopInitials(name: string): string {
   return name.trim().slice(0, 2).toUpperCase() || "?";
 }
@@ -56,7 +62,7 @@ export function HomeOverview() {
       const loc = await getCurrentLocation();
       const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
       if (error) throw error;
-      setNearby((data as NearbyShopRow[]) ?? []);
+      setNearby(((data as NearbyShopRow[]) ?? []).slice(0, NEARBY_LIMIT));
       setNearbyState("ready");
     } catch {
       setNearbyState("error");
