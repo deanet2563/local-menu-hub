@@ -44,7 +44,7 @@ function loadMaps(): Promise<MyTreeGoogleMapsApi> {
   if (mapsPromise) return mapsPromise;
   const key = import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY;
   if (!key) return Promise.reject(new Error("maps_key_missing"));
-  mapsPromise = new Promise((resolve, reject) => {
+  const attempt = new Promise<MyTreeGoogleMapsApi>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>("script[data-mytree-google-maps]");
     if (existing) {
       existing.addEventListener("load", () => currentMaps() ? resolve(currentMaps()!) : reject(new Error("maps_load_failed")), { once: true });
@@ -59,8 +59,12 @@ function loadMaps(): Promise<MyTreeGoogleMapsApi> {
     script.addEventListener("load", () => currentMaps() ? resolve(currentMaps()!) : reject(new Error("maps_load_failed")), { once: true });
     script.addEventListener("error", () => reject(new Error("maps_load_failed")), { once: true });
     document.head.appendChild(script);
+  }).catch((error): never => {
+    mapsPromise = null;
+    throw error;
   });
-  return mapsPromise;
+  mapsPromise = attempt;
+  return attempt;
 }
 
 function markerIcon(shop: MerchantMapShop): Record<string, unknown> | undefined {
@@ -119,6 +123,7 @@ export function MyTreeMap() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [mapsError, setMapsError] = useState(false);
+  const [mapsAttempt, setMapsAttempt] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const [location, setLocation] = useState<MapLocation | null>(null);
   const [locationState, setLocationState] = useState<"idle" | "loading" | "denied" | "error" | "ready">("idle");
@@ -143,6 +148,7 @@ export function MyTreeMap() {
 
   useEffect(() => {
     let disposed = false;
+    setMapsError(false);
     void loadMaps().then((google) => {
       if (disposed || !mapElementRef.current || mapRef.current) return;
       mapRef.current = new google.maps.Map(mapElementRef.current, {
@@ -164,7 +170,7 @@ export function MyTreeMap() {
       locationMarkerRef.current = null;
       mapRef.current = null;
     };
-  }, []);
+  }, [mapsAttempt]);
 
   const categories = useMemo(() => Array.from(new Set(shops.map((shop) => shop.category).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, "th")), [shops]);
   const filteredShops = useMemo(() => {
@@ -172,6 +178,12 @@ export function MyTreeMap() {
     if (!location) return filtered;
     return [...filtered].sort((a, b) => distanceKm(location, a) - distanceKm(location, b));
   }, [category, location, openOnly, query, shops]);
+
+  useEffect(() => {
+    if (selectedShop && !filteredShops.some((shop) => shop.shopId === selectedShop.shopId)) {
+      setSelectedShop(null);
+    }
+  }, [filteredShops, selectedShop]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -183,13 +195,24 @@ export function MyTreeMap() {
       const listener = marker.addListener("click", () => setSelectedShop(shop));
       return { marker, listener };
     });
-    if (filteredShops.length > 0) {
+    if (filteredShops.length === 1) {
+      map.panTo({ lat: filteredShops[0]!.lat, lng: filteredShops[0]!.lng });
+      map.setZoom(15);
+    } else if (filteredShops.length > 1) {
       const bounds = new google.maps.LatLngBounds();
       filteredShops.forEach((shop) => bounds.extend({ lat: shop.lat, lng: shop.lng }));
       if (location) bounds.extend(location);
       map.fitBounds(bounds, 56);
     }
   }, [filteredShops, location, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const google = currentMaps();
+    if (!mapReady || !map || !google || !location) return;
+    locationMarkerRef.current?.setMap(null);
+    locationMarkerRef.current = new google.maps.Marker({ map, position: location, title: "ตำแหน่งของฉัน", zIndex: 30_000 });
+  }, [location, mapReady]);
 
   function locateMe() {
     if (!navigator.geolocation) return setLocationState("error");
@@ -242,8 +265,8 @@ export function MyTreeMap() {
           <div className="mt-3 flex items-center justify-between gap-3">
             <label className="flex items-center gap-2 text-xs font-semibold text-[#315a42]"><input type="checkbox" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)} className="h-4 w-4 accent-[#1f6a45]" /> เปิดอยู่ตอนนี้</label>
             <div className="rounded-full bg-[#eef7e9] p-1">
-              <button type="button" onClick={() => setView("map")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "map" ? "bg-white text-[#1f6a45] shadow-sm" : "text-[#668170]"}`}>แผนที่</button>
-              <button type="button" onClick={() => setView("list")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "list" ? "bg-white text-[#1f6a45] shadow-sm" : "text-[#668170]"}`}>รายการ</button>
+              <button type="button" aria-pressed={view === "map"} onClick={() => setView("map")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "map" ? "bg-white text-[#1f6a45] shadow-sm" : "text-[#668170]"}`}>แผนที่</button>
+              <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "list" ? "bg-white text-[#1f6a45] shadow-sm" : "text-[#668170]"}`}>รายการ</button>
             </div>
           </div>
         </div>
@@ -253,7 +276,7 @@ export function MyTreeMap() {
         <div className="mt-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-4">
           <div className={view === "list" ? "hidden lg:block" : "relative h-[calc(100dvh-280px)] min-h-[430px] overflow-hidden rounded-3xl border border-[#dce8dc] bg-[#eef3ec]"}>
             <div ref={mapElementRef} className="h-full w-full" />
-            {mapsError && <div className="absolute inset-0 grid place-items-center bg-[#f8fbf5] p-8 text-center"><div><p className="font-bold">เปิดแผนที่ไม่ได้ในขณะนี้</p><p className="mt-1 text-sm text-gray-600">ยังสามารถดูร้านแบบรายการและเปิดนำทางได้</p><button type="button" onClick={() => setView("list")} className="mt-4 rounded-xl bg-[#1f6a45] px-4 py-2 text-sm font-semibold text-white">ดูแบบรายการ</button></div></div>}
+            {mapsError && <div className="absolute inset-0 grid place-items-center bg-[#f8fbf5] p-8 text-center"><div><p className="font-bold">เปิดแผนที่ไม่ได้ในขณะนี้</p><p className="mt-1 text-sm text-gray-600">ยังสามารถดูร้านแบบรายการและเปิดนำทางได้</p><div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => setMapsAttempt((attempt) => attempt + 1)} className="rounded-xl border border-[#b9d2bd] bg-white px-4 py-2 text-sm font-semibold text-[#1f6a45]">ลองโหลดใหม่</button><button type="button" onClick={() => setView("list")} className="rounded-xl bg-[#1f6a45] px-4 py-2 text-sm font-semibold text-white">ดูแบบรายการ</button></div></div></div>}
             {loading && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-3 text-sm shadow">กำลังโหลดร้านค้าใกล้บ้าน…</div>}
             {!loading && !loadError && filteredShops.length === 0 && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-4 text-center text-sm shadow">ไม่พบร้านตามตัวกรองนี้ ลองเลือก “ทั้งหมด” หรือปิดตัวกรอง “เปิดอยู่ตอนนี้”</div>}
             {selectedShop && <div className="absolute inset-x-3 bottom-3 z-10"><ShopCard shop={selectedShop} location={location} compact /></div>}
