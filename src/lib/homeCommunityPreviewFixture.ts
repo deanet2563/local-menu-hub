@@ -11,6 +11,15 @@
 // data shape long-term.
 // ============================================================
 
+// TODO: static community name — real community membership/scoping comes from
+// Community lane (codex/community-phase3-foundation), not yet merged. Replace
+// with dynamic value once merged.
+//
+// Sammakorn Village เป็น pilot community เดียวที่มีอยู่จริงตอนนี้ Home จึง
+// ตั้งชื่อนี้ค้างไว้ได้ — แต่ทันทีที่มีชุมชนที่สอง label นี้จะกลายเป็นข้อมูลผิด
+// สำหรับผู้ใช้ชุมชนอื่น ไม่ใช่แค่ค่า default ที่ไม่อัปเดต.
+export const CURRENT_COMMUNITY_NAME = "สัมมากรวิลเลจ";
+
 export type HomeCommunityEvent = {
   id: string;
   title: string;

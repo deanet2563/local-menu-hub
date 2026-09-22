@@ -8,7 +8,7 @@ import { PromoBanner } from "@/components/customer/PromoBanner";
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { HOME_SPONSOR_CARDS, selectHomeSponsorCard } from "@/lib/homeSponsorCards";
 import { HOME_PROMO_BANNER } from "@/lib/homePromoBanner";
-import { HOME_COMMUNITY_EVENTS, HOME_COMMUNITY_POSTS } from "@/lib/homeCommunityPreviewFixture";
+import { CURRENT_COMMUNITY_NAME, HOME_COMMUNITY_EVENTS, HOME_COMMUNITY_POSTS } from "@/lib/homeCommunityPreviewFixture";
 
 // ============================================================
 // MyTree — Home (`/`) overview. Approved page split: Home is the
@@ -120,9 +120,17 @@ export function HomeOverview() {
       )}
 
       <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#28432f]">ชุมชน</h2>
-          <Link to="/community" className="text-xs text-[#3f6b4a]">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="shrink-0 text-sm font-bold text-[#28432f]">ชุมชน</h2>
+            {/* TODO: static community name — real community membership/scoping
+                comes from Community lane (codex/community-phase3-foundation),
+                not yet merged. Replace with dynamic value once merged. */}
+            <span className="min-w-0 truncate rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]">
+              {CURRENT_COMMUNITY_NAME}
+            </span>
+          </div>
+          <Link to="/community" className="shrink-0 text-xs text-[#3f6b4a]">
             ดูทั้งหมด
           </Link>
         </div>
