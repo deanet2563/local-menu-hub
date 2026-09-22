@@ -18,6 +18,15 @@ export type CatalogShop = {
   distance_km: number | null;
 };
 export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+export type ShopPromotion = {
+  id: string;
+  shop_id: string;
+  special_text: string;
+  created_at: string;
+  shop_name: string;
+  shop_logo_url: string | null;
+  shop_is_open: boolean;
+};
 export type LocationState = "idle" | "loading" | "ready" | "error";
 export type CatalogState = "loading" | "ready" | "error";
 
@@ -26,6 +35,7 @@ const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 export function useCustomerCatalog() {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [promotions, setPromotions] = useState<ShopPromotion[]>([]);
   const [catalogState, setCatalogState] = useState<CatalogState>("loading");
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [nearOrder, setNearOrder] = useState<string[] | null>(null);
@@ -38,7 +48,7 @@ export function useCustomerCatalog() {
     setCatalogState("loading");
     setCatalogError(null);
     try {
-      const [{ data: s, error: shopError }, { data: m, error: itemError }] = await Promise.all([
+      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: p, error: promotionError }] = await Promise.all([
         publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open").eq("is_approved", true).eq("is_banned", false),
         publicSupabase
           .from("menu_items")
@@ -47,11 +57,46 @@ export function useCustomerCatalog() {
           .eq("shops.is_open", true)
           .eq("shops.is_approved", true)
           .eq("shops.is_banned", false),
+        publicSupabase
+          .from("daily_specials")
+          .select("id,shop_id,special_text,created_at, shops!inner(name,logo_url,is_open,is_approved,is_banned)")
+          .eq("shops.is_approved", true)
+          .eq("shops.is_banned", false)
+          .order("created_at", { ascending: false })
+          .limit(8),
       ]);
       if (shopError) throw shopError;
       if (itemError) throw itemError;
       setAllShops(((s as Omit<CatalogShop, "distance_km">[]) ?? []).map((shop) => ({ ...shop, distance_km: null })));
       setItems((m as CatalogItem[]) ?? []);
+      if (promotionError) {
+        // Promotions are optional home content. A promotion read must never
+        // turn the whole ordering home into a blank/error screen.
+        setPromotions([]);
+      } else {
+        type PromotionRow = {
+          id: string;
+          shop_id: string;
+          special_text: string | null;
+          created_at: string;
+          shops: { name: string; logo_url: string | null; is_open: boolean } | { name: string; logo_url: string | null; is_open: boolean }[];
+        };
+        const rows = (p as unknown as PromotionRow[]) ?? [];
+        setPromotions(rows.flatMap((promotion) => {
+          const relatedShop = Array.isArray(promotion.shops) ? promotion.shops[0] : promotion.shops;
+          const specialText = promotion.special_text?.trim();
+          if (!relatedShop || !specialText) return [];
+          return [{
+            id: promotion.id,
+            shop_id: promotion.shop_id,
+            special_text: specialText,
+            created_at: promotion.created_at,
+            shop_name: relatedShop.name,
+            shop_logo_url: relatedShop.logo_url,
+            shop_is_open: relatedShop.is_open,
+          }];
+        }));
+      }
       setCatalogState("ready");
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : "โหลดข้อมูลร้านไม่สำเร็จ");
@@ -129,6 +174,7 @@ export function useCustomerCatalog() {
   return {
     shops,
     items,
+    promotions,
     loading: catalogState === "loading",
     catalogState,
     catalogError,

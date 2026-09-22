@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { cart, useCart } from "@/lib/cart";
-import { useCustomerCatalog, type CatalogItem, type CatalogShop } from "@/hooks/useCustomerCatalog";
+import { useCustomerCatalog, type CatalogItem, type CatalogShop, type ShopPromotion } from "@/hooks/useCustomerCatalog";
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 import { bucketKeyForCategory } from "@/lib/foodHubCategories";
@@ -55,8 +55,31 @@ function MenuCard({ item, shopName, onAdd }: { item: CatalogItem; shopName: stri
   );
 }
 
+function PromotionCard({ promotion }: { promotion: ShopPromotion }) {
+  return (
+    <Link
+      to="/shop/$shopId"
+      params={{ shopId: promotion.shop_id }}
+      className="group flex min-w-[280px] snap-start items-center gap-3 rounded-2xl border border-[#F0D1B7] bg-[#FFF8F0] p-3 shadow-[0_5px_16px_rgba(111,62,25,0.06)] sm:min-w-0"
+    >
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white">
+        <ImageWithFallback src={promotion.shop_logo_url} alt={promotion.shop_name} kind="shop" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[#FFE3CB] px-2 py-1 text-[10px] font-extrabold text-[#A9420A]">โปรโมชันจากร้าน</span>
+          {!promotion.shop_is_open && <span className="text-[10px] font-bold text-[#747B76]">ร้านปิดอยู่</span>}
+        </div>
+        <h3 className="mt-2 line-clamp-2 text-sm font-extrabold leading-5 text-[#71320F]">{promotion.special_text}</h3>
+        <p className="mt-1 truncate text-xs font-semibold text-[#6B746D]">{promotion.shop_name}</p>
+      </div>
+      <span className="shrink-0 text-[#C55514] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>
+    </Link>
+  );
+}
+
 export function HomeOverview() {
-  const { items, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
+  const { items, promotions, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
   const currentCart = useCart();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -100,11 +123,13 @@ export function HomeOverview() {
           {catalogState === "error" && <section className="rounded-3xl border border-[#F2CDAF] bg-[#FFF5EC] p-5"><h2 className="font-extrabold text-[#79340F]">โหลดร้านอาหารไม่สำเร็จ</h2><p className="mt-1 text-sm text-[#89583C]">{catalogError || "กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"}</p><button type="button" onClick={() => void reloadCatalog()} className="mt-4 min-h-11 rounded-xl bg-[#EB681B] px-5 text-sm font-bold text-white">ลองอีกครั้ง</button></section>}
 
           {catalogState === "ready" && <>
-            <section aria-labelledby="open-nearby-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="open-nearby-title" className="text-lg font-black">ร้านเปิดใกล้คุณ</h2><p className="mt-0.5 text-xs text-[#738078]">เลือกร้านที่พร้อมรับออเดอร์ตอนนี้</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="min-h-10 shrink-0 text-xs font-bold text-[#087A31] disabled:opacity-50">{locationState === "loading" ? "กำลังหาตำแหน่ง…" : "อัปเดตตำแหน่ง"}</button></div><div className="grid gap-3 md:grid-cols-2">{openShops.slice(0, 6).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div>{openShops.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">{query ? "ไม่พบร้านเปิดที่ตรงกับคำค้น" : "ขณะนี้ยังไม่มีร้านเปิดรับออเดอร์"}</div>}{locationState === "error" && <p className="mt-2 text-xs text-[#7A847D]">ยังไม่สามารถอ่านตำแหน่งได้ จึงแสดงร้านโดยไม่เรียงระยะทาง</p>}</section>
+            <section aria-labelledby="menu-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="menu-title" className="text-lg font-black">{category ? `เมนู ${FOOD_CATEGORIES.find((entry) => entry.key === category)?.label ?? category}` : "เมนูน่าสั่งตอนนี้"}</h2><p className="mt-0.5 text-xs text-[#738078]">เมนูที่พร้อมขายจากร้านที่เปิดอยู่</p></div><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูเพิ่ม <ArrowIcon /></Link></div><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{visibleItems.slice(0, 8).map((item) => <MenuCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} onAdd={() => setConfiguring(item)} />)}</div>{visibleItems.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">ไม่พบเมนูที่ตรงกับคำค้นหรือหมวดนี้</div>}</section>
+
+            {promotions.length > 0 && <section aria-labelledby="promotion-title"><div className="mb-3"><h2 id="promotion-title" className="text-lg font-black">โปรโมชันจากร้าน</h2><p className="mt-0.5 text-xs text-[#738078]">ข้อเสนอที่ร้านค้าเปิดแสดงอยู่ในขณะนี้</p></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">{promotions.map((promotion) => <PromotionCard key={promotion.id} promotion={promotion} />)}</div></section>}
 
             <section className="overflow-hidden rounded-3xl border border-[#CFE2D1] bg-[#EDF7ED] p-5 md:flex md:items-center md:justify-between md:gap-5"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#EB681B]">MYTREE LOCAL MAP</p><h2 className="mt-1 text-xl font-black text-[#075B28]">ดูร้านอาหารใกล้ฉันบนแผนที่</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#53675A]">ค้นหาร้านในพื้นที่ พร้อมพัฒนาข้อมูลซอย ทางเข้า และจุดสังเกตที่คนในพื้นที่ใช้จริง</p></div><Link to="/map" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-[#087A31] px-5 text-sm font-bold text-white md:mt-0 md:shrink-0">เปิดแผนที่</Link></section>
 
-            <section aria-labelledby="menu-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="menu-title" className="text-lg font-black">{category ? `เมนู ${FOOD_CATEGORIES.find((entry) => entry.key === category)?.label ?? category}` : "เมนูน่าสั่งตอนนี้"}</h2><p className="mt-0.5 text-xs text-[#738078]">เมนูที่พร้อมขายจากร้านที่เปิดอยู่</p></div><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูเพิ่ม <ArrowIcon /></Link></div><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{visibleItems.slice(0, 8).map((item) => <MenuCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} onAdd={() => setConfiguring(item)} />)}</div>{visibleItems.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">ไม่พบเมนูที่ตรงกับคำค้นหรือหมวดนี้</div>}</section>
+            <section aria-labelledby="open-nearby-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="open-nearby-title" className="text-lg font-black">ร้านเปิดใกล้คุณ</h2><p className="mt-0.5 text-xs text-[#738078]">เลือกร้านที่พร้อมรับออเดอร์ตอนนี้</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="min-h-10 shrink-0 text-xs font-bold text-[#087A31] disabled:opacity-50">{locationState === "loading" ? "กำลังหาตำแหน่ง…" : "อัปเดตตำแหน่ง"}</button></div><div className="grid gap-3 md:grid-cols-2">{openShops.slice(0, 6).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div>{openShops.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">{query ? "ไม่พบร้านเปิดที่ตรงกับคำค้น" : "ขณะนี้ยังไม่มีร้านเปิดรับออเดอร์"}</div>}{locationState === "error" && <p className="mt-2 text-xs text-[#7A847D]">ยังไม่สามารถอ่านตำแหน่งได้ จึงแสดงร้านโดยไม่เรียงระยะทาง</p>}</section>
 
             {closedShops.length > 0 && <section aria-labelledby="closed-shop-title"><h2 id="closed-shop-title" className="mb-3 text-base font-black">ร้านอื่นในพื้นที่</h2><div className="grid gap-3 opacity-90 md:grid-cols-2">{closedShops.slice(0, 4).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div></section>}
             <section className="rounded-3xl border border-[#E4E9E1] bg-white p-5"><h2 className="font-black text-[#203D2A]">มีร้านอาหาร?</h2><p className="mt-1 text-sm leading-6 text-[#6D7A71]">สมัครเข้าร่วม MyTree ยืนยันตำแหน่งร้าน และใช้ MyTree POS ฟรีตามเงื่อนไขของระบบ</p><Link to="/sweet/signup" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[#EB681B] px-4 text-sm font-bold text-[#B94A0C]">สมัครร้านค้ากับ MyTree</Link></section>
