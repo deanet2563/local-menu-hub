@@ -1,23 +1,28 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createServer } from 'vite';
+import { build, preview } from 'vite';
 import { chromium, webkit } from 'playwright';
 
 const root = process.cwd();
 const fixture = path.join(root, 'tools/tests/cart-map');
-const server = await createServer({
+const outDir = await mkdtemp(path.join(tmpdir(), 'mytree-cart-map-'));
+const config = {
   configFile: false, root, logLevel: 'error',
-  optimizeDeps: { entries: ['tools/tests/cart-map/index.html'] },
   resolve: { alias: [
     { find: '@tanstack/react-router', replacement: path.join(fixture, 'router.tsx') },
     ...['supabase', 'deliveryLocation', 'order'].map(name => ({ find: `@/lib/${name}`, replacement: path.join(fixture, 'backend.ts') })),
     { find: '@', replacement: path.join(root, 'src') },
   ] },
-  define: { 'import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY': JSON.stringify('test-key'), 'import.meta.env.VITE_GOOGLE_MAPS_MAP_ID': JSON.stringify('test-map') },
-  server: { host: '127.0.0.1', port: 0 },
-});
-await server.listen();
+  define: { 'process.env.NODE_ENV': JSON.stringify('development'), 'import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY': JSON.stringify('test-key'), 'import.meta.env.VITE_GOOGLE_MAPS_MAP_ID': JSON.stringify('test-map') },
+  build: { outDir, emptyOutDir: true, rollupOptions: { input: path.join(fixture, 'index.html') } },
+  preview: { host: '127.0.0.1', port: 0 },
+};
+// Static fixture avoids Vite dependency-optimizer reloads racing the assertions.
+// Development React is explicit so StrictMode still exercises effect replay.
+await build(config);
+const server = await preview(config);
 const address = server.httpServer.address();
 const base = `http://127.0.0.1:${address.port}/tools/tests/cart-map/`;
 const engine = process.env.TEST_BROWSER === 'webkit' ? webkit : chromium;
@@ -121,4 +126,4 @@ try {
     assert.equal((await stats()).orders, 1);
   });
   console.log(`${passed} cart map regression scenarios passed (${process.env.TEST_BROWSER || 'chromium'}, 390x844, StrictMode, mocked SDK/backend).`);
-} finally { await browser.close(); await server.close(); }
+} finally { await browser.close(); await new Promise(resolve => server.httpServer.close(resolve)); await rm(outDir, { recursive: true, force: true }); }
