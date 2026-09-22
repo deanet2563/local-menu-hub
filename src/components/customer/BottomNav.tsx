@@ -15,9 +15,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 // exactly (a stylised people/community glyph, not a literal tree).
 // ============================================================
 
-const MOSS = "#3f6b4a";
-const MOSS_DEEP = "#28432f";
-const INK_FAINT = "#a3a99c";
+const MOSS = "#10A53D";
+const MOSS_DEEP = "#06752B";
+const INK_FAINT = "#98A39B";
 
 type NavTab = {
   to: "/" | "/hub" | "/community" | "/map" | "/account";
@@ -30,7 +30,7 @@ function iconProps(active: boolean) {
     viewBox: "0 0 24 24",
     fill: "none" as const,
     stroke: active ? MOSS : INK_FAINT,
-    strokeWidth: 1.8,
+    strokeWidth: active ? 2.2 : 1.8,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     className: "w-6 h-6",
@@ -103,8 +103,9 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-gray-200 bg-white/95 backdrop-blur px-1.5 pt-2.5"
-      style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom, 0px))" }}
+      aria-label="เมนูหลัก"
+      className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-[#E4EAE5] bg-white/95 px-2 pt-2 shadow-[0_-8px_26px_rgba(11,81,36,0.08)] backdrop-blur-xl"
+      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
     >
       {TABS.map((tab) => {
         const active = pathname === tab.to;
@@ -113,15 +114,13 @@ export function BottomNav() {
           <Link
             key={tab.to}
             to={tab.to}
-            className="flex flex-col items-center gap-1 py-1 text-[10.5px] font-semibold"
+            aria-current={active ? "page" : undefined}
+            className="relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-2xl py-1 text-[10.5px] font-semibold"
             style={{ color: active ? MOSS_DEEP : INK_FAINT }}
           >
-            <Icon active={active} />
-            <span>{tab.label}</span>
-            <span
-              className="h-1 w-1 rounded-full -mt-0.5"
-              style={{ backgroundColor: MOSS, opacity: active ? 1 : 0 }}
-            />
+            {active && <span className="absolute inset-x-2 top-0 h-9 rounded-2xl bg-[#E7F8EA]" aria-hidden="true" />}
+            <span className="relative"><Icon active={active} /></span>
+            <span className="relative">{tab.label}</span>
           </Link>
         );
       })}
