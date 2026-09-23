@@ -5,6 +5,7 @@ import { useCustomerCatalog, type CatalogItem, type CatalogShop, type ShopPromot
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 import { bucketKeyForCategory } from "@/lib/foodHubCategories";
+import { isOrderingPreview } from "@/lib/supabase";
 
 const FOOD_CATEGORIES = [
   { key: "single-dish", label: "อาหารจานเดียว", icon: "🍛" },
@@ -24,6 +25,29 @@ function ArrowIcon() {
   return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>;
 }
 
+function MyTreeLogo() {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
+      {failed ? (
+        <span className="text-3xl" role="img" aria-label="MyTree">🌳</span>
+      ) : (
+        <img
+          src="/brand/mytree-logo.png"
+          alt="MyTree"
+          width={44}
+          height={44}
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+          onError={() => setFailed(true)}
+          className="h-11 w-11 object-contain"
+        />
+      )}
+    </div>
+  );
+}
+
 function ImageWithFallback({ src, alt, kind }: { src: string | null; alt: string; kind: "shop" | "food" }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return <div className="flex h-full w-full items-center justify-center bg-[#EEF4EB] text-2xl" role="img" aria-label={`${alt} ไม่มีรูป`}>{kind === "shop" ? "🏪" : "🍽️"}</div>;
@@ -31,19 +55,17 @@ function ImageWithFallback({ src, alt, kind }: { src: string | null; alt: string
 }
 
 function ShopCard({ shop }: { shop: CatalogShop }) {
-  const content = <>
+  return (
+    <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)]">
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageWithFallback src={shop.logo_url} alt={shop.name} kind="shop" /></div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${shop.is_open ? "bg-[#E5F6E9] text-[#087A31]" : "bg-[#F0F1EF] text-[#747B76]"}`}>{shop.is_open ? "เปิดอยู่" : "ปิดอยู่"}</span></div>
+        <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p><span className="shrink-0 rounded-full bg-[#E5F6E9] px-2 py-1 text-[10px] font-bold text-[#087A31]">เปิดอยู่</span></div>
         <p className="mt-1 truncate text-xs text-[#77837B]">{shop.category || "ร้านอาหารใกล้บ้าน"}</p>
         <p className="mt-1 text-[11px] font-semibold text-[#506459]">{shop.distance_km == null ? "ดูรายละเอียดร้าน" : `${shop.distance_km.toFixed(1)} กม.`}</p>
       </div>
-      {shop.is_open && <span className="text-[#9AA59E] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>}
-    </>;
-  const className = `group flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)] ${shop.is_open ? "" : "cursor-not-allowed grayscale-[20%]"}`;
-  return shop.is_open
-    ? <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className={className}>{content}</Link>
-    : <div className={className} aria-disabled="true" title="ร้านยังไม่เปิดรับออเดอร์">{content}</div>;
+      <span className="text-[#9AA59E] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>
+    </Link>
+  );
 }
 
 function MenuCard({ item, shopName, onAdd }: { item: CatalogItem; shopName: string; onAdd: () => void }) {
@@ -85,8 +107,10 @@ export function HomeOverview() {
   const [category, setCategory] = useState<string | null>(null);
   const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase("th");
+  const previewMode = isOrderingPreview();
 
   const visibleShops = useMemo(() => allOrderedShops.filter((shop) => {
+    if (!shop.is_open) return false;
     if (!normalizedQuery) return true;
     const haystack = `${shop.name} ${shop.category ?? ""} ${shopKeywords(shop.shop_id)}`.toLocaleLowerCase("th");
     return haystack.includes(normalizedQuery);
@@ -97,6 +121,49 @@ export function HomeOverview() {
     const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)} ${shopKeywords(item.shop_id)}`.toLocaleLowerCase("th");
     return matchesCategory && (!normalizedQuery || haystack.includes(normalizedQuery));
   }), [items, category, normalizedQuery, shopName, shopKeywords]);
+
+  const searchSuggestions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const rows = [
+      ...visibleShops.map((shop) => ({ key: `shop-${shop.shop_id}`, label: shop.name, meta: shop.category || "ร้านอาหาร", rank: shop.name.toLocaleLowerCase("th").startsWith(normalizedQuery) ? 0 : 2 })),
+      ...items.flatMap((item) => {
+        const name = item.name.toLocaleLowerCase("th");
+        const categoryName = (item.category ?? "").toLocaleLowerCase("th");
+        const shop = shopName(item.shop_id);
+        const keywords = shopKeywords(item.shop_id).toLocaleLowerCase("th");
+        if (![name, categoryName, shop.toLocaleLowerCase("th"), keywords].some((value) => value.includes(normalizedQuery))) return [];
+        return [{ key: `item-${item.item_id}`, label: item.name, meta: shop, rank: name.startsWith(normalizedQuery) ? 0 : categoryName.startsWith(normalizedQuery) ? 1 : 2 }];
+      }),
+    ];
+    return rows.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, "th")).slice(0, 8);
+  }, [normalizedQuery, visibleShops, items, shopName, shopKeywords]);
+
+  const displayPromotions = useMemo<ShopPromotion[]>(() => {
+    const live = promotions.filter((promotion) => promotion.shop_is_open);
+    if (live.length > 0 || !previewMode) return live;
+    const demoShop = visibleShops[0];
+    if (!demoShop) return [];
+    return [
+      {
+        id: "preview-demo-1",
+        shop_id: demoShop.shop_id,
+        special_text: "ตัวอย่างโปรโมชัน: ซื้อครบ 200 บาท รับส่วนลด 20 บาท",
+        created_at: new Date(0).toISOString(),
+        shop_name: demoShop.name,
+        shop_logo_url: demoShop.logo_url,
+        shop_is_open: true,
+      },
+      {
+        id: "preview-demo-2",
+        shop_id: demoShop.shop_id,
+        special_text: "ตัวอย่างโปรโมชัน: เมนูพิเศษประจำวัน ราคาพิเศษเฉพาะวันนี้",
+        created_at: new Date(0).toISOString(),
+        shop_name: demoShop.name,
+        shop_logo_url: demoShop.logo_url,
+        shop_is_open: true,
+      },
+    ];
+  }, [promotions, previewMode, visibleShops]);
 
   function addConfigured(input: { product: ConfigurableProduct; qty: number; options: Parameters<typeof cart.add>[0]["options"]; note: string | null }) {
     const payload = { itemId: input.product.itemId, shopId: input.product.shopId, name: input.product.name, price: input.product.price, imageUrl: input.product.imageUrl, options: input.options, note: input.note };
@@ -109,15 +176,30 @@ export function HomeOverview() {
     setConfiguring(null);
   }
 
-  const openShops = visibleShops.filter((shop) => shop.is_open);
-  const closedShops = visibleShops.filter((shop) => !shop.is_open);
+  const openShops = visibleShops;
 
   return (
     <div className="min-h-screen bg-[#F7F8F3] pb-32 text-[#183B27]">
       <div className="mx-auto max-w-6xl">
         <header className="border-b border-[#E4EAE2] bg-[#FFFDF8] px-4 pb-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-6">
-          <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2.5"><img src="/brand/mytree-logo.png" alt="MyTree" className="h-11 w-11 shrink-0 object-contain" /><div className="min-w-0"><p className="text-lg font-black leading-tight text-[#075B28]">MyTree</p><Link to="/map" className="flex min-h-6 items-center gap-1 text-xs font-semibold text-[#65736A]" aria-label="เปลี่ยนพื้นที่บนแผนที่"><span className="truncate">สัมมากร</span><span className="text-[#EB681B]">เปลี่ยนพื้นที่</span></Link></div></div><Link to="/account" aria-label="บัญชีของฉัน" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DEE7DD] bg-white text-[#087A31]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-6 w-6"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg></Link></div>
-          <label className="mt-3 flex min-h-12 items-center gap-3 rounded-2xl border border-[#DDE7DC] bg-white px-4 shadow-[0_4px_14px_rgba(41,74,50,0.05)] focus-within:border-[#77B888] focus-within:ring-2 focus-within:ring-[#D9F0DE]"><span className="text-[#EB681B]"><SearchIcon /></span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาร้าน เมนู หรือประเภทอาหาร" className="min-w-0 flex-1 bg-transparent text-sm text-[#203D2A] outline-none placeholder:text-[#919B94]" />{query && <button type="button" onClick={() => setQuery("")} className="min-h-9 px-1 text-xs font-bold text-[#6D786F]">ล้าง</button>}</label>
+          <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2.5"><MyTreeLogo /><div className="min-w-0"><p className="text-lg font-black leading-tight text-[#075B28]">MyTree</p><Link to="/map" className="flex min-h-6 items-center gap-1 text-xs font-semibold text-[#65736A]" aria-label="เปลี่ยนพื้นที่บนแผนที่"><span className="truncate">สัมมากร</span><span className="text-[#EB681B]">เปลี่ยนพื้นที่</span></Link></div></div><Link to="/account" aria-label="บัญชีของฉัน" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DEE7DD] bg-white text-[#087A31]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-6 w-6"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg></Link></div>
+          <div className="relative mt-3">
+            <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#DDE7DC] bg-white px-4 shadow-[0_4px_14px_rgba(41,74,50,0.05)] focus-within:border-[#77B888] focus-within:ring-2 focus-within:ring-[#D9F0DE]">
+              <span className="text-[#EB681B]"><SearchIcon /></span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาร้าน เมนู หรือประเภทอาหาร" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-sm text-[#203D2A] outline-none placeholder:text-[#919B94]" />
+              {query && <button type="button" onClick={() => setQuery("")} className="min-h-9 px-1 text-xs font-bold text-[#6D786F]">ล้าง</button>}
+            </label>
+            {normalizedQuery && searchSuggestions.length > 0 && (
+              <div className="absolute inset-x-0 top-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-2xl border border-[#DDE7DC] bg-white shadow-[0_14px_30px_rgba(31,61,42,0.14)]">
+                {searchSuggestions.map((suggestion) => (
+                  <button key={suggestion.key} type="button" onClick={() => setQuery(suggestion.label)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-[#EEF1EC] px-4 text-left last:border-b-0 hover:bg-[#F5FAF5]">
+                    <span className="truncate text-sm font-bold text-[#203D2A]">{suggestion.label}</span>
+                    <span className="shrink-0 text-xs text-[#7A867E]">{suggestion.meta}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </header>
 
         <main className="space-y-7 px-4 py-5 sm:px-6 lg:px-8">
@@ -129,13 +211,12 @@ export function HomeOverview() {
           {catalogState === "ready" && <>
             <section aria-labelledby="menu-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="menu-title" className="text-lg font-black">{category ? `เมนู ${FOOD_CATEGORIES.find((entry) => entry.key === category)?.label ?? category}` : "เมนูน่าสั่งตอนนี้"}</h2><p className="mt-0.5 text-xs text-[#738078]">เมนูที่พร้อมขายจากร้านที่เปิดอยู่</p></div><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูเพิ่ม <ArrowIcon /></Link></div><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{visibleItems.slice(0, 8).map((item) => <MenuCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} onAdd={() => setConfiguring(item)} />)}</div>{visibleItems.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">ไม่พบเมนูที่ตรงกับคำค้นหรือหมวดนี้</div>}</section>
 
-            {promotions.length > 0 && <section aria-labelledby="promotion-title"><div className="mb-3"><h2 id="promotion-title" className="text-lg font-black">โปรโมชันจากร้าน</h2><p className="mt-0.5 text-xs text-[#738078]">ข้อเสนอที่ร้านค้าเปิดแสดงอยู่ในขณะนี้</p></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">{promotions.map((promotion) => <PromotionCard key={promotion.id} promotion={promotion} />)}</div></section>}
+            {displayPromotions.length > 0 && <section aria-labelledby="promotion-title"><div className="mb-3"><div className="flex items-center gap-2"><h2 id="promotion-title" className="text-lg font-black">โปรโมชันจากร้าน</h2>{previewMode && promotions.length === 0 && <span className="rounded-full bg-[#FFF0E3] px-2 py-1 text-[10px] font-black text-[#B94A0C]">DEMO PREVIEW</span>}</div><p className="mt-0.5 text-xs text-[#738078]">{previewMode && promotions.length === 0 ? "ตัวอย่างหน้าตาโปรโมชันสำหรับตรวจ UI เท่านั้น ไม่ใช่ข้อมูลจริง" : "ข้อเสนอที่ร้านค้าเปิดแสดงอยู่ในขณะนี้"}</p></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">{displayPromotions.map((promotion) => <PromotionCard key={promotion.id} promotion={promotion} />)}</div></section>}
 
             <section className="overflow-hidden rounded-3xl border border-[#CFE2D1] bg-[#EDF7ED] p-5 md:flex md:items-center md:justify-between md:gap-5"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#EB681B]">MYTREE LOCAL MAP</p><h2 className="mt-1 text-xl font-black text-[#075B28]">ดูร้านอาหารใกล้ฉันบนแผนที่</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#53675A]">ค้นหาร้านในพื้นที่ พร้อมพัฒนาข้อมูลซอย ทางเข้า และจุดสังเกตที่คนในพื้นที่ใช้จริง</p></div><Link to="/map" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-[#087A31] px-5 text-sm font-bold text-white md:mt-0 md:shrink-0">เปิดแผนที่</Link></section>
 
             <section aria-labelledby="open-nearby-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="open-nearby-title" className="text-lg font-black">ร้านเปิดใกล้คุณ</h2><p className="mt-0.5 text-xs text-[#738078]">เลือกร้านที่พร้อมรับออเดอร์ตอนนี้</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="min-h-10 shrink-0 text-xs font-bold text-[#087A31] disabled:opacity-50">{locationState === "loading" ? "กำลังหาตำแหน่ง…" : "อัปเดตตำแหน่ง"}</button></div><div className="grid gap-3 md:grid-cols-2">{openShops.slice(0, 6).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div>{openShops.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">{query ? "ไม่พบร้านเปิดที่ตรงกับคำค้น" : "ขณะนี้ยังไม่มีร้านเปิดรับออเดอร์"}</div>}{locationState === "error" && <p className="mt-2 text-xs text-[#7A847D]">ยังไม่สามารถอ่านตำแหน่งได้ จึงแสดงร้านโดยไม่เรียงระยะทาง</p>}</section>
 
-            {closedShops.length > 0 && <section aria-labelledby="closed-shop-title"><h2 id="closed-shop-title" className="mb-3 text-base font-black">ร้านอื่นในพื้นที่</h2><div className="grid gap-3 opacity-90 md:grid-cols-2">{closedShops.slice(0, 4).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div></section>}
             <section className="rounded-3xl border border-[#E4E9E1] bg-white p-5"><h2 className="font-black text-[#203D2A]">มีร้านอาหาร?</h2><p className="mt-1 text-sm leading-6 text-[#6D7A71]">สมัครเข้าร่วม MyTree ยืนยันตำแหน่งร้าน และใช้ MyTree POS ฟรีตามเงื่อนไขของระบบ</p><Link to="/sweet/signup" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[#EB681B] px-4 text-sm font-bold text-[#B94A0C]">สมัครร้านค้ากับ MyTree</Link></section>
           </>}
         </main>
