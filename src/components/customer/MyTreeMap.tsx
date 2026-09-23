@@ -52,7 +52,7 @@ function loadMaps(): Promise<MyTreeGoogleMapsApi> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly`;
     script.async = true;
     script.defer = true;
     script.dataset.mytreeGoogleMaps = "true";
