@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: ca1576c7a12190dd08ff2599a0dee53f9a896a9e
+-- Canonical blob SHA: c319630c18ec391bf3f88c840e2fd640759db0bf
 
 \set ON_ERROR_STOP on
 
@@ -580,3 +580,52 @@ begin
   end if;
 end
 $cleanup$;
+
+
+-- lifecycle authority hardening verification
+do $final$
+declare
+  n_revoke bigint;
+  role_def text;
+  active_def text;
+  lock_pos integer;
+  recheck_pos integer;
+begin
+  select count(*) into n_revoke
+  from pg_proc p
+  join pg_namespace ns on ns.oid=p.pronamespace
+  where ns.nspname='public'
+    and p.proname='fn_revoke_rider'
+    and p.prokind='f';
+
+  if n_revoke <> 1 then
+    raise exception 'fn_revoke_rider overload count must be 1, found %', n_revoke;
+  end if;
+
+  if to_regprocedure('public.fn_revoke_rider(uuid)') is not null then
+    raise exception 'legacy fn_revoke_rider(uuid) overload still exists';
+  end if;
+
+  select pg_get_functiondef(p.oid) into role_def
+  from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace
+  where ns.nspname='public' and p.proname='fn_admin_set_role'
+  limit 1;
+
+  select pg_get_functiondef(p.oid) into active_def
+  from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace
+  where ns.nspname='public' and p.proname='fn_admin_set_active'
+  limit 1;
+
+  lock_pos := strpos(role_def, 'pg_advisory_xact_lock');
+  recheck_pos := strpos(substr(role_def, lock_pos + 1), 'fn_admin_has_permission(''system.admin'')');
+  if lock_pos = 0 or recheck_pos = 0 then
+    raise exception 'fn_admin_set_role missing post-lock permission recheck';
+  end if;
+
+  lock_pos := strpos(active_def, 'pg_advisory_xact_lock');
+  recheck_pos := strpos(substr(active_def, lock_pos + 1), 'fn_admin_has_permission(''system.admin'')');
+  if lock_pos = 0 or recheck_pos = 0 then
+    raise exception 'fn_admin_set_active missing post-lock permission recheck';
+  end if;
+end
+$final$;
