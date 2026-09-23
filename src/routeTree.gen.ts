@@ -163,10 +163,6 @@ export interface FileRoutesByFullPath {
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/head-office/': typeof HeadOfficeIndexRoute
   '/head-office/$section': typeof HeadOfficeSectionRoute
-  '/head-office': typeof HeadOfficeIndexRoute
-  '/head-office/$section': typeof HeadOfficeSectionRoute
-  '/head-office/': typeof HeadOfficeIndexRoute
-  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -191,6 +187,8 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/head-office': typeof HeadOfficeIndexRoute
+  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -216,6 +214,8 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/head-office/': typeof HeadOfficeIndexRoute
+  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -244,10 +244,6 @@ export interface FileRouteTypes {
     | '/debug/checkout-map'
     | '/head-office/'
     | '/head-office/$section'
-    | '/head-office'
-    | '/head-office/$section'
-    | '/head-office/'
-    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
@@ -272,6 +268,8 @@ export interface FileRouteTypes {
     | '/cart'
     | '/orders'
     | '/debug/checkout-map'
+    | '/head-office'
+    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
@@ -296,6 +294,8 @@ export interface FileRouteTypes {
     | '/cart'
     | '/orders'
     | '/debug/checkout-map'
+    | '/head-office/'
+    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
