@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: c4b20d5c1082e8470117d4b0d99a7cbf51b12649
+-- Canonical blob SHA: acbb182f9c44144c940641bba5ef58af8074ed6d
 
 \set ON_ERROR_STOP on
 
@@ -188,12 +188,56 @@ end $$;
 -- Existing Shop approve flow remains compatible for an authorized scoped role.
 select public.fn_approve_shop('shop-test');
 
-do $$
+do $
 begin
   if not (select is_approved from public.shops where shop_id = 'shop-test') then
     raise exception 'shop approve flow did not persist';
   end if;
-end $$;
+end $;
+
+-- Live-production drift: shop category admin RPCs must use shops.action rather
+-- than raw platform_admins row existence.
+do $do$
+declare
+  v_category_id uuid;
+begin
+  v_category_id := public.fn_admin_create_shop_category('RBAC Test Category', null, 90);
+  perform public.fn_admin_update_shop_category(
+    v_category_id,
+    'RBAC Test Category Updated',
+    null,
+    91,
+    false
+  );
+
+  if not exists (
+    select 1
+    from public.shop_category_master
+    where category_id = v_category_id
+      and label = 'RBAC Test Category Updated'
+      and is_active = false
+  ) then
+    raise exception 'shop category RBAC admin flow did not persist';
+  end if;
+end
+$do$;
+
+-- A Shop Admin does not get the orders.action override merely by being present
+-- in platform_admins.
+do $
+begin
+  begin
+    perform public.fn_shop_request_delivery_v3(
+      '31000000-0000-0000-0000-000000000001'
+    );
+    raise exception 'shop admin unexpectedly received orders.action delivery override';
+  exception
+    when others then
+      if sqlerrm not like 'shop_actor_not_authorized%' then
+        raise;
+      end if;
+  end;
+end $;
 
 -- The same Shop Admin cannot invoke Rider governance.
 do $$
@@ -267,7 +311,7 @@ select set_config(
   '{"customer_id":"00000000-0000-0000-0000-000000000006"}',
   false
 );
-do $$
+do $
 begin
   if not public.fn_admin_has_permission('analytics.read') then
     raise exception 'read-only analyst missing analytics.read';
@@ -276,7 +320,20 @@ begin
      or public.fn_admin_has_permission('system.admin') then
     raise exception 'read-only analyst received mutation permission';
   end if;
-end $$;
+end $;
+
+do $
+begin
+  begin
+    perform public.fn_admin_create_shop_category('Analyst Escalation', null, 100);
+    raise exception 'read-only analyst unexpectedly created shop category';
+  exception
+    when others then
+      if sqlerrm not like 'permission denied: shops.action%' then
+        raise;
+      end if;
+  end;
+end $;
 
 -- Read-only Analyst can read order/analytics surfaces but cannot obtain broad
 -- action-only access or finance data.
@@ -336,6 +393,48 @@ begin
     raise exception 'finance admin unexpectedly received orders.action access';
   end if;
 end $do$;
+
+-- Production-drift delivery admin bypass must be orders.action-scoped.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000008"}',
+  false
+);
+select * from public.fn_shop_request_delivery_v3(
+  '31000000-0000-0000-0000-000000000001'
+);
+select * from public.fn_shop_reoffer_delivery_v3(
+  '31000000-0000-0000-0000-000000000001',
+  'test',
+  null
+);
+select * from public.fn_shop_cancel_delivery_v3(
+  '31000000-0000-0000-0000-000000000001',
+  'test',
+  null
+);
+
+do $do$
+declare
+  n bigint;
+begin
+  select count(*) into n
+  from pg_proc p
+  join pg_namespace ns on ns.oid = p.pronamespace
+  where ns.nspname = 'public'
+    and p.prokind = 'f'
+    and p.proname in (
+      'fn_shop_request_delivery_v3',
+      'fn_shop_reoffer_delivery_v3',
+      'fn_shop_cancel_delivery_v3'
+    )
+    and pg_get_functiondef(p.oid) ilike '%platform_admins%';
+
+  if n <> 0 then
+    raise exception 'live delivery admin RPC definitions still reference platform_admins directly';
+  end if;
+end
+$do$;
 
 -- Operations Admin receives orders.action and can use the legacy all-command
 -- sub_orders policy only within that permission.
