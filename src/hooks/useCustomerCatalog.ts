@@ -60,6 +60,11 @@ export function useCustomerCatalog() {
           .eq("shops.is_approved", true)
           .eq("shops.is_banned", false),
         publicSupabase
+          .from("menu_items")
+          .select("item_id,shop_id,name,price,image_url,category,is_available, shops!inner(is_open,is_approved,is_banned)")
+          .eq("shops.is_approved", true)
+          .eq("shops.is_banned", false),
+        publicSupabase
           .from("daily_specials")
           .select("id,shop_id,special_text,created_at, shops!inner(name,logo_url,is_open,is_approved,is_banned)")
           .eq("shops.is_approved", true)
