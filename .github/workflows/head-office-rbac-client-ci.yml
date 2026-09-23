@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/components/admin/PlatformAdminGate.tsx'
+      - 'src/components/head-office/**'
       - 'src/lib/adminAccess.ts'
       - 'src/routes/head-office/**'
       - 'src/routes/sweet/admin.tsx'
