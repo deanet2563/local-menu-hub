@@ -222,7 +222,7 @@ begin
   if not (select is_approved from public.riders where id = '20000000-0000-0000-0000-000000000001') then
     raise exception 'rider approve flow did not persist';
   end if;
-end $;
+end $do$;
 
 
 -- Rider document verification must be authorized and audited as verify, even
@@ -304,7 +304,7 @@ begin
   if n_payments <> 0 then
     raise exception 'read-only analyst unexpectedly received finance.action access';
   end if;
-end $;
+end $do$;
 
 -- Audit stream is not exposed to ordinary scoped admins without audit permission.
 do $do$
@@ -314,7 +314,7 @@ begin
   if n <> 0 then
     raise exception 'read-only analyst should not see audit rows through RLS';
   end if;
-end $;
+end $do$;
 
 -- Finance Admin receives finance.action but not order mutation authority.
 select set_config(
@@ -335,7 +335,7 @@ begin
   if n_sub <> 0 then
     raise exception 'finance admin unexpectedly received orders.action access';
   end if;
-end $;
+end $do$;
 
 -- Operations Admin receives orders.action and can use the legacy all-command
 -- sub_orders policy only within that permission.
@@ -355,7 +355,7 @@ begin
   ) then
     raise exception 'operations admin orders.action delete did not execute';
   end if;
-end $;
+end $do$;
 
 -- Super Admin can read audit, manage admin lifecycle, and cannot lock out self.
 select set_config(
@@ -455,7 +455,7 @@ begin
     raise exception 'disabled admin retained legacy RLS access: orders %, items %, daily %, sub %, payments %',
       n_orders, n_items, n_daily, n_sub, n_payments;
   end if;
-end $;
+end $do$;
 
 reset role;
 
