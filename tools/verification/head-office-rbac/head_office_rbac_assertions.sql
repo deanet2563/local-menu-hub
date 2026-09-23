@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: d428e89e54bb226ed73606e06ac42580dfe89646
+-- Canonical blob SHA: ca1576c7a12190dd08ff2599a0dee53f9a896a9e
 
 \set ON_ERROR_STOP on
 
@@ -569,8 +569,7 @@ declare
 begin
   select count(*) into n
   from pg_policies
-  where schemaname = 'public'
-    and tablename <> 'platform_admins'
+  where not (schemaname = 'public' and tablename = 'platform_admins')
     and (
       coalesce(qual, '') ilike '%platform_admins%'
       or coalesce(with_check, '') ilike '%platform_admins%'
