@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: c319630c18ec391bf3f88c840e2fd640759db0bf
+-- Canonical blob SHA: d796788103c72e90e7579ea6673006e3362fbe4c
 
 \set ON_ERROR_STOP on
 
@@ -13,6 +13,7 @@ insert into public.customers(id, name) values
   ('00000000-0000-0000-0000-000000000006', 'analyst'),
   ('00000000-0000-0000-0000-000000000007', 'finance admin'),
   ('00000000-0000-0000-0000-000000000008', 'operations admin'),
+  ('00000000-0000-0000-0000-000000000010', 'inactive super admin'),
   ('00000000-0000-0000-0000-000000000099', 'ordinary user'),
   ('10000000-0000-0000-0000-000000000001', 'target customer'),
   ('20000000-0000-0000-0000-000000000001', 'target rider'),
@@ -26,6 +27,9 @@ insert into public.platform_admins(customer_id, role) values
   ('00000000-0000-0000-0000-000000000006', 'read_only_analyst'),
   ('00000000-0000-0000-0000-000000000007', 'finance_admin'),
   ('00000000-0000-0000-0000-000000000008', 'operations_admin');
+
+insert into public.platform_admins(customer_id, role, is_active)
+values ('00000000-0000-0000-0000-000000000010', 'super_admin', false);
 
 insert into public.shops(shop_id, name) values ('shop-test', 'Test Shop');
 
@@ -70,7 +74,35 @@ values
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
     null
+  ),
+  (
+    '31000000-0000-0000-0000-000000000003',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    null
+  ),
+  (
+    '31000000-0000-0000-0000-000000000004',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    '20000000-0000-0000-0000-000000000001'
+  ),
+  (
+    '31000000-0000-0000-0000-000000000005',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    null
+  ),
+  (
+    '31000000-0000-0000-0000-000000000006',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    null
   );
+
+update public.sub_orders
+set delivery_status='rider_called'
+where sub_id='31000000-0000-0000-0000-000000000004';
 
 insert into public.order_items(item_id, sub_id, shop_id)
 values (
@@ -436,6 +468,76 @@ begin
 end
 $do$;
 
+-- shared admin_action delivery guard regression: trusted business RPC transition
+-- shapes remain valid without granting orders.action to Rider/Customer actors.
+reset role;
+
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"20000000-0000-0000-0000-000000000001"}',
+  false
+);
+select set_config('mytree.admin_action','true',false);
+
+update public.sub_orders
+set assigned_rider_id='20000000-0000-0000-0000-000000000001',
+    delivery_status='rider_called'
+where sub_id='31000000-0000-0000-0000-000000000003';
+
+update public.sub_orders
+set delivery_status='picked_up'
+where sub_id='31000000-0000-0000-0000-000000000003';
+
+update public.sub_orders
+set delivery_status='delivered',
+    delivery_proof_path='31000000-0000-0000-0000-000000000003/proof.jpg'
+where sub_id='31000000-0000-0000-0000-000000000003';
+
+update public.sub_orders
+set assigned_rider_id=null,
+    delivery_status='needs_rider'
+where sub_id='31000000-0000-0000-0000-000000000004';
+
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"10000000-0000-0000-0000-000000000001"}',
+  false
+);
+
+update public.sub_orders
+set order_status='cancelled',
+    delivery_status='failed',
+    assigned_rider_id=null
+where sub_id='31000000-0000-0000-0000-000000000005';
+
+-- A scoped admin without orders.action cannot turn the shared flag into a
+-- generic delivery bypass when not otherwise an authorized order actor.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000003"}',
+  false
+);
+
+do $guard$
+begin
+  begin
+    update public.sub_orders
+    set assigned_rider_id='20000000-0000-0000-0000-000000000001',
+        delivery_status='rider_called'
+    where sub_id='31000000-0000-0000-0000-000000000006';
+    raise exception 'shop admin unexpectedly bypassed delivery guard via shared flag';
+  exception
+    when others then
+      if sqlerrm not like 'not authorized to update this order%' then
+        raise;
+      end if;
+  end;
+end
+$guard$;
+
+select set_config('mytree.admin_action','false',false);
+set role authenticated;
+
 -- Operations Admin receives orders.action and can use the legacy all-command
 -- sub_orders policy only within that permission.
 select set_config(
@@ -509,6 +611,21 @@ begin
       end if;
   end;
 end $$;
+
+-- An already-inactive Super Admin does not contribute to the active invariant;
+-- cleanup operations on that row must be allowed while the sole active Super remains.
+-- inactive Super Admin cleanup must not trip the last-active-Super guard.
+select public.fn_admin_set_active(
+  '00000000-0000-0000-0000-000000000010',
+  false,
+  'inactive super no-op cleanup'
+);
+
+select public.fn_admin_set_role(
+  '00000000-0000-0000-0000-000000000010',
+  'read_only_analyst',
+  'inactive super role cleanup'
+);
 
 -- Disable another admin and prove active-state enforcement is immediate.
 select public.fn_admin_set_active(
@@ -629,3 +746,17 @@ begin
   end if;
 end
 $final$;
+
+
+do $rider_policy$
+begin
+  if exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='riders'
+      and policyname='shop_or_admin_reads_active_riders'
+  ) then
+    raise exception 'obsolete broad rider policy still exists';
+  end if;
+end
+$rider_policy$;
