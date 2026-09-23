@@ -8,7 +8,7 @@ export const Route = createFileRoute("/sweet/admin")({
 
 function AdminRoute() {
   return (
-    <PlatformAdminGate>
+    <PlatformAdminGate requiredPermission="system.admin">
       <AdminConsole />
     </PlatformAdminGate>
   );
