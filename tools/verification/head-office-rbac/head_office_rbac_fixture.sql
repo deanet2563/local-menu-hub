@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 355aa156b29cc4765b84df72715ea25aacb450d6
+-- Canonical blob SHA: 86330e0bc0bbf092fbb64576b2a6410f5b64d2c6
 
 \set ON_ERROR_STOP on
 
@@ -110,7 +110,18 @@ create table public.sub_orders (
   sub_id uuid primary key default gen_random_uuid(),
   order_id uuid not null,
   shop_id text not null,
-  assigned_rider_id uuid
+  items_json jsonb not null default '[]'::jsonb,
+  amount numeric not null default 0,
+  order_status text not null default 'pending',
+  payment_status text not null default 'pending',
+  payment_method text not null default 'cash',
+  assigned_rider_id uuid,
+  delivery_address text,
+  payment_slip_url text,
+  delivery_status text not null default 'needs_rider',
+  delivery_photo_url text,
+  delivery_proof_path text,
+  rider_called_at timestamptz
 );
 
 create table public.order_items (
@@ -297,7 +308,11 @@ create or replace function public.fn_my_hub_order_ids()
 returns setof uuid
 language sql
 stable
-as $fn$ select null::uuid where false $fn$;
+as $fn$
+  select ho.order_id
+  from public.hub_orders ho
+  where ho.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+$fn$;
 
 create or replace function public.fn_customer_related_to_caller(p_customer_id uuid)
 returns boolean
@@ -309,7 +324,30 @@ create or replace function public.fn_my_rider_id()
 returns uuid
 language sql
 stable
-as $$ select null::uuid $$;
+as $fn$
+  select r.id
+  from public.riders r
+  where r.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+  limit 1
+$fn$;
+
+-- fixture baseline rider delivery guard; migration under test replaces this body.
+create or replace function public.fn_guard_rider_delivery_update()
+returns trigger
+language plpgsql
+set search_path to 'public', 'pg_temp'
+as $guard$
+begin
+  if current_setting('mytree.admin_action', true) = 'true' then
+    return new;
+  end if;
+  return new;
+end;
+$guard$;
+
+create trigger trg_0_guard_rider_delivery_update
+before update on public.sub_orders
+for each row execute function public.fn_guard_rider_delivery_update();
 
 alter table public.platform_admins enable row level security;
 alter table public.riders enable row level security;
