@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 44d488f1abdb92d425d40b7761b8644341f4d1b5
+-- Canonical blob SHA: 4c090008dbb5e6835c69d91fb472f0067d55e553
 
 \set ON_ERROR_STOP on
 
