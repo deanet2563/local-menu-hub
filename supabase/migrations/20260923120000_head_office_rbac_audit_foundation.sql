@@ -293,16 +293,11 @@ alter table public.admin_role_permissions enable row level security;
 alter table public.admin_audit_log enable row level security;
 alter table public.platform_admins enable row level security;
 
-revoke all on public.admin_roles from anon;
-revoke all on public.admin_permissions from anon;
-revoke all on public.admin_role_permissions from anon;
-revoke all on public.admin_audit_log from anon;
-
-revoke insert, update, delete on public.admin_roles from authenticated;
-revoke insert, update, delete on public.admin_permissions from authenticated;
-revoke insert, update, delete on public.admin_role_permissions from authenticated;
-revoke insert, update, delete on public.admin_audit_log from authenticated;
-revoke insert, update, delete on public.platform_admins from authenticated;
+revoke all on public.admin_roles from public, anon, authenticated;
+revoke all on public.admin_permissions from public, anon, authenticated;
+revoke all on public.admin_role_permissions from public, anon, authenticated;
+revoke all on public.admin_audit_log from public, anon, authenticated;
+revoke all on public.platform_admins from public, anon, authenticated;
 
 grant select on public.admin_roles to authenticated;
 grant select on public.admin_permissions to authenticated;
@@ -423,6 +418,22 @@ begin
     raise exception 'unknown admin role';
   end if;
 
+  if p_customer_id = private.current_admin_customer_id() then
+    raise exception 'cannot change current admin role';
+  end if;
+
+  if exists (
+    select 1
+    from public.platform_admins pa
+    where pa.customer_id::text = p_customer_id
+      and pa.role_key = 'super_admin'
+      and pa.is_active = true
+  ) and p_role_key <> 'super_admin'
+    and (select count(*) from public.platform_admins where role_key = 'super_admin' and is_active = true) <= 1
+  then
+    raise exception 'cannot demote the last active super admin';
+  end if;
+
   select to_jsonb(pa.*) into v_before
   from public.platform_admins pa
   where pa.customer_id::text = p_customer_id
@@ -472,6 +483,19 @@ begin
     raise exception 'cannot disable current admin account';
   end if;
 
+  if p_is_active = false
+    and exists (
+      select 1
+      from public.platform_admins pa
+      where pa.customer_id::text = p_customer_id
+        and pa.role_key = 'super_admin'
+        and pa.is_active = true
+    )
+    and (select count(*) from public.platform_admins where role_key = 'super_admin' and is_active = true) <= 1
+  then
+    raise exception 'cannot disable the last active super admin';
+  end if;
+
   select to_jsonb(pa.*) into v_before
   from public.platform_admins pa
   where pa.customer_id::text = p_customer_id
@@ -519,12 +543,31 @@ as $$
 declare
   v_actor text;
   v_role text;
-  v_before jsonb := to_jsonb(old);
-  v_after jsonb := to_jsonb(new);
+  v_before jsonb;
+  v_after jsonb;
   v_target_id text;
   v_action text;
   v_reason text;
 begin
+  -- Keep the audit payload intentionally narrow. Admin audit should capture
+  -- governance state transitions without duplicating customer/shop PII.
+  v_before := jsonb_strip_nulls(jsonb_build_object(
+    'is_approved', to_jsonb(old) -> 'is_approved',
+    'is_banned', to_jsonb(old) -> 'is_banned',
+    'banned_reason', to_jsonb(old) -> 'banned_reason',
+    'verified_at', to_jsonb(old) -> 'verified_at',
+    'deletion_requested_at', to_jsonb(old) -> 'deletion_requested_at',
+    'deletion_reason', to_jsonb(old) -> 'deletion_reason'
+  ));
+  v_after := jsonb_strip_nulls(jsonb_build_object(
+    'is_approved', to_jsonb(new) -> 'is_approved',
+    'is_banned', to_jsonb(new) -> 'is_banned',
+    'banned_reason', to_jsonb(new) -> 'banned_reason',
+    'verified_at', to_jsonb(new) -> 'verified_at',
+    'deletion_requested_at', to_jsonb(new) -> 'deletion_requested_at',
+    'deletion_reason', to_jsonb(new) -> 'deletion_reason'
+  ));
+
   v_actor := private.current_admin_customer_id();
 
   select pa.role_key into v_role
