@@ -2,6 +2,19 @@ import type { MerchantMapShop } from "@/lib/merchantMapMarkers";
 
 export type MapLocation = { lat: number; lng: number };
 
+export function groupMapShopsByCoordinate(shops: MerchantMapShop[]): MerchantMapShop[][] {
+  const groups = new Map<string, MerchantMapShop[]>();
+  shops.forEach((shop) => {
+    // Six decimal places keeps genuinely co-located pins together without
+    // merging neighbouring businesses that merely share a building/soi.
+    const key = `${shop.lat.toFixed(6)},${shop.lng.toFixed(6)}`;
+    const group = groups.get(key);
+    if (group) group.push(shop);
+    else groups.set(key, [shop]);
+  });
+  return Array.from(groups.values());
+}
+
 export function distanceKm(origin: MapLocation, destination: MapLocation): number {
   const earthRadiusKm = 6371;
   const toRadians = (degrees: number) => degrees * Math.PI / 180;

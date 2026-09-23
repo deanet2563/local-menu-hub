@@ -7,7 +7,7 @@ import {
   type MerchantMapRow,
   type MerchantMapShop,
 } from "@/lib/merchantMapMarkers";
-import { directionsUrl, distanceKm, filterMapShops, formatDistance, type MapLocation } from "@/lib/myTreeMap";
+import { directionsUrl, distanceKm, filterMapShops, formatDistance, groupMapShopsByCoordinate, type MapLocation } from "@/lib/myTreeMap";
 import { publicSupabase } from "@/lib/publicSupabase";
 
 type LatLngLiteral = { lat: number; lng: number };
@@ -68,18 +68,57 @@ function loadMaps(): Promise<MyTreeGoogleMapsApi> {
   return attempt;
 }
 
-function markerIcon(shop: MerchantMapShop): Record<string, unknown> | undefined {
+function markerIcon(shop: MerchantMapShop, locationCount = 1): Record<string, unknown> | undefined {
   const google = currentMaps();
   if (!google?.maps.Size || !google.maps.Point) return undefined;
   const fill = shop.isOpen === false ? "#f3f4f6" : "#fff7ed";
   const stroke = shop.isOpen === false ? "#6b7280" : "#ea580c";
-  const glyph = merchantFallbackIcon(shop.category);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56"><path d="M24 55 16 42h16L24 55Z" fill="${stroke}"/><circle cx="24" cy="22" r="20" fill="${fill}" stroke="${stroke}" stroke-width="4"/><text x="24" y="29" text-anchor="middle" font-family="Arial,sans-serif" font-size="18">${glyph}</text></svg>`;
+  const glyph = locationCount > 1 ? String(locationCount) : merchantFallbackIcon(shop.category);
+  const glyphWeight = locationCount > 1 ? "700" : "400";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56"><path d="M24 55 16 42h16L24 55Z" fill="${stroke}"/><circle cx="24" cy="22" r="20" fill="${fill}" stroke="${stroke}" stroke-width="4"/><text x="24" y="29" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="${glyphWeight}">${glyph}</text></svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new google.maps.Size(48, 56),
     anchor: new google.maps.Point(24, 56),
   };
+}
+
+function CoLocatedShopPicker({ shops, onChoose, onClose }: { shops: MerchantMapShop[]; onChoose: (shop: MerchantMapShop) => void; onClose: () => void }) {
+  return (
+    <article className="relative rounded-2xl border border-[#dce8dc] bg-white p-4 shadow-[0_12px_32px_rgba(31,82,55,0.12)]">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="ปิดรายชื่อร้านในตำแหน่งนี้"
+        className="absolute right-2 top-2 z-10 grid h-10 w-10 place-items-center rounded-full border border-[#dce8dc] bg-white text-2xl leading-none text-[#315a42] shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f6a45]"
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+      <div className="pr-11">
+        <h2 className="text-base font-black text-[#173c29]">มี {shops.length} ร้านอยู่ที่ตำแหน่งนี้</h2>
+        <p className="mt-1 text-xs text-gray-600">เลือกร้านที่ต้องการดู</p>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {shops.map((shop) => (
+          <button
+            type="button"
+            key={shop.shopId}
+            onClick={() => onChoose(shop)}
+            className="flex min-h-12 items-center gap-3 rounded-xl border border-[#dce8dc] bg-[#f8fbf5] px-3 py-2 text-left"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#eef7e9] text-base">
+              {shop.logoUrl ? <img src={shop.logoUrl} alt="" className="h-full w-full object-cover" /> : <span aria-hidden="true">{merchantFallbackIcon(shop.category)}</span>}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-[#173c29]">{shop.name}</span>
+              <span className="block truncate text-xs text-gray-500">{shop.category || "ร้านค้าใน MyTree"}</span>
+            </span>
+            <span className="text-lg text-[#1f6a45]" aria-hidden="true">›</span>
+          </button>
+        ))}
+      </div>
+    </article>
+  );
 }
 
 function ShopCard({ shop, location, compact = false, onShowOnMap, onClose }: { shop: MerchantMapShop; location: MapLocation | null; compact?: boolean; onShowOnMap?: () => void; onClose?: () => void }) {
@@ -127,6 +166,7 @@ export function MyTreeMap() {
   const locationMarkerRef = useRef<MyTreeGoogleMarker | null>(null);
   const [shops, setShops] = useState<MerchantMapShop[]>([]);
   const [selectedShop, setSelectedShop] = useState<MerchantMapShop | null>(null);
+  const [selectedLocationShops, setSelectedLocationShops] = useState<MerchantMapShop[] | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [openOnly, setOpenOnly] = useState(false);
@@ -189,6 +229,7 @@ export function MyTreeMap() {
     if (!location) return filtered;
     return [...filtered].sort((a, b) => distanceKm(location, a) - distanceKm(location, b));
   }, [category, location, openOnly, query, shops]);
+  const filteredLocationGroups = useMemo(() => groupMapShopsByCoordinate(filteredShops), [filteredShops]);
 
   useEffect(() => {
     if (selectedShop && !filteredShops.some((shop) => shop.shopId === selectedShop.shopId)) {
@@ -197,13 +238,33 @@ export function MyTreeMap() {
   }, [filteredShops, selectedShop]);
 
   useEffect(() => {
+    if (selectedLocationShops && selectedLocationShops.some((shop) => !filteredShops.some((visibleShop) => visibleShop.shopId === shop.shopId))) {
+      setSelectedLocationShops(null);
+    }
+  }, [filteredShops, selectedLocationShops]);
+
+  useEffect(() => {
     const map = mapRef.current;
     const google = currentMaps();
     if (!mapReady || !map || !google) return;
     markerHandlesRef.current.forEach(({ marker, listener }) => { listener.remove(); marker.setMap(null); });
-    markerHandlesRef.current = filteredShops.map((shop) => {
-      const marker = new google.maps.Marker({ map, position: { lat: shop.lat, lng: shop.lng }, title: shop.name, icon: markerIcon(shop) });
-      const listener = marker.addListener("click", () => setSelectedShop(shop));
+    markerHandlesRef.current = filteredLocationGroups.map((locationShops) => {
+      const shop = locationShops[0]!;
+      const marker = new google.maps.Marker({
+        map,
+        position: { lat: shop.lat, lng: shop.lng },
+        title: locationShops.length > 1 ? `${locationShops.length} ร้านในตำแหน่งเดียวกัน` : shop.name,
+        icon: markerIcon(shop, locationShops.length),
+      });
+      const listener = marker.addListener("click", () => {
+        if (locationShops.length > 1) {
+          setSelectedShop(null);
+          setSelectedLocationShops(locationShops);
+        } else {
+          setSelectedLocationShops(null);
+          setSelectedShop(shop);
+        }
+      });
       return { marker, listener };
     });
     if (filteredShops.length === 1 && !location) {
@@ -215,7 +276,7 @@ export function MyTreeMap() {
       if (location) bounds.extend(location);
       map.fitBounds(bounds, 56);
     }
-  }, [filteredShops, location, mapReady]);
+  }, [filteredLocationGroups, filteredShops, location, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -243,6 +304,7 @@ export function MyTreeMap() {
   }
 
   function chooseShop(shop: MerchantMapShop) {
+    setSelectedLocationShops(null);
     setSelectedShop(shop);
     setView("map");
     mapRef.current?.panTo({ lat: shop.lat, lng: shop.lng });
@@ -290,6 +352,7 @@ export function MyTreeMap() {
             {mapsError && <div className="absolute inset-0 grid place-items-center bg-[#f8fbf5] p-8 text-center"><div><p className="font-bold">เปิดแผนที่ไม่ได้ในขณะนี้</p><p className="mt-1 text-sm text-gray-600">ยังสามารถดูร้านแบบรายการและเปิดนำทางได้</p><div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => setMapsAttempt((attempt) => attempt + 1)} className="rounded-xl border border-[#b9d2bd] bg-white px-4 py-2 text-sm font-semibold text-[#1f6a45]">ลองโหลดใหม่</button><button type="button" onClick={() => setView("list")} className="rounded-xl bg-[#1f6a45] px-4 py-2 text-sm font-semibold text-white">ดูแบบรายการ</button></div></div></div>}
             {loading && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-3 text-sm shadow">กำลังโหลดร้านค้าใกล้บ้าน…</div>}
             {!loading && !loadError && filteredShops.length === 0 && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-4 text-center text-sm shadow">ไม่พบร้านตามตัวกรองนี้ ลองเลือก “ทั้งหมด” หรือปิดตัวกรอง “เปิดอยู่ตอนนี้”</div>}
+            {selectedLocationShops && <div className="absolute inset-x-3 bottom-3 z-10"><CoLocatedShopPicker shops={selectedLocationShops} onChoose={(shop) => { setSelectedLocationShops(null); setSelectedShop(shop); }} onClose={() => setSelectedLocationShops(null)} /></div>}
             {selectedShop && <div className="absolute inset-x-3 bottom-3 z-10"><ShopCard shop={selectedShop} location={location} compact onClose={() => setSelectedShop(null)} /></div>}
           </div>
 
