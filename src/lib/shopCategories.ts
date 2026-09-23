@@ -8,15 +8,30 @@ export type ShopCategoryMaster = {
   is_active: boolean;
 };
 
-export async function loadActiveShopCategories(): Promise<ShopCategoryMaster[]> {
-  const { data, error } = await publicSupabase
+function isSchemaCacheError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return error.code === "PGRST205"
+    || /schema cache/i.test(error.message ?? "")
+    || /shop_category_master/i.test(error.message ?? "");
+}
+
+async function fetchActiveShopCategories() {
+  return publicSupabase
     .from("shop_category_master")
     .select("category_id,label,icon,sort_order,is_active")
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("label", { ascending: true });
-  if (error) throw error;
-  return (data as ShopCategoryMaster[]) ?? [];
+}
+
+export async function loadActiveShopCategories(): Promise<ShopCategoryMaster[]> {
+  let result = await fetchActiveShopCategories();
+  if (result.error && isSchemaCacheError(result.error)) {
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    result = await fetchActiveShopCategories();
+  }
+  if (result.error) throw result.error;
+  return (result.data as ShopCategoryMaster[]) ?? [];
 }
 
 export async function loadAllShopCategories(): Promise<ShopCategoryMaster[]> {
