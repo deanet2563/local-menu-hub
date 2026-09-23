@@ -20,6 +20,9 @@ as $$
   );
 $$;
 
+grant usage on schema auth to authenticated, service_role;
+grant execute on function auth.jwt() to authenticated, service_role;
+
 create type public.admin_role_enum as enum ('super_admin', 'support');
 
 create table public.customers (
