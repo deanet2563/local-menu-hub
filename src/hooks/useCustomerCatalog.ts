@@ -17,7 +17,8 @@ export type CatalogShop = {
   is_open: boolean;
   distance_km: number | null;
 };
-export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };\nexport type HubCatalogItem = CatalogItem & { is_available: boolean; shop_is_open: boolean };
+export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+export type HubCatalogItem = CatalogItem & { is_available: boolean; shop_is_open: boolean };
 export type ShopPromotion = {
   id: string;
   shop_id: string;
@@ -35,7 +36,8 @@ const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 
 export function useCustomerCatalog() {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
-  const [items, setItems] = useState<CatalogItem[]>([]);\n  const [hubItems, setHubItems] = useState<HubCatalogItem[]>([]);
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [hubItems, setHubItems] = useState<HubCatalogItem[]>([]);
   const [promotions, setPromotions] = useState<ShopPromotion[]>([]);
   const [listingKeywords, setListingKeywords] = useState<ListingKeyword[]>([]);
   const [catalogState, setCatalogState] = useState<CatalogState>("loading");
