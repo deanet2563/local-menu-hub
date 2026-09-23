@@ -217,7 +217,7 @@ select set_config(
 );
 select public.fn_approve_rider('20000000-0000-0000-0000-000000000001');
 
-do $
+do $do$
 begin
   if not (select is_approved from public.riders where id = '20000000-0000-0000-0000-000000000001') then
     raise exception 'rider approve flow did not persist';
@@ -280,7 +280,7 @@ end $$;
 
 -- Read-only Analyst can read order/analytics surfaces but cannot obtain broad
 -- action-only access or finance data.
-do $
+do $do$
 declare
   n_orders bigint;
   n_items bigint;
@@ -307,7 +307,7 @@ begin
 end $;
 
 -- Audit stream is not exposed to ordinary scoped admins without audit permission.
-do $
+do $do$
 declare n bigint;
 begin
   select count(*) into n from public.admin_audit_log;
@@ -322,7 +322,7 @@ select set_config(
   '{"customer_id":"00000000-0000-0000-0000-000000000007"}',
   false
 );
-do $
+do $do$
 declare
   n_payments bigint;
   n_sub bigint;
@@ -347,7 +347,7 @@ select set_config(
 delete from public.sub_orders
 where sub_id = '31000000-0000-0000-0000-000000000002';
 
-do $
+do $do$
 begin
   if exists (
     select 1 from public.sub_orders
@@ -424,7 +424,7 @@ select set_config(
   false
 );
 
-do $
+do $do$
 declare
   ctx jsonb;
   n_orders bigint;
