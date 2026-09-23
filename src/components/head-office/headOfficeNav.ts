@@ -27,6 +27,3 @@ export function getHeadOfficeSection(section: HeadOfficeSection) {
   return HEAD_OFFICE_SECTIONS.find((item) => item.key === section)!;
 }
 
-export function headOfficePath(section: HeadOfficeSection) {
-  return section === "overview" ? "/head-office" : `/head-office/${section}`;
-}
