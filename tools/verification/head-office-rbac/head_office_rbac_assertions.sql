@@ -1,0 +1,462 @@
+-- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
+-- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
+-- Canonical blob SHA: 4e854217e4b8ebde243903fa80c2d010f01390e5
+
+\set ON_ERROR_STOP on
+
+-- Seed identities.
+insert into public.customers(id, name) values
+  ('00000000-0000-0000-0000-000000000001', 'super'),
+  ('00000000-0000-0000-0000-000000000003', 'shop admin'),
+  ('00000000-0000-0000-0000-000000000004', 'rider admin'),
+  ('00000000-0000-0000-0000-000000000005', 'moderation admin'),
+  ('00000000-0000-0000-0000-000000000006', 'analyst'),
+  ('00000000-0000-0000-0000-000000000007', 'finance admin'),
+  ('00000000-0000-0000-0000-000000000008', 'operations admin'),
+  ('00000000-0000-0000-0000-000000000099', 'ordinary user'),
+  ('10000000-0000-0000-0000-000000000001', 'target customer'),
+  ('20000000-0000-0000-0000-000000000001', 'target rider'),
+  ('20000000-0000-0000-0000-000000000002', 'verify target rider');
+
+insert into public.platform_admins(customer_id, role) values
+  ('00000000-0000-0000-0000-000000000001', 'super_admin'),
+  ('00000000-0000-0000-0000-000000000003', 'shop_admin'),
+  ('00000000-0000-0000-0000-000000000004', 'rider_admin'),
+  ('00000000-0000-0000-0000-000000000005', 'moderation_admin'),
+  ('00000000-0000-0000-0000-000000000006', 'read_only_analyst'),
+  ('00000000-0000-0000-0000-000000000007', 'finance_admin'),
+  ('00000000-0000-0000-0000-000000000008', 'operations_admin');
+
+insert into public.shops(shop_id, name) values ('shop-test', 'Test Shop');
+
+insert into public.riders(
+  id, customer_id, name, is_online, is_approved, rider_class, plate_number, win_registration_no
+)
+values
+  (
+    '20000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    'Test Rider',
+    false,
+    false,
+    'general',
+    null,
+    null
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000002',
+    'Verify Rider',
+    false,
+    false,
+    'public_win',
+    'TEST-PLATE',
+    'WIN-TEST'
+  );
+
+insert into public.hub_orders(order_id, customer_id)
+values ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001');
+
+insert into public.sub_orders(sub_id, order_id, shop_id, assigned_rider_id)
+values
+  (
+    '31000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    null
+  ),
+  (
+    '31000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000001',
+    'shop-test',
+    null
+  );
+
+insert into public.order_items(item_id, sub_id, shop_id)
+values (
+  '32000000-0000-0000-0000-000000000001',
+  '31000000-0000-0000-0000-000000000001',
+  'shop-test'
+);
+
+insert into public.daily_shop_sales_summary(shop_id, sales_date)
+values ('shop-test', current_date);
+
+insert into public.subscription_payments(payment_id, amount)
+values ('33000000-0000-0000-0000-000000000001', 100);
+
+set role authenticated;
+
+-- Unauthorized user is not an admin and has no permission.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000099"}',
+  false
+);
+
+do $$
+begin
+  if public.fn_is_platform_admin() then
+    raise exception 'unauthorized user unexpectedly recognized as platform admin';
+  end if;
+  if public.fn_admin_has_permission('shops.read') then
+    raise exception 'unauthorized user unexpectedly has shops.read';
+  end if;
+end $$;
+
+-- Legacy "support" maps to support_admin permissions.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000002"}',
+  false
+);
+
+do $$
+declare
+  ctx jsonb;
+begin
+  if not public.fn_is_platform_admin() then
+    raise exception 'legacy support row should remain an active platform admin';
+  end if;
+  if not public.fn_admin_has_permission('members.read') then
+    raise exception 'legacy support should inherit support_admin members.read';
+  end if;
+  if public.fn_admin_has_permission('shops.action') then
+    raise exception 'support admin must not inherit shop governance actions';
+  end if;
+
+  ctx := public.fn_admin_access_context();
+  if (select role::text from public.platform_admins where customer_id = '00000000-0000-0000-0000-000000000002') <> 'support_admin' then
+    raise exception 'legacy support row was not canonicalized by stage 2 migration';
+  end if;
+  if ctx ->> 'role_key' <> 'support_admin' then
+    raise exception 'legacy support role was not canonicalized in access context: %', ctx;
+  end if;
+end $$;
+
+-- Shop Admin is domain-scoped.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000003"}',
+  false
+);
+
+do $$
+begin
+  if not public.fn_admin_has_permission('shops.action') then
+    raise exception 'shop admin missing shops.action';
+  end if;
+  if public.fn_admin_has_permission('riders.action') then
+    raise exception 'shop admin unexpectedly has riders.action';
+  end if;
+  if public.fn_admin_has_permission('system.admin') then
+    raise exception 'shop admin unexpectedly has system.admin';
+  end if;
+end $$;
+
+-- Direct role escalation is blocked by table grants.
+do $$
+begin
+  begin
+    update public.platform_admins
+    set role = 'super_admin'
+    where customer_id = '00000000-0000-0000-0000-000000000003';
+    raise exception 'direct platform_admins role update unexpectedly succeeded';
+  exception
+    when insufficient_privilege then null;
+  end;
+end $$;
+
+-- RPC privilege escalation is blocked as well.
+do $$
+begin
+  begin
+    perform public.fn_admin_set_role(
+      '00000000-0000-0000-0000-000000000003',
+      'super_admin',
+      'attempted escalation'
+    );
+    raise exception 'shop admin unexpectedly changed an admin role';
+  exception
+    when others then
+      if sqlerrm not like 'permission denied:%' then
+        raise;
+      end if;
+  end;
+end $$;
+
+-- Existing Shop approve flow remains compatible for an authorized scoped role.
+select public.fn_approve_shop('shop-test');
+
+do $$
+begin
+  if not (select is_approved from public.shops where shop_id = 'shop-test') then
+    raise exception 'shop approve flow did not persist';
+  end if;
+end $$;
+
+-- The same Shop Admin cannot invoke Rider governance.
+do $$
+begin
+  begin
+    perform public.fn_approve_rider('20000000-0000-0000-0000-000000000001');
+    raise exception 'shop admin unexpectedly approved a rider';
+  exception
+    when others then
+      if sqlerrm not like 'permission denied: riders.action%' then
+        raise;
+      end if;
+  end;
+end $$;
+
+-- Rider Admin can approve Rider through the legacy RPC signature.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000004"}',
+  false
+);
+select public.fn_approve_rider('20000000-0000-0000-0000-000000000001');
+
+do $
+begin
+  if not (select is_approved from public.riders where id = '20000000-0000-0000-0000-000000000001') then
+    raise exception 'rider approve flow did not persist';
+  end if;
+end $;
+
+
+-- Rider document verification must be authorized and audited as verify, even
+-- when verification also approves the rider in the same UPDATE.
+select public.fn_verify_rider_document('20000000-0000-0000-0000-000000000002');
+
+-- Moderation Admin can ban a customer; Shop Admin cannot.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000003"}',
+  false
+);
+do $$
+begin
+  begin
+    perform public.fn_ban_customer(
+      '10000000-0000-0000-0000-000000000001',
+      'shop admin must not moderate'
+    );
+    raise exception 'shop admin unexpectedly banned a customer';
+  exception
+    when others then
+      if sqlerrm not like 'permission denied: moderation.action%' then
+        raise;
+      end if;
+  end;
+end $$;
+
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000005"}',
+  false
+);
+select public.fn_ban_customer(
+  '10000000-0000-0000-0000-000000000001',
+  'moderation regression test'
+);
+
+-- Read-only Analyst receives reads but no action/admin permission.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000006"}',
+  false
+);
+do $$
+begin
+  if not public.fn_admin_has_permission('analytics.read') then
+    raise exception 'read-only analyst missing analytics.read';
+  end if;
+  if public.fn_admin_has_permission('shops.action')
+     or public.fn_admin_has_permission('system.admin') then
+    raise exception 'read-only analyst received mutation permission';
+  end if;
+end $$;
+
+-- Read-only Analyst can read order/analytics surfaces but cannot obtain broad
+-- action-only access or finance data.
+do $
+declare
+  n_orders bigint;
+  n_items bigint;
+  n_daily bigint;
+  n_sub bigint;
+  n_payments bigint;
+begin
+  select count(*) into n_orders from public.hub_orders;
+  select count(*) into n_items from public.order_items;
+  select count(*) into n_daily from public.daily_shop_sales_summary;
+  select count(*) into n_sub from public.sub_orders;
+  select count(*) into n_payments from public.subscription_payments;
+
+  if n_orders <> 1 or n_items <> 1 or n_daily <> 1 then
+    raise exception 'read-only analyst read permissions incomplete: orders %, items %, daily %',
+      n_orders, n_items, n_daily;
+  end if;
+  if n_sub <> 0 then
+    raise exception 'read-only analyst unexpectedly received orders.action sub-order access';
+  end if;
+  if n_payments <> 0 then
+    raise exception 'read-only analyst unexpectedly received finance.action access';
+  end if;
+end $;
+
+-- Audit stream is not exposed to ordinary scoped admins without audit permission.
+do $
+declare n bigint;
+begin
+  select count(*) into n from public.admin_audit_log;
+  if n <> 0 then
+    raise exception 'read-only analyst should not see audit rows through RLS';
+  end if;
+end $;
+
+-- Finance Admin receives finance.action but not order mutation authority.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000007"}',
+  false
+);
+do $
+declare
+  n_payments bigint;
+  n_sub bigint;
+begin
+  select count(*) into n_payments from public.subscription_payments;
+  select count(*) into n_sub from public.sub_orders;
+  if n_payments <> 1 then
+    raise exception 'finance admin cannot read subscription payments';
+  end if;
+  if n_sub <> 0 then
+    raise exception 'finance admin unexpectedly received orders.action access';
+  end if;
+end $;
+
+-- Operations Admin receives orders.action and can use the legacy all-command
+-- sub_orders policy only within that permission.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000008"}',
+  false
+);
+delete from public.sub_orders
+where sub_id = '31000000-0000-0000-0000-000000000002';
+
+do $
+begin
+  if exists (
+    select 1 from public.sub_orders
+    where sub_id = '31000000-0000-0000-0000-000000000002'
+  ) then
+    raise exception 'operations admin orders.action delete did not execute';
+  end if;
+end $;
+
+-- Super Admin can read audit, manage admin lifecycle, and cannot lock out self.
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000001"}',
+  false
+);
+
+do $$
+declare n bigint;
+begin
+  select count(*) into n from public.admin_audit_log;
+  if n < 4 then
+    raise exception 'expected governance audit rows, found %', n;
+  end if;
+
+  if not exists (
+    select 1
+    from public.admin_audit_log
+    where target_type = 'riders'
+      and target_id = '20000000-0000-0000-0000-000000000002'
+      and action = 'riders.verify'
+  ) then
+    raise exception 'rider verification was not classified as riders.verify in audit';
+  end if;
+
+  begin
+    perform public.fn_admin_set_active(
+      '00000000-0000-0000-0000-000000000001',
+      false,
+      'self lockout test'
+    );
+    raise exception 'self-disable unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm <> 'cannot disable current admin account' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.fn_admin_set_role(
+      '00000000-0000-0000-0000-000000000001',
+      'read_only_analyst',
+      'self demotion test'
+    );
+    raise exception 'self role change unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm <> 'cannot change current admin role' then
+        raise;
+      end if;
+  end;
+end $$;
+
+-- Disable another admin and prove active-state enforcement is immediate.
+select public.fn_admin_set_active(
+  '00000000-0000-0000-0000-000000000002',
+  false,
+  'inactive-state regression test'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"customer_id":"00000000-0000-0000-0000-000000000002"}',
+  false
+);
+
+do $
+declare
+  ctx jsonb;
+  n_orders bigint;
+  n_items bigint;
+  n_daily bigint;
+  n_sub bigint;
+  n_payments bigint;
+begin
+  if public.fn_is_platform_admin() then
+    raise exception 'disabled admin still recognized as active';
+  end if;
+  if public.fn_admin_has_permission('members.read') then
+    raise exception 'disabled admin still has permissions';
+  end if;
+
+  ctx := public.fn_admin_access_context();
+  if (ctx ->> 'is_active')::boolean then
+    raise exception 'disabled admin access context still active';
+  end if;
+
+  select count(*) into n_orders from public.hub_orders;
+  select count(*) into n_items from public.order_items;
+  select count(*) into n_daily from public.daily_shop_sales_summary;
+  select count(*) into n_sub from public.sub_orders;
+  select count(*) into n_payments from public.subscription_payments;
+
+  if n_orders <> 0 or n_items <> 0 or n_daily <> 0 or n_sub <> 0 or n_payments <> 0 then
+    raise exception 'disabled admin retained legacy RLS access: orders %, items %, daily %, sub %, payments %',
+      n_orders, n_items, n_daily, n_sub, n_payments;
+  end if;
+end $;
+
+reset role;
+
+select 'head_office_rbac_audit_tests_passed' as result;
