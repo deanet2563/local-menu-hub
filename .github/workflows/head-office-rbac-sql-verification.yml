@@ -36,6 +36,8 @@ jobs:
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120000_head_office_rbac_audit_foundation.sql
       - name: Apply legacy Support canonicalization
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120100_head_office_support_role_canonicalize.sql
+      - name: Apply production policy cleanup
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120200_head_office_rbac_production_policy_cleanup.sql
       - name: Run RBAC and audit assertions
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/head_office_rbac_assertions.sql
       - name: Run Super Admin concurrency assertions
