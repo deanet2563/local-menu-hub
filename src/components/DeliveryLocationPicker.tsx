@@ -19,7 +19,7 @@ import {
   type MerchantMapShop,
   type MerchantMapViewport,
 } from "@/lib/merchantMapMarkers";
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
 
 type LatLngLiteral = { lat: number; lng: number };
 

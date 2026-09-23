@@ -19,7 +19,8 @@ import {
 } from "@/lib/deliveryLocation";
 import { submitOrder } from "@/lib/order";
 import { getShopAvailability, type BusinessHours } from "@/lib/shopAvailability";
-import { getCurrentCustomerId, publicSupabase, supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
+import { getCurrentCustomerId, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/cart")({ component: CartCheckout });
 

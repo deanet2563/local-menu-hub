@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 
 // ============================================================

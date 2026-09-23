@@ -1,4 +1,4 @@
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
 
 export type OrderingOption = {
   option_id: string;
