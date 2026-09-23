@@ -79,6 +79,8 @@ export function ShopPage({ shopId }: { shopId: string }) {
     options: Parameters<typeof cart.add>[0]["options"];
     note: string | null;
   }) {
+    if (!shop.is_open) return;
+
     const payload = {
       itemId: input.product.itemId,
       shopId: input.product.shopId,
@@ -91,7 +93,13 @@ export function ShopPage({ shopId }: { shopId: string }) {
       setName: activeSetName,
     };
 
-    for (let n = 0; n < input.qty; n += 1) cart.add(payload, { allowMultipleShops: true });
+    const firstResult = cart.add(payload);
+    if (firstResult === "different_shop") {
+      const confirmed = window.confirm("ในตะกร้ามีสินค้าจากร้านอื่น ต้องการล้างตะกร้าเดิมและเพิ่มเมนูจากร้านนี้หรือไม่?");
+      if (!confirmed) return;
+      cart.add(payload, { force: true });
+    }
+    for (let n = 1; n < input.qty; n += 1) cart.add(payload);
     setConfiguring(null);
   }
 
@@ -107,7 +115,12 @@ export function ShopPage({ shopId }: { shopId: string }) {
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-lg font-bold truncate">{shop.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold truncate">{shop.name}</h1>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${shop.is_open ? "bg-[#E5F6E9] text-[#087A31]" : "bg-[#F0F1EF] text-[#747B76]"}`}>
+              {shop.is_open ? "เปิดอยู่" : "ปิดอยู่"}
+            </span>
+          </div>
           <p className="text-xs text-gray-400 truncate">
             {shop.category}{shop.delivery_note ? ` · ${shop.delivery_note}` : ""}
           </p>
@@ -152,8 +165,13 @@ export function ShopPage({ shopId }: { shopId: string }) {
                   <p className="text-sm font-bold text-[#a85f2c]">฿{i.price}</p>
                   {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ใน{activeSetName} {qtyOf(i.item_id)} ชิ้น</p>}
                 </div>
-                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-[#3f6b4a] text-white text-sm px-3 py-1.5">
-                  {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
+                <button
+                  type="button"
+                  disabled={!shop.is_open}
+                  onClick={() => shop.is_open && setConfiguring(i)}
+                  className="rounded-lg bg-[#3f6b4a] px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
+                >
+                  {!shop.is_open ? "ร้านปิด" : qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
                 </button>
               </div>
             ))}
