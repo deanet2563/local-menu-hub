@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: 8ba2844a7973c9f05fa107233b9faa0fdc6ff330
+-- Canonical blob SHA: d428e89e54bb226ed73606e06ac42580dfe89646
 
 \set ON_ERROR_STOP on
 
@@ -559,3 +559,25 @@ end $do$;
 reset role;
 
 select 'head_office_rbac_audit_tests_passed' as result;
+
+
+-- No production-facing RLS policy may retain an admin bypass based only on a
+-- platform_admins row. The self-read policy on platform_admins itself is excluded.
+do $cleanup$
+declare
+  n bigint;
+begin
+  select count(*) into n
+  from pg_policies
+  where schemaname = 'public'
+    and tablename <> 'platform_admins'
+    and (
+      coalesce(qual, '') ilike '%platform_admins%'
+      or coalesce(with_check, '') ilike '%platform_admins%'
+    );
+
+  if n <> 0 then
+    raise exception 'residual raw platform_admins RLS policies remain: %', n;
+  end if;
+end
+$cleanup$;
