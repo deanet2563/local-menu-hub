@@ -168,7 +168,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
                 <button
                   type="button"
                   disabled={!shop.is_open}
-                  onClick={() => shop.is_open && setConfiguring(i)}
+                  onClick={() => { if (shop.is_open) setConfiguring(i); }}
                   className="rounded-lg bg-[#3f6b4a] px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
                 >
                   {!shop.is_open ? "ร้านปิด" : qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
