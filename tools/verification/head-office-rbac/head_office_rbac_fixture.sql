@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 4c090008dbb5e6835c69d91fb472f0067d55e553
+-- Canonical blob SHA: a0da6887245408a5de605cc1f2843a4eb1d9d814
 
 \set ON_ERROR_STOP on
 
@@ -43,6 +43,7 @@ create table public.platform_admins (
 create table public.shops (
   shop_id text primary key,
   name text not null,
+  category text,
   is_open boolean default false,
   is_approved boolean not null default false,
   approved_at timestamptz,
@@ -107,6 +108,160 @@ create table public.subscription_payments (
   payment_id uuid primary key default gen_random_uuid(),
   amount numeric not null default 0
 );
+
+create table public.shop_category_master (
+  category_id uuid primary key default gen_random_uuid(),
+  label text not null unique,
+  icon text,
+  sort_order integer not null default 100,
+  is_active boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.shop_category_master enable row level security;
+
+create policy "active shop categories are public"
+  on public.shop_category_master
+  for select
+  to anon, authenticated
+  using (is_active = true);
+
+create policy "platform admins can read all shop categories"
+  on public.shop_category_master
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.platform_admins pa
+      where pa.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+    )
+  );
+
+create or replace function public.fn_admin_create_shop_category(
+  p_label text,
+  p_icon text default null,
+  p_sort_order integer default 100
+)
+returns uuid
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $
+declare
+  v_id uuid;
+begin
+  if not exists (
+    select 1 from public.platform_admins pa
+    where pa.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+  ) then
+    raise exception 'forbidden';
+  end if;
+  insert into public.shop_category_master(label,icon,sort_order)
+  values (p_label,p_icon,p_sort_order)
+  returning category_id into v_id;
+  return v_id;
+end;
+$;
+
+create or replace function public.fn_admin_update_shop_category(
+  p_category_id uuid,
+  p_label text,
+  p_icon text,
+  p_sort_order integer,
+  p_is_active boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $
+begin
+  if not exists (
+    select 1 from public.platform_admins pa
+    where pa.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+  ) then
+    raise exception 'forbidden';
+  end if;
+  update public.shop_category_master
+  set label=p_label, icon=p_icon, sort_order=p_sort_order, is_active=p_is_active
+  where category_id=p_category_id;
+end;
+$;
+
+create or replace function public.fn_shop_request_delivery_v3(p_sub_id uuid)
+returns table(result text, sub_id uuid, shop_id text)
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $
+declare
+  v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
+begin
+  if not (
+    exists(select 1 from public.shop_staff ss where ss.customer_id=v_actor_customer_id)
+    or exists(
+      select 1 from public.platform_admins pa
+      where pa.customer_id = v_actor_customer_id
+    )
+  ) then
+    raise exception 'shop_actor_not_authorized';
+  end if;
+  return query select 'ok'::text, p_sub_id, 'shop-test'::text;
+end;
+$;
+
+create or replace function public.fn_shop_reoffer_delivery_v3(
+  p_sub_id uuid,
+  p_reason_code text,
+  p_note text default null
+)
+returns table(result text, sub_id uuid, previous_assigned_rider_id uuid, shop_id text)
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $
+declare
+  v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
+begin
+  if not (
+    exists(select 1 from public.shop_staff ss where ss.customer_id=v_actor_customer_id)
+    or exists(
+      select 1 from public.platform_admins pa
+      where pa.customer_id = v_actor_customer_id
+    )
+  ) then
+    raise exception 'shop_actor_not_authorized';
+  end if;
+  return query select 'ok'::text, p_sub_id, null::uuid, 'shop-test'::text;
+end;
+$;
+
+create or replace function public.fn_shop_cancel_delivery_v3(
+  p_sub_id uuid,
+  p_reason_code text,
+  p_note text
+)
+returns table(result text, sub_id uuid, previous_assigned_rider_id uuid)
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $
+declare
+  v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
+begin
+  if not (
+    exists(select 1 from public.shop_staff ss where ss.customer_id=v_actor_customer_id)
+    or exists(
+      select 1 from public.platform_admins pa
+      where pa.customer_id = v_actor_customer_id
+    )
+  ) then
+    raise exception 'shop_actor_not_authorized';
+  end if;
+  return query select 'ok'::text, p_sub_id, null::uuid;
+end;
+$;
+
 
 create or replace function public.fn_staff_shop_ids()
 returns setof text
@@ -270,7 +425,13 @@ create policy shop_or_admin_reads_daily_summary
 grant all on table public.platform_admins to anon, authenticated, service_role;
 grant select on table public.shops, public.riders, public.customers, public.shop_staff to authenticated;
 grant all on table public.hub_orders, public.sub_orders, public.order_items, public.daily_shop_sales_summary, public.subscription_payments to authenticated;
-grant all on table public.hub_orders, public.sub_orders, public.order_items, public.daily_shop_sales_summary, public.subscription_payments to service_role;
+grant select on table public.shop_category_master to anon, authenticated;
+grant all on table public.hub_orders, public.sub_orders, public.order_items, public.daily_shop_sales_summary, public.subscription_payments, public.shop_category_master to service_role;
+grant execute on function public.fn_admin_create_shop_category(text,text,integer) to authenticated, service_role;
+grant execute on function public.fn_admin_update_shop_category(uuid,text,text,integer,boolean) to authenticated, service_role;
+grant execute on function public.fn_shop_request_delivery_v3(uuid) to authenticated, service_role;
+grant execute on function public.fn_shop_reoffer_delivery_v3(uuid,text,text) to authenticated, service_role;
+grant execute on function public.fn_shop_cancel_delivery_v3(uuid,text,text) to authenticated, service_role;
 
 create or replace function public.fn_is_platform_admin()
 returns boolean
