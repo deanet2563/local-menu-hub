@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 542786da06cc7d1f19428bf251fcd5507a6c93a7
+-- Canonical blob SHA: 729a67472d92abceb6e4d5b9bb8ce5858f8a1b25
 
 \set ON_ERROR_STOP on
 
@@ -304,6 +304,28 @@ create policy self_reads_own_admin_row
   on public.platform_admins
   for select
   using (customer_id = (auth.jwt() ->> 'customer_id')::uuid);
+
+create policy rider_reads_scoped_rows
+  on public.riders
+  for select
+  using (
+    customer_id = (auth.jwt() ->> 'customer_id')::uuid
+    or exists (
+      select 1 from public.platform_admins pa
+      where pa.customer_id = (auth.jwt() ->> 'customer_id')::uuid
+    )
+    or (
+      is_online = true
+      and is_approved = true
+      and is_banned = false
+      and exists (select 1 from public.fn_staff_shop_ids())
+    )
+    or exists (
+      select 1 from public.sub_orders s
+      where s.assigned_rider_id = riders.id
+        and s.order_id in (select public.fn_my_hub_order_ids())
+    )
+  );
 
 create policy shop_or_admin_reads_active_riders
   on public.riders
