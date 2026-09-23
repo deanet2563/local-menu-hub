@@ -79,7 +79,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
     options: Parameters<typeof cart.add>[0]["options"];
     note: string | null;
   }) {
-    if (!shop.is_open) return;
+    if (!shop?.is_open) return;
 
     const payload = {
       itemId: input.product.itemId,
@@ -168,7 +168,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
                 <button
                   type="button"
                   disabled={!shop.is_open}
-                  onClick={() => { if (shop.is_open) setConfiguring(i); }}
+                  onClick={() => { if (shop?.is_open) setConfiguring(i); }}
                   className="rounded-lg bg-[#3f6b4a] px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
                 >
                   {!shop.is_open ? "ร้านปิด" : qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
