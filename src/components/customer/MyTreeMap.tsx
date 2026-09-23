@@ -82,11 +82,21 @@ function markerIcon(shop: MerchantMapShop): Record<string, unknown> | undefined 
   };
 }
 
-function ShopCard({ shop, location, compact = false, onShowOnMap }: { shop: MerchantMapShop; location: MapLocation | null; compact?: boolean; onShowOnMap?: () => void }) {
+function ShopCard({ shop, location, compact = false, onShowOnMap, onClose }: { shop: MerchantMapShop; location: MapLocation | null; compact?: boolean; onShowOnMap?: () => void; onClose?: () => void }) {
   const distance = location ? formatDistance(distanceKm(location, shop)) : null;
   return (
-    <article className={`rounded-2xl border border-[#dce8dc] bg-white shadow-[0_12px_32px_rgba(31,82,55,0.12)] ${compact ? "p-3" : "p-4"}`}>
-      <div className="flex items-start gap-3">
+    <article className={`relative rounded-2xl border border-[#dce8dc] bg-white shadow-[0_12px_32px_rgba(31,82,55,0.12)] ${compact ? "p-3" : "p-4"}`}>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={`ปิดการ์ดร้าน ${shop.name}`}
+          className="absolute right-2 top-2 z-10 grid h-10 w-10 place-items-center rounded-full border border-[#dce8dc] bg-white text-2xl leading-none text-[#315a42] shadow-sm transition-colors hover:bg-[#eef7e9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f6a45]"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      )}
+      <div className={`flex items-start gap-3 ${onClose ? "pr-10" : ""}`}>
         <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#eef7e9] text-xl">
           {shop.logoUrl ? <img src={shop.logoUrl} alt="" className="h-full w-full object-cover" /> : <span aria-hidden="true">{merchantFallbackIcon(shop.category)}</span>}
         </div>
@@ -280,7 +290,7 @@ export function MyTreeMap() {
             {mapsError && <div className="absolute inset-0 grid place-items-center bg-[#f8fbf5] p-8 text-center"><div><p className="font-bold">เปิดแผนที่ไม่ได้ในขณะนี้</p><p className="mt-1 text-sm text-gray-600">ยังสามารถดูร้านแบบรายการและเปิดนำทางได้</p><div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => setMapsAttempt((attempt) => attempt + 1)} className="rounded-xl border border-[#b9d2bd] bg-white px-4 py-2 text-sm font-semibold text-[#1f6a45]">ลองโหลดใหม่</button><button type="button" onClick={() => setView("list")} className="rounded-xl bg-[#1f6a45] px-4 py-2 text-sm font-semibold text-white">ดูแบบรายการ</button></div></div></div>}
             {loading && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-3 text-sm shadow">กำลังโหลดร้านค้าใกล้บ้าน…</div>}
             {!loading && !loadError && filteredShops.length === 0 && <div className="absolute inset-x-4 top-4 rounded-2xl bg-white/95 p-4 text-center text-sm shadow">ไม่พบร้านตามตัวกรองนี้ ลองเลือก “ทั้งหมด” หรือปิดตัวกรอง “เปิดอยู่ตอนนี้”</div>}
-            {selectedShop && <div className="absolute inset-x-3 bottom-3 z-10"><ShopCard shop={selectedShop} location={location} compact /></div>}
+            {selectedShop && <div className="absolute inset-x-3 bottom-3 z-10"><ShopCard shop={selectedShop} location={location} compact onClose={() => setSelectedShop(null)} /></div>}
           </div>
 
           <aside className={`${view === "map" ? "hidden lg:block" : "block"} space-y-3 ${view === "list" ? "mt-4 lg:mt-0" : ""}`}>
