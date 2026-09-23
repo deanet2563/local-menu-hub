@@ -109,8 +109,8 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 sm:items-center" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-h-[90vh] sm:rounded-2xl">
         <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
           <div className="min-w-0">
             <p className="font-semibold truncate">{product.name}</p>
@@ -188,7 +188,7 @@ export function ProductConfigurator({ product, onClose, onConfirm }: Props) {
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
+        <div className="sticky bottom-0 border-t border-gray-100 bg-white px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
           <button
             onClick={confirm}
             disabled={loading}
