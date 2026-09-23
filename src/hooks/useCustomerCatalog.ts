@@ -17,7 +17,7 @@ export type CatalogShop = {
   is_open: boolean;
   distance_km: number | null;
 };
-export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };\nexport type HubCatalogItem = CatalogItem & { is_available: boolean; shop_is_open: boolean };
 export type ShopPromotion = {
   id: string;
   shop_id: string;
@@ -35,7 +35,7 @@ const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 
 export function useCustomerCatalog() {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
-  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [items, setItems] = useState<CatalogItem[]>([]);\n  const [hubItems, setHubItems] = useState<HubCatalogItem[]>([]);
   const [promotions, setPromotions] = useState<ShopPromotion[]>([]);
   const [listingKeywords, setListingKeywords] = useState<ListingKeyword[]>([]);
   const [catalogState, setCatalogState] = useState<CatalogState>("loading");
@@ -50,7 +50,7 @@ export function useCustomerCatalog() {
     setCatalogState("loading");
     setCatalogError(null);
     try {
-      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: p, error: promotionError }, { data: k, error: keywordError }] = await Promise.all([
+      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: hm, error: hubItemError }, { data: p, error: promotionError }, { data: k, error: keywordError }] = await Promise.all([
         publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open").eq("is_approved", true).eq("is_banned", false),
         publicSupabase
           .from("menu_items")
@@ -76,6 +76,24 @@ export function useCustomerCatalog() {
       if (itemError) throw itemError;
       setAllShops(((s as Omit<CatalogShop, "distance_km">[]) ?? []).map((shop) => ({ ...shop, distance_km: null })));
       setItems((m as CatalogItem[]) ?? []);
+      type HubItemRow = CatalogItem & {
+        is_available: boolean;
+        shops: { is_open: boolean } | { is_open: boolean }[];
+      };
+      setHubItems(((hm as unknown as HubItemRow[]) ?? []).flatMap((item) => {
+        const relatedShop = Array.isArray(item.shops) ? item.shops[0] : item.shops;
+        if (!relatedShop) return [];
+        return [{
+          item_id: item.item_id,
+          shop_id: item.shop_id,
+          name: item.name,
+          price: item.price,
+          image_url: item.image_url,
+          category: item.category,
+          is_available: item.is_available,
+          shop_is_open: relatedShop.is_open,
+        }];
+      }));
       if (promotionError) {
         // Promotions are optional home content. A promotion read must never
         // turn the whole ordering home into a blank/error screen.
