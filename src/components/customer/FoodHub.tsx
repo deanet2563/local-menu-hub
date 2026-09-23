@@ -43,9 +43,16 @@ function ShopCard({ shop }: { shop: CatalogShop }) {
   );
 
   const className = `flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)] ${shop.is_open ? "" : "opacity-75"}`;
-  return shop.is_open
-    ? <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className={className}>{content}</Link>
-    : <div className={className} aria-disabled="true" title="ร้านยังไม่เปิดรับออเดอร์">{content}</div>;
+  return (
+    <Link
+      to="/shop/$shopId"
+      params={{ shopId: shop.shop_id }}
+      className={className}
+      aria-label={shop.is_open ? `เปิดร้าน ${shop.name}` : `ดูเมนูร้าน ${shop.name} ร้านปิดอยู่`}
+    >
+      {content}
+    </Link>
+  );
 }
 
 function MenuCard({
@@ -262,8 +269,12 @@ export function FoodHub() {
                 </div>
                 {visibleItems.length === 0 && (
                   <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-8 text-center">
-                    <p className="text-sm font-bold text-[#4F5E54]">ไม่พบเมนูที่ตรงกับการค้นหา</p>
-                    <p className="mt-1 text-xs text-[#7A867E]">ลองล้างคำค้นหรือเลือกหมวดอื่น</p>
+                    <p className="text-sm font-bold text-[#4F5E54]">
+                      {hubItems.length === 0 ? "ยังไม่มีเมนูใน Food Hub" : "ไม่พบเมนูที่ตรงกับการค้นหา"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#7A867E]">
+                      {hubItems.length === 0 ? "เมื่อร้านเพิ่มเมนู ระบบจะแสดงที่นี่อัตโนมัติ" : "ลองล้างคำค้นหรือเลือกหมวดอื่น"}
+                    </p>
                   </div>
                 )}
               </section>
