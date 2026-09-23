@@ -34,7 +34,7 @@ export type CatalogState = "loading" | "ready" | "error";
 
 const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 
-export function useCustomerCatalog() {
+export function useCustomerCatalog({ includeHubItems = false }: { includeHubItems?: boolean } = {}) {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [hubItems, setHubItems] = useState<HubCatalogItem[]>([]);
@@ -61,11 +61,13 @@ export function useCustomerCatalog() {
           .eq("shops.is_open", true)
           .eq("shops.is_approved", true)
           .eq("shops.is_banned", false),
-        publicSupabase
-          .from("menu_items")
-          .select("item_id,shop_id,name,price,image_url,category,is_available, shops!inner(is_open,is_approved,is_banned)")
-          .eq("shops.is_approved", true)
-          .eq("shops.is_banned", false),
+        includeHubItems
+          ? publicSupabase
+              .from("menu_items")
+              .select("item_id,shop_id,name,price,image_url,category,is_available, shops!inner(is_open,is_approved,is_banned)")
+              .eq("shops.is_approved", true)
+              .eq("shops.is_banned", false)
+          : Promise.resolve({ data: null, error: null }),
         publicSupabase
           .from("daily_specials")
           .select("id,shop_id,special_text,created_at, shops!inner(name,logo_url,is_open,is_approved,is_banned)")
@@ -87,7 +89,9 @@ export function useCustomerCatalog() {
         is_available: boolean;
         shops: { is_open: boolean } | { is_open: boolean }[];
       };
-      if (hubItemError) {
+      if (!includeHubItems) {
+        setHubItems([]);
+      } else if (hubItemError) {
         const openShopIds = new Set(((s as Omit<CatalogShop, "distance_km">[]) ?? []).filter((shop) => shop.is_open).map((shop) => shop.shop_id));
         setHubItems(((m as CatalogItem[]) ?? []).map((item) => ({
           ...item,
