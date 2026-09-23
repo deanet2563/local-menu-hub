@@ -3,7 +3,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   HEAD_OFFICE_SECTIONS,
   getHeadOfficeSection,
-  headOfficePath,
   type HeadOfficeSection,
 } from "./headOfficeNav";
 
@@ -43,7 +42,7 @@ export function HeadOfficeShell({
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative h-full w-[min(88vw,20rem)] border-r border-gray-200 bg-white shadow-xl">
-            <SidebarContent section={section} />
+            <SidebarContent section={section} onClose={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}
@@ -92,14 +91,30 @@ export function HeadOfficeShell({
   );
 }
 
-function SidebarContent({ section }: { section: HeadOfficeSection }) {
+function SidebarContent({
+  section,
+  onClose,
+}: {
+  section: HeadOfficeSection;
+  onClose?: () => void;
+}) {
   return (
     <>
-      <div className="border-b border-gray-100 px-5 py-5">
-        <Link to="/head-office" className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-5">
+        <Link to="/head-office" className="min-w-0 flex-1 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-300">
           <p className="text-xl font-bold tracking-tight">MyTree</p>
           <p className="mt-0.5 text-xs text-gray-500">Head Office</p>
         </Link>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดเมนู Head Office"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-lg text-gray-600"
+          >
+            ×
+          </button>
+        )}
       </div>
       <nav aria-label="Head Office navigation" className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
@@ -107,10 +122,11 @@ function SidebarContent({ section }: { section: HeadOfficeSection }) {
             const isActive = item.key === section;
             return (
               <li key={item.key}>
-                <Link
-                  to={headOfficePath(item.key)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                {item.key === "overview" ? (
+                  <Link
+                    to="/head-office"
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                     isActive
                       ? "bg-gray-900 text-white shadow-sm"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
@@ -125,7 +141,29 @@ function SidebarContent({ section }: { section: HeadOfficeSection }) {
                     {item.shortLabel}
                   </span>
                   <span>{item.label}</span>
-                </Link>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/head-office/$section"
+                    params={{ section: item.key }}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-gray-900 text-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-bold ${
+                        isActive ? "bg-white/15 text-white" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {item.shortLabel}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                )}
               </li>
             );
           })}
