@@ -8,7 +8,7 @@ import {
   type MerchantMapShop,
 } from "@/lib/merchantMapMarkers";
 import { directionsUrl, distanceKm, filterMapShops, formatDistance, type MapLocation } from "@/lib/myTreeMap";
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
 
 type LatLngLiteral = { lat: number; lng: number };
 type Listener = { remove(): void };
@@ -52,7 +52,7 @@ function loadMaps(): Promise<MyTreeGoogleMapsApi> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
     script.async = true;
     script.defer = true;
     script.dataset.mytreeGoogleMaps = "true";
