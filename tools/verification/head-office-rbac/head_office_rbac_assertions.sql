@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: acbb182f9c44144c940641bba5ef58af8074ed6d
+-- Canonical blob SHA: 8ba2844a7973c9f05fa107233b9faa0fdc6ff330
 
 \set ON_ERROR_STOP on
 
@@ -188,12 +188,12 @@ end $$;
 -- Existing Shop approve flow remains compatible for an authorized scoped role.
 select public.fn_approve_shop('shop-test');
 
-do $
+do $blk$
 begin
   if not (select is_approved from public.shops where shop_id = 'shop-test') then
     raise exception 'shop approve flow did not persist';
   end if;
-end $;
+end $blk$;
 
 -- Live-production drift: shop category admin RPCs must use shops.action rather
 -- than raw platform_admins row existence.
@@ -224,7 +224,7 @@ $do$;
 
 -- A Shop Admin does not get the orders.action override merely by being present
 -- in platform_admins.
-do $
+do $blk$
 begin
   begin
     perform public.fn_shop_request_delivery_v3(
@@ -237,7 +237,7 @@ begin
         raise;
       end if;
   end;
-end $;
+end $blk$;
 
 -- The same Shop Admin cannot invoke Rider governance.
 do $$
@@ -311,7 +311,7 @@ select set_config(
   '{"customer_id":"00000000-0000-0000-0000-000000000006"}',
   false
 );
-do $
+do $blk$
 begin
   if not public.fn_admin_has_permission('analytics.read') then
     raise exception 'read-only analyst missing analytics.read';
@@ -320,9 +320,9 @@ begin
      or public.fn_admin_has_permission('system.admin') then
     raise exception 'read-only analyst received mutation permission';
   end if;
-end $;
+end $blk$;
 
-do $
+do $blk$
 begin
   begin
     perform public.fn_admin_create_shop_category('Analyst Escalation', null, 100);
@@ -333,7 +333,7 @@ begin
         raise;
       end if;
   end;
-end $;
+end $blk$;
 
 -- Read-only Analyst can read order/analytics surfaces but cannot obtain broad
 -- action-only access or finance data.
