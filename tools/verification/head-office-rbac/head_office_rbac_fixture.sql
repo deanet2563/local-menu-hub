@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 1ac0c722ef79a17e1453ede6abc14968ac15d658
+-- Canonical blob SHA: 355aa156b29cc4765b84df72715ea25aacb450d6
 
 \set ON_ERROR_STOP on
 
@@ -504,6 +504,21 @@ grant execute on function public.fn_admin_update_shop_category(uuid,text,text,in
 grant execute on function public.fn_shop_request_delivery_v3(uuid) to authenticated, service_role;
 grant execute on function public.fn_shop_reoffer_delivery_v3(uuid,text,text) to authenticated, service_role;
 grant execute on function public.fn_shop_cancel_delivery_v3(uuid,text,text) to authenticated, service_role;
+
+-- legacy revoke overload fixture: production history may contain this signature.
+create or replace function public.fn_revoke_rider(p_rider_id uuid)
+returns public.riders
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $legacy$
+declare
+  v_row public.riders;
+begin
+  select * into v_row from public.riders where id = p_rider_id;
+  return v_row;
+end;
+$legacy$;
 
 create or replace function public.fn_is_platform_admin()
 returns boolean
