@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 1c491a03493ea48c68eab2ae2283ceac1cf58636
+-- Canonical blob SHA: 1ac0c722ef79a17e1453ede6abc14968ac15d658
 
 \set ON_ERROR_STOP on
 
@@ -9,6 +9,7 @@ create role authenticated nologin;
 create role service_role nologin bypassrls;
 
 create schema auth;
+create schema storage;
 create or replace function auth.jwt()
 returns jsonb
 language sql
@@ -21,7 +22,25 @@ as $$
 $$;
 
 grant usage on schema auth to authenticated, service_role;
+grant usage on schema storage to authenticated, service_role;
 grant execute on function auth.jwt() to authenticated, service_role;
+
+
+create or replace function storage.foldername(p_name text)
+returns text[]
+language sql
+immutable
+as $storage$
+  select string_to_array(p_name, '/');
+$storage$;
+
+create table storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text not null,
+  name text not null
+);
+
+alter table storage.objects enable row level security;
 
 create type public.admin_role_enum as enum ('super_admin', 'support');
 
@@ -357,6 +376,36 @@ create policy read_own_or_related_customers
     or public.fn_customer_related_to_caller(id)
   );
 
+
+create policy "delivery principals read private delivery proof"
+  on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'delivery-proofs'
+    and (storage.foldername(name))[1] is not null
+    and exists (
+      select 1 from public.sub_orders so
+      where so.sub_id::text = (storage.foldername(storage.objects.name))[1]
+        and (
+          exists (
+            select 1 from public.riders r
+            where r.id = so.assigned_rider_id
+              and r.customer_id::text = nullif(auth.jwt() ->> 'customer_id', '')
+          )
+          or exists (
+            select 1 from public.shop_staff ss
+            where ss.shop_id = so.shop_id
+              and ss.customer_id::text = nullif(auth.jwt() ->> 'customer_id', '')
+          )
+          or so.order_id in (select public.fn_my_hub_order_ids())
+          or exists (
+            select 1 from public.platform_admins pa
+            where pa.customer_id::text = nullif(auth.jwt() ->> 'customer_id', '')
+          )
+        )
+    )
+  );
 
 create policy admin_only_subscription_payments
   on public.subscription_payments
@@ -698,3 +747,7 @@ values ('00000000-0000-0000-0000-000000000002', 'legacy support');
 
 insert into public.platform_admins(customer_id, role)
 values ('00000000-0000-0000-0000-000000000002', 'support');
+
+grant select on table storage.objects to authenticated;
+grant all on table storage.objects to service_role;
+grant execute on function storage.foldername(text) to authenticated, service_role;
