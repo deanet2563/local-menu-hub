@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId, supabase } from "@/lib/supabase";
+import { ensurePlatformAdminLineLogin } from "@/lib/aiOfficeAuth";
 
 type AccessState = "loading" | "no-auth" | "not-admin" | "error" | "ok";
 
@@ -12,7 +13,9 @@ export function PlatformAdminGate({ children }: { children: ReactNode }) {
     setErrorMessage(null);
 
     try {
-      await initLiff();
+      const loginState = await ensurePlatformAdminLineLogin();
+      if (loginState === "redirecting") return;
+
       const customerId = await getCurrentCustomerId();
 
       if (!customerId) {
