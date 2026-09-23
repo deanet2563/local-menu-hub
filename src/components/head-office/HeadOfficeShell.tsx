@@ -41,7 +41,7 @@ export function HeadOfficeShell({
             className="absolute inset-0 bg-gray-950/35"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative h-full w-[min(88vw,20rem)] border-r border-gray-200 bg-white shadow-xl">
+          <aside className="relative flex h-full w-[min(88vw,20rem)] flex-col border-r border-gray-200 bg-white shadow-xl">
             <SidebarContent section={section} onClose={() => setMobileOpen(false)} />
           </aside>
         </div>
