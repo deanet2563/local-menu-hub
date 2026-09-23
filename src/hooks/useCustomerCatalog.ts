@@ -79,6 +79,7 @@ export function useCustomerCatalog() {
       ]);
       if (shopError) throw shopError;
       if (itemError) throw itemError;
+      if (hubItemError) throw hubItemError;
       setAllShops(((s as Omit<CatalogShop, "distance_km">[]) ?? []).map((shop) => ({ ...shop, distance_km: null })));
       setItems((m as CatalogItem[]) ?? []);
       type HubItemRow = CatalogItem & {
@@ -215,6 +216,7 @@ export function useCustomerCatalog() {
   return {
     shops,
     items,
+    hubItems,
     promotions,
     loading: catalogState === "loading",
     catalogState,
