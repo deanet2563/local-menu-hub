@@ -34,11 +34,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-/** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
+const PREVIEW_SUFFIX = ".local-menu-hub.pages.dev";
+const NON_PREVIEW_HOSTS = new Set(["mytree.cc", "www.mytree.cc", "local-menu-hub.pages.dev"]);
+
+/** True only for Cloudflare Pages branch/hash previews or an explicit preview build flag.
+ * Production custom domains and the canonical Pages production host are always excluded. */
 export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
-  return import.meta.env.VITE_ALLOW_ANONYMOUS_PREVIEW === "true"
-    || window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+  if (import.meta.env.VITE_ALLOW_ANONYMOUS_PREVIEW === "true") return true;
+
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.endsWith(PREVIEW_SUFFIX) && !NON_PREVIEW_HOSTS.has(hostname);
 }
 
 function isAiOfficeRoute(): boolean {
@@ -61,6 +67,7 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  * a permanently-broken cache. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
+  if (isOrderingPreview() && !isAiOfficeRoute()) return Promise.resolve();
   if (!liffReady) {
     liffReady = withTimeout(
       liff.init({
@@ -82,6 +89,7 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  if (isOrderingPreview() && !isAiOfficeRoute()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
