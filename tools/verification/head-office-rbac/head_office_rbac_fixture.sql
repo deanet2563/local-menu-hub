@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: 729a67472d92abceb6e4d5b9bb8ce5858f8a1b25
+-- Canonical blob SHA: 1c491a03493ea48c68eab2ae2283ceac1cf58636
 
 \set ON_ERROR_STOP on
 
@@ -67,6 +67,7 @@ create table public.riders (
   win_registration_no text,
   verified_at timestamptz,
   verified_by uuid,
+  offers_delivery boolean not null default false,
   offers_passenger boolean not null default false,
   is_banned boolean not null default false,
   banned_reason text,
