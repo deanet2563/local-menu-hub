@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
+import { supabase, getCurrentCustomerId, initLiff, isOrderingPreview } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { linkRichMenu } from "@/lib/richmenu";
 import { loadActiveShopCategories, type ShopCategoryMaster } from "@/lib/shopCategories";
@@ -50,10 +50,16 @@ export function ShopSignupForm() {
         setCategories(rows);
         setCategoriesError(rows.length ? null : "ยังไม่มีหมวดร้านที่เปิดใช้งาน");
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setCategories([]);
-        setCategoriesError("โหลดหมวดร้านไม่สำเร็จ กรุณาลองใหม่");
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+        setCategoriesError(
+          isOrderingPreview() && (message || code)
+            ? `โหลดหมวดร้านไม่สำเร็จ (${code || "unknown"}): ${message || "unknown error"}`
+            : "โหลดหมวดร้านไม่สำเร็จ กรุณาลองใหม่"
+        );
       })
       .finally(() => {
         if (active) setCategoriesLoading(false);
