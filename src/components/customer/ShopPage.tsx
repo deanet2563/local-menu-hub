@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/publicSupabase";
 import { cart, useCart, cartCount, cartTotal } from "@/lib/cart";
 import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
 
