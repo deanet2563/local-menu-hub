@@ -1,229 +1,228 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { publicSupabase } from "@/lib/supabase";
-import { getCurrentLocation } from "@/lib/geolocation";
-import { useCart } from "@/lib/cart";
-import { SponsorCard } from "@/components/customer/SponsorCard";
-import { PromoBanner } from "@/components/customer/PromoBanner";
+import { cart, useCart } from "@/lib/cart";
+import { useCustomerCatalog, type CatalogItem, type CatalogShop, type ShopPromotion } from "@/hooks/useCustomerCatalog";
 import { FloatingCartBar } from "@/components/customer/FloatingCartBar";
-import { HOME_SPONSOR_CARDS, selectHomeSponsorCard } from "@/lib/homeSponsorCards";
-import { HOME_PROMO_BANNER } from "@/lib/homePromoBanner";
-import { CURRENT_COMMUNITY_NAME, HOME_COMMUNITY_EVENTS, HOME_COMMUNITY_POSTS } from "@/lib/homeCommunityPreviewFixture";
+import { ProductConfigurator, type ConfigurableProduct } from "@/components/customer/ProductConfigurator";
+import { bucketKeyForCategory } from "@/lib/foodHubCategories";
+import { isOrderingPreview } from "@/lib/supabase";
 
-// ============================================================
-// MyTree — Home (`/`) overview. Approved page split: Home is the
-// general local-hub landing page (quick-access categories, sponsor
-// slots, a short community preview, a mixed "nearby now" list);
-// food-only browsing lives at /hub (FoodHub.tsx). Kept as its own
-// component, not a reuse of HubHome.tsx or FoodHub.tsx.
-//
-// No min-h-screen on the wrapper — that inflated page height past
-// the visible viewport on mobile in-app WebViews (LINE included) and
-// pushed BottomNav off-screen on Food Hub; same class, same bug here.
-// ============================================================
+const FOOD_CATEGORIES = [
+  { key: "single-dish", label: "อาหารจานเดียว", icon: "🍛" },
+  { key: "noodles", label: "ก๋วยเตี๋ยว", icon: "🍜" },
+  { key: "snacks", label: "ของว่าง", icon: "🥟" },
+  { key: "bakery", label: "เบเกอรี่", icon: "🥐" },
+  { key: "desserts", label: "ของหวาน", icon: "🍨" },
+  { key: "drinks", label: "เครื่องดื่ม", icon: "🥤" },
+  { key: "other", label: "อื่น ๆ", icon: "🍽️" },
+] as const;
 
-type QuickAccessTile = { key: string; label: string; icon: string; to?: "/hub" };
+function SearchIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>;
+}
 
-const QUICK_ACCESS_TILES: QuickAccessTile[] = [
-  { key: "food", label: "อาหาร", icon: "🍜", to: "/hub" },
-  { key: "secondhand", label: "ตลาดมือสอง", icon: "🛍️" },
-  { key: "services", label: "ช่าง-บริการ", icon: "🛠️" },
-  { key: "health", label: "สุขภาพ", icon: "🏥" },
-  { key: "education", label: "การศึกษา", icon: "📚" },
-  { key: "beauty", label: "ความงาม", icon: "💅" },
-  { key: "events", label: "กิจกรรม", icon: "🎉" },
-  { key: "all", label: "ทั้งหมด", icon: "🗂️" },
-];
+function ArrowIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>;
+}
 
-type NearbyShopRow = { shop_id: string; name: string; category: string | null; distance_km: number | string | null };
-type NearbyState = "idle" | "loading" | "ready" | "error";
+function MyTreeLogo() {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
+      {failed ? (
+        <span className="text-3xl" role="img" aria-label="MyTree">🌳</span>
+      ) : (
+        <img
+          src="/brand/mytree-logo.png"
+          alt="MyTree"
+          width={44}
+          height={44}
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+          onError={() => setFailed(true)}
+          className="h-11 w-11 object-contain"
+        />
+      )}
+    </div>
+  );
+}
 
-// fn_shops_near_location(p_lat, p_lng) รับแค่พิกัด ไม่มี parameter limit
-// และคืนร้านที่เปิด/อนุมัติแล้วทั้งหมด เรียงตามระยะทางใกล้→ไกล
-// ตัดจำนวนฝั่ง client จึงเป็นทางที่กระทบน้อยสุด (Home เป็นหน้ารวม
-// ไม่ใช่หน้าค้นหา — เกิน 12 ร้านให้ไปต่อที่ lane ของหมวดนั้น).
-const NEARBY_LIMIT = 12;
+function ImageWithFallback({ src, alt, kind }: { src: string | null; alt: string; kind: "shop" | "food" }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className="flex h-full w-full items-center justify-center bg-[#EEF4EB] text-2xl" role="img" aria-label={`${alt} ไม่มีรูป`}>{kind === "shop" ? "🏪" : "🍽️"}</div>;
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover" />;
+}
 
-function shopInitials(name: string): string {
-  return name.trim().slice(0, 2).toUpperCase() || "?";
+function ShopCard({ shop }: { shop: CatalogShop }) {
+  return (
+    <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)]">
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageWithFallback src={shop.logo_url} alt={shop.name} kind="shop" /></div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p><span className="shrink-0 rounded-full bg-[#E5F6E9] px-2 py-1 text-[10px] font-bold text-[#087A31]">เปิดอยู่</span></div>
+        <p className="mt-1 truncate text-xs text-[#77837B]">{shop.category || "ร้านอาหารใกล้บ้าน"}</p>
+        <p className="mt-1 text-[11px] font-semibold text-[#506459]">{shop.distance_km == null ? "ดูรายละเอียดร้าน" : `${shop.distance_km.toFixed(1)} กม.`}</p>
+      </div>
+      <span className="text-[#9AA59E] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>
+    </Link>
+  );
+}
+
+function MenuCard({ item, shopName, onAdd }: { item: CatalogItem; shopName: string; onAdd: () => void }) {
+  return (
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-[#E5EBE4] bg-white shadow-[0_5px_16px_rgba(37,69,46,0.05)]">
+      <Link to="/shop/$shopId" params={{ shopId: item.shop_id }} className="block aspect-[4/3] overflow-hidden"><ImageWithFallback src={item.image_url} alt={item.name} kind="food" /></Link>
+      <div className="p-3"><h3 className="truncate text-sm font-extrabold text-[#203D2A]">{item.name}</h3><p className="mt-0.5 truncate text-xs text-[#7A867E]">{shopName}</p><div className="mt-3 flex items-center justify-between gap-2"><p className="text-sm font-black text-[#B64C0D]">฿{Number(item.price).toLocaleString("th-TH")}</p><button type="button" onClick={onAdd} aria-label={`เพิ่ม ${item.name} ลงตะกร้า`} className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EB681B] text-xl font-bold leading-none text-white shadow-sm active:scale-95">+</button></div></div>
+    </article>
+  );
+}
+
+function PromotionCard({ promotion }: { promotion: ShopPromotion }) {
+  return (
+    <Link
+      to="/shop/$shopId"
+      params={{ shopId: promotion.shop_id }}
+      className="group flex min-w-[280px] snap-start items-center gap-3 rounded-2xl border border-[#F0D1B7] bg-[#FFF8F0] p-3 shadow-[0_5px_16px_rgba(111,62,25,0.06)] sm:min-w-0"
+    >
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white">
+        <ImageWithFallback src={promotion.shop_logo_url} alt={promotion.shop_name} kind="shop" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[#FFE3CB] px-2 py-1 text-[10px] font-extrabold text-[#A9420A]">โปรโมชันจากร้าน</span>
+          {!promotion.shop_is_open && <span className="text-[10px] font-bold text-[#747B76]">ร้านปิดอยู่</span>}
+        </div>
+        <h3 className="mt-2 line-clamp-2 text-sm font-extrabold leading-5 text-[#71320F]">{promotion.special_text}</h3>
+        <p className="mt-1 truncate text-xs font-semibold text-[#6B746D]">{promotion.shop_name}</p>
+      </div>
+      <span className="shrink-0 text-[#C55514] transition-transform group-hover:translate-x-0.5"><ArrowIcon /></span>
+    </Link>
+  );
 }
 
 export function HomeOverview() {
-  const c = useCart();
-  const [comingSoonLabel, setComingSoonLabel] = useState<string | null>(null);
-  const [nearby, setNearby] = useState<NearbyShopRow[]>([]);
-  const [nearbyState, setNearbyState] = useState<NearbyState>("idle");
+  const { items, promotions, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName, shopKeywords } = useCustomerCatalog();
+  const currentCart = useCart();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
+  const normalizedQuery = query.trim().toLocaleLowerCase("th");
+  const previewMode = isOrderingPreview();
 
-  useEffect(() => {
-    void loadNearby();
-  }, []);
+  const visibleShops = useMemo(() => allOrderedShops.filter((shop) => {
+    if (!shop.is_open) return false;
+    if (!normalizedQuery) return true;
+    const haystack = `${shop.name} ${shop.category ?? ""} ${shopKeywords(shop.shop_id)}`.toLocaleLowerCase("th");
+    return haystack.includes(normalizedQuery);
+  }), [allOrderedShops, normalizedQuery, shopKeywords]);
+  const visibleItems = useMemo(() => items.filter((item) => {
+    const itemBucket = bucketKeyForCategory(item.category);
+    const matchesCategory = !category || (category === "other" ? itemBucket === null : itemBucket === category);
+    const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)} ${shopKeywords(item.shop_id)}`.toLocaleLowerCase("th");
+    return matchesCategory && (!normalizedQuery || haystack.includes(normalizedQuery));
+  }), [items, category, normalizedQuery, shopName, shopKeywords]);
 
-  async function loadNearby() {
-    setNearbyState("loading");
-    try {
-      const loc = await getCurrentLocation();
-      const { data, error } = await publicSupabase.rpc("fn_shops_near_location", { p_lat: loc.lat, p_lng: loc.lng });
-      if (error) throw error;
-      setNearby(((data as NearbyShopRow[]) ?? []).slice(0, NEARBY_LIMIT));
-      setNearbyState("ready");
-    } catch {
-      setNearbyState("error");
+  const searchSuggestions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const rows = [
+      ...visibleShops.map((shop) => ({ key: `shop-${shop.shop_id}`, label: shop.name, meta: shop.category || "ร้านอาหาร", rank: shop.name.toLocaleLowerCase("th").startsWith(normalizedQuery) ? 0 : 2 })),
+      ...items.flatMap((item) => {
+        const name = item.name.toLocaleLowerCase("th");
+        const categoryName = (item.category ?? "").toLocaleLowerCase("th");
+        const shop = shopName(item.shop_id);
+        const keywords = shopKeywords(item.shop_id).toLocaleLowerCase("th");
+        if (![name, categoryName, shop.toLocaleLowerCase("th"), keywords].some((value) => value.includes(normalizedQuery))) return [];
+        return [{ key: `item-${item.item_id}`, label: item.name, meta: shop, rank: name.startsWith(normalizedQuery) ? 0 : categoryName.startsWith(normalizedQuery) ? 1 : 2 }];
+      }),
+    ];
+    return rows.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, "th")).slice(0, 8);
+  }, [normalizedQuery, visibleShops, items, shopName, shopKeywords]);
+
+  const displayPromotions = useMemo<ShopPromotion[]>(() => {
+    const live = promotions.filter((promotion) => promotion.shop_is_open);
+    if (live.length > 0 || !previewMode) return live;
+    const demoShop = visibleShops[0];
+    if (!demoShop) return [];
+    return [
+      {
+        id: "preview-demo-1",
+        shop_id: demoShop.shop_id,
+        special_text: "ตัวอย่างโปรโมชัน: ซื้อครบ 200 บาท รับส่วนลด 20 บาท",
+        created_at: new Date(0).toISOString(),
+        shop_name: demoShop.name,
+        shop_logo_url: demoShop.logo_url,
+        shop_is_open: true,
+      },
+      {
+        id: "preview-demo-2",
+        shop_id: demoShop.shop_id,
+        special_text: "ตัวอย่างโปรโมชัน: เมนูพิเศษประจำวัน ราคาพิเศษเฉพาะวันนี้",
+        created_at: new Date(0).toISOString(),
+        shop_name: demoShop.name,
+        shop_logo_url: demoShop.logo_url,
+        shop_is_open: true,
+      },
+    ];
+  }, [promotions, previewMode, visibleShops]);
+
+  function addConfigured(input: { product: ConfigurableProduct; qty: number; options: Parameters<typeof cart.add>[0]["options"]; note: string | null }) {
+    const payload = { itemId: input.product.itemId, shopId: input.product.shopId, name: input.product.name, price: input.product.price, imageUrl: input.product.imageUrl, options: input.options, note: input.note };
+    const firstResult = cart.add(payload);
+    if (firstResult === "different_shop") {
+      if (!window.confirm("ในตะกร้ามีสินค้าจากร้านอื่น ต้องการล้างตะกร้าเดิมและเพิ่มเมนูจากร้านนี้หรือไม่?")) return;
+      cart.add(payload, { force: true });
     }
+    for (let n = 1; n < input.qty; n += 1) cart.add(payload);
+    setConfiguring(null);
   }
 
-  const topSponsor = selectHomeSponsorCard(HOME_SPONSOR_CARDS, "top");
-  const midSponsor = selectHomeSponsorCard(HOME_SPONSOR_CARDS, "mid");
+  const openShops = visibleShops;
 
   return (
-    <div className="pb-24 bg-[#e6ede4]/40">
-      <div className="p-4 space-y-3 bg-white">
-        <div>
-          <h1 className="text-xl font-bold text-[#28432f]">MyTree 🌳</h1>
-          <p className="text-xs text-gray-500">แหล่งรวมร้านค้าและบริการใกล้บ้านคุณ</p>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2">
-          {QUICK_ACCESS_TILES.map((tile) => {
-            const tileClass =
-              "flex flex-col items-center gap-1 rounded-xl py-2 text-[11px] font-medium bg-white border border-gray-200 text-[#28432f]";
-            if (tile.to) {
-              return (
-                <Link key={tile.key} to={tile.to} className={tileClass}>
-                  <span className="text-lg leading-none">{tile.icon}</span>
-                  <span className="truncate">{tile.label}</span>
-                </Link>
-              );
-            }
-            return (
-              <button type="button" key={tile.key} onClick={() => setComingSoonLabel(tile.label)} className={tileClass}>
-                <span className="text-lg leading-none">{tile.icon}</span>
-                <span className="truncate">{tile.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="pt-3">
-        <PromoBanner
-          emoji={HOME_PROMO_BANNER.emoji}
-          title={HOME_PROMO_BANNER.title}
-          subtitle={HOME_PROMO_BANNER.subtitle}
-          ctaLabel={HOME_PROMO_BANNER.ctaLabel}
-        />
-      </div>
-
-      {topSponsor && (
-        <div className="pt-3">
-          <SponsorCard label={topSponsor.sponsorLabel} title={topSponsor.title} subtitle={topSponsor.subtitle} ctaLabel={topSponsor.ctaLabel} />
-        </div>
-      )}
-
-      <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="shrink-0 text-sm font-bold text-[#28432f]">ชุมชน</h2>
-            {/* TODO: static community name — real community membership/scoping
-                comes from Community lane (codex/community-phase3-foundation),
-                not yet merged. Replace with dynamic value once merged. */}
-            <span className="min-w-0 truncate rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]">
-              {CURRENT_COMMUNITY_NAME}
-            </span>
+    <div className="min-h-screen bg-[#F7F8F3] pb-32 text-[#183B27]">
+      <div className="mx-auto max-w-6xl">
+        <header className="border-b border-[#E4EAE2] bg-[#FFFDF8] px-4 pb-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-6">
+          <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2.5"><MyTreeLogo /><div className="min-w-0"><p className="text-lg font-black leading-tight text-[#075B28]">MyTree</p><Link to="/map" className="flex min-h-6 items-center gap-1 text-xs font-semibold text-[#65736A]" aria-label="เปลี่ยนพื้นที่บนแผนที่"><span className="truncate">สัมมากร</span><span className="text-[#EB681B]">เปลี่ยนพื้นที่</span></Link></div></div><Link to="/account" aria-label="บัญชีของฉัน" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DEE7DD] bg-white text-[#087A31]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-6 w-6"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg></Link></div>
+          <div className="relative mt-3">
+            <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#DDE7DC] bg-white px-4 shadow-[0_4px_14px_rgba(41,74,50,0.05)] focus-within:border-[#77B888] focus-within:ring-2 focus-within:ring-[#D9F0DE]">
+              <span className="text-[#EB681B]"><SearchIcon /></span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาร้าน เมนู หรือประเภทอาหาร" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-sm text-[#203D2A] outline-none placeholder:text-[#919B94]" />
+              {query && <button type="button" onClick={() => setQuery("")} className="min-h-9 px-1 text-xs font-bold text-[#6D786F]">ล้าง</button>}
+            </label>
+            {normalizedQuery && searchSuggestions.length > 0 && (
+              <div className="absolute inset-x-0 top-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-2xl border border-[#DDE7DC] bg-white shadow-[0_14px_30px_rgba(31,61,42,0.14)]">
+                {searchSuggestions.map((suggestion) => (
+                  <button key={suggestion.key} type="button" onClick={() => setQuery(suggestion.label)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-[#EEF1EC] px-4 text-left last:border-b-0 hover:bg-[#F5FAF5]">
+                    <span className="truncate text-sm font-bold text-[#203D2A]">{suggestion.label}</span>
+                    <span className="shrink-0 text-xs text-[#7A867E]">{suggestion.meta}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <Link to="/community" className="shrink-0 text-xs text-[#3f6b4a]">
-            ดูทั้งหมด
-          </Link>
-        </div>
+        </header>
 
-        <div className="space-y-2">
-          {HOME_COMMUNITY_EVENTS.slice(0, 2).map((evt) => (
-            <div key={evt.id} className="rounded-xl border border-gray-100 bg-white p-3">
-              <p className="text-sm font-medium truncate">{evt.title}</p>
-              <p className="text-xs text-gray-400">{evt.whenLabel} · {evt.locationLabel}</p>
-            </div>
-          ))}
-        </div>
+        <main className="space-y-7 px-4 py-5 sm:px-6 lg:px-8">
+          <section aria-labelledby="food-category-title"><div className="mb-3 flex items-center justify-between"><h2 id="food-category-title" className="text-lg font-black">เลือกตามหมวด</h2><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูทั้งหมด <ArrowIcon /></Link></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:px-0">{FOOD_CATEGORIES.map((entry) => <button key={entry.key} type="button" onClick={() => setCategory(category === entry.key ? null : entry.key)} className={`flex min-w-[82px] snap-start flex-col items-center gap-2 rounded-2xl border px-3 py-3 text-xs font-bold transition ${category === entry.key ? "border-[#72B685] bg-[#E5F6E9] text-[#075B28]" : "border-[#E3E9E1] bg-white text-[#3E5547]"}`}><span className="text-2xl">{entry.icon}</span><span className="whitespace-nowrap">{entry.label}</span></button>)}</div></section>
 
-        <div className="space-y-2">
-          {HOME_COMMUNITY_POSTS.slice(0, 3).map((post) => (
-            <div key={post.id} className="rounded-xl border border-gray-100 bg-white p-3">
-              <p className="text-xs font-medium text-[#28432f]">{post.author}</p>
-              <p className="text-sm text-gray-600 truncate">{post.excerpt}</p>
-            </div>
-          ))}
-        </div>
+          {catalogState === "loading" && <section aria-label="กำลังโหลดข้อมูล" className="space-y-3"><div className="h-5 w-44 animate-pulse rounded bg-[#E6ECE4]" /><div className="grid gap-3 md:grid-cols-2"><div className="h-24 animate-pulse rounded-2xl bg-white" /><div className="h-24 animate-pulse rounded-2xl bg-white" /></div></section>}
+          {catalogState === "error" && <section className="rounded-3xl border border-[#F2CDAF] bg-[#FFF5EC] p-5"><h2 className="font-extrabold text-[#79340F]">โหลดร้านอาหารไม่สำเร็จ</h2><p className="mt-1 text-sm text-[#89583C]">{catalogError || "กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"}</p><button type="button" onClick={() => void reloadCatalog()} className="mt-4 min-h-11 rounded-xl bg-[#EB681B] px-5 text-sm font-bold text-white">ลองอีกครั้ง</button></section>}
+
+          {catalogState === "ready" && <>
+            <section aria-labelledby="menu-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="menu-title" className="text-lg font-black">{category ? `เมนู ${FOOD_CATEGORIES.find((entry) => entry.key === category)?.label ?? category}` : "เมนูน่าสั่งตอนนี้"}</h2><p className="mt-0.5 text-xs text-[#738078]">เมนูที่พร้อมขายจากร้านที่เปิดอยู่</p></div><Link to="/hub" className="flex min-h-10 items-center gap-1 text-sm font-bold text-[#087A31]">ดูเพิ่ม <ArrowIcon /></Link></div><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{visibleItems.slice(0, 8).map((item) => <MenuCard key={item.item_id} item={item} shopName={shopName(item.shop_id)} onAdd={() => setConfiguring(item)} />)}</div>{visibleItems.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">ไม่พบเมนูที่ตรงกับคำค้นหรือหมวดนี้</div>}</section>
+
+            {displayPromotions.length > 0 && <section aria-labelledby="promotion-title"><div className="mb-3"><div className="flex items-center gap-2"><h2 id="promotion-title" className="text-lg font-black">โปรโมชันจากร้าน</h2>{previewMode && promotions.length === 0 && <span className="rounded-full bg-[#FFF0E3] px-2 py-1 text-[10px] font-black text-[#B94A0C]">DEMO PREVIEW</span>}</div><p className="mt-0.5 text-xs text-[#738078]">{previewMode && promotions.length === 0 ? "ตัวอย่างหน้าตาโปรโมชันสำหรับตรวจ UI เท่านั้น ไม่ใช่ข้อมูลจริง" : "ข้อเสนอที่ร้านค้าเปิดแสดงอยู่ในขณะนี้"}</p></div><div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">{displayPromotions.map((promotion) => <PromotionCard key={promotion.id} promotion={promotion} />)}</div></section>}
+
+            <section className="overflow-hidden rounded-3xl border border-[#CFE2D1] bg-[#EDF7ED] p-5 md:flex md:items-center md:justify-between md:gap-5"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#EB681B]">MYTREE LOCAL MAP</p><h2 className="mt-1 text-xl font-black text-[#075B28]">ดูร้านอาหารใกล้ฉันบนแผนที่</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#53675A]">ค้นหาร้านในพื้นที่ พร้อมพัฒนาข้อมูลซอย ทางเข้า และจุดสังเกตที่คนในพื้นที่ใช้จริง</p></div><Link to="/map" className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-[#087A31] px-5 text-sm font-bold text-white md:mt-0 md:shrink-0">เปิดแผนที่</Link></section>
+
+            <section aria-labelledby="open-nearby-title"><div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="open-nearby-title" className="text-lg font-black">ร้านเปิดใกล้คุณ</h2><p className="mt-0.5 text-xs text-[#738078]">เลือกร้านที่พร้อมรับออเดอร์ตอนนี้</p></div><button type="button" onClick={() => void refreshNearbyShops()} disabled={locationState === "loading"} className="min-h-10 shrink-0 text-xs font-bold text-[#087A31] disabled:opacity-50">{locationState === "loading" ? "กำลังหาตำแหน่ง…" : "อัปเดตตำแหน่ง"}</button></div><div className="grid gap-3 md:grid-cols-2">{openShops.slice(0, 6).map((shop) => <ShopCard key={shop.shop_id} shop={shop} />)}</div>{openShops.length === 0 && <div className="rounded-2xl border border-[#E2E8E0] bg-white px-4 py-7 text-center text-sm text-[#748077]">{query ? "ไม่พบร้านเปิดที่ตรงกับคำค้น" : "ขณะนี้ยังไม่มีร้านเปิดรับออเดอร์"}</div>}{locationState === "error" && <p className="mt-2 text-xs text-[#7A847D]">ยังไม่สามารถอ่านตำแหน่งได้ จึงแสดงร้านโดยไม่เรียงระยะทาง</p>}</section>
+
+            <section className="rounded-3xl border border-[#E4E9E1] bg-white p-5"><h2 className="font-black text-[#203D2A]">มีร้านอาหาร?</h2><p className="mt-1 text-sm leading-6 text-[#6D7A71]">สมัครเข้าร่วม MyTree ยืนยันตำแหน่งร้าน และใช้ MyTree POS ฟรีตามเงื่อนไขของระบบ</p><Link to="/sweet/signup" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[#EB681B] px-4 text-sm font-bold text-[#B94A0C]">สมัครร้านค้ากับ MyTree</Link></section>
+          </>}
+        </main>
       </div>
-
-      {midSponsor && <SponsorCard label={midSponsor.sponsorLabel} title={midSponsor.title} subtitle={midSponsor.subtitle} ctaLabel={midSponsor.ctaLabel} />}
-
-      <div className="p-4 space-y-3">
-        <h2 className="text-sm font-bold text-[#28432f]">ใกล้คุณตอนนี้</h2>
-
-        {nearbyState === "loading" && <p className="text-sm text-gray-400 py-2">กำลังค้นหาร้านใกล้คุณ...</p>}
-
-        {nearbyState === "error" && (
-          <div className="py-2 space-y-1">
-            <p className="text-sm text-gray-400">เปิดสิทธิ์ตำแหน่งเพื่อดูร้านใกล้คุณ</p>
-            <button type="button" onClick={() => void loadNearby()} className="text-xs text-[#3f6b4a]">
-              ลองอีกครั้ง
-            </button>
-          </div>
-        )}
-
-        {nearbyState === "ready" && (
-          <div className="space-y-2">
-            {nearby.map((s) => {
-              const km = s.distance_km == null ? null : Number(s.distance_km);
-              return (
-                <Link
-                  key={s.shop_id}
-                  to="/shop/$shopId"
-                  params={{ shopId: s.shop_id }}
-                  className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-2"
-                >
-                  <div className="w-12 h-12 shrink-0 rounded-lg bg-[#faeadb] flex items-center justify-center text-sm font-bold text-[#a85f2c]">
-                    {shopInitials(s.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{s.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{s.category}</p>
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-[#3f6b4a]">
-                    {km != null && !Number.isNaN(km) ? `${km.toFixed(1)} กม.` : "ไม่ระบุระยะทาง"}
-                  </span>
-                </Link>
-              );
-            })}
-            {nearby.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">ไม่พบร้านใกล้คุณ</p>}
-          </div>
-        )}
-      </div>
-
-      <FloatingCartBar cart={c} />
-
-      {comingSoonLabel && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setComingSoonLabel(null)}
-        >
-          <div
-            className="m-4 w-full max-w-xs rounded-2xl bg-white p-4 text-center space-y-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-sm font-bold text-[#28432f]">{comingSoonLabel}</p>
-            <p className="text-xs text-gray-500">เร็วๆนี้</p>
-            <button
-              type="button"
-              onClick={() => setComingSoonLabel(null)}
-              className="mt-1 rounded-lg bg-[#3f6b4a] text-white text-sm px-4 py-1.5"
-            >
-              ปิด
-            </button>
-          </div>
-        </div>
-      )}
+      <FloatingCartBar cart={currentCart} />
+      {configuring && <ProductConfigurator product={{ itemId: configuring.item_id, shopId: configuring.shop_id, name: configuring.name, price: configuring.price, imageUrl: configuring.image_url }} onClose={() => setConfiguring(null)} onConfirm={addConfigured} />}
     </div>
   );
 }
