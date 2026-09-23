@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/migrations/20260923120000_head_office_rbac_audit_foundation.sql
--- Canonical blob SHA: 0f61e63a2cd2d643626be01d20619903be9b0ca2
+-- Canonical blob SHA: ad7a6dc11fc09fdac4e6fd8ba1514ac9c4b3c5aa
 
 -- MyTree Head Office RBAC, permission enforcement, and append-oriented audit foundation.
 -- Canonical migration owner: deanet2563/mytree-worker.
@@ -568,11 +568,15 @@ begin
   loop
     v_def := pg_get_functiondef(r.oid);
     v_hardened := regexp_replace(v_def, '[[:space:]]+', ' ', 'g');
-    v_hardened := regexp_replace(
+    v_hardened := replace(
       v_hardened,
-      'or exists ?\\( select 1 from public\\.platform_admins pa where pa\\.customer_id = v_actor_customer_id \\)',
-      'or private.admin_can_override_order_action()',
-      'gi'
+      'or exists( select 1 from public.platform_admins pa where pa.customer_id = v_actor_customer_id )',
+      'or private.admin_can_override_order_action()'
+    );
+    v_hardened := replace(
+      v_hardened,
+      'or exists ( select 1 from public.platform_admins pa where pa.customer_id = v_actor_customer_id )',
+      'or private.admin_can_override_order_action()'
     );
 
     if v_hardened = v_def then
