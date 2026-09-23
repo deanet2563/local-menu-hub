@@ -79,20 +79,24 @@ function PromotionCard({ promotion }: { promotion: ShopPromotion }) {
 }
 
 export function HomeOverview() {
-  const { items, promotions, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
+  const { items, promotions, allOrderedShops, catalogState, catalogError, reloadCatalog, locationState, refreshNearbyShops, shopName, shopKeywords } = useCustomerCatalog();
   const currentCart = useCart();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [configuring, setConfiguring] = useState<CatalogItem | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase("th");
 
-  const visibleShops = useMemo(() => allOrderedShops.filter((shop) => !normalizedQuery || shop.name.toLocaleLowerCase("th").includes(normalizedQuery) || (shop.category ?? "").toLocaleLowerCase("th").includes(normalizedQuery)), [allOrderedShops, normalizedQuery]);
+  const visibleShops = useMemo(() => allOrderedShops.filter((shop) => {
+    if (!normalizedQuery) return true;
+    const haystack = `${shop.name} ${shop.category ?? ""} ${shopKeywords(shop.shop_id)}`.toLocaleLowerCase("th");
+    return haystack.includes(normalizedQuery);
+  }), [allOrderedShops, normalizedQuery, shopKeywords]);
   const visibleItems = useMemo(() => items.filter((item) => {
     const itemBucket = bucketKeyForCategory(item.category);
     const matchesCategory = !category || (category === "other" ? itemBucket === null : itemBucket === category);
-    const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)}`.toLocaleLowerCase("th");
+    const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)} ${shopKeywords(item.shop_id)}`.toLocaleLowerCase("th");
     return matchesCategory && (!normalizedQuery || haystack.includes(normalizedQuery));
-  }), [items, category, normalizedQuery, shopName]);
+  }), [items, category, normalizedQuery, shopName, shopKeywords]);
 
   function addConfigured(input: { product: ConfigurableProduct; qty: number; options: Parameters<typeof cart.add>[0]["options"]; note: string | null }) {
     const payload = { itemId: input.product.itemId, shopId: input.product.shopId, name: input.product.name, price: input.product.price, imageUrl: input.product.imageUrl, options: input.options, note: input.note };
