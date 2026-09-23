@@ -8,39 +8,42 @@ function isLiffEntryUrl(): boolean {
   return window.location.hostname === LIFF_HOST;
 }
 
+function normalizeAdminPath(path: string): string {
+  if (!path.startsWith("/")) return `/${path}`;
+  return path;
+}
+
 /**
- * AI Office is an admin-only surface. A raw Pages URL opened from a LINE chat
- * is only LINE's generic in-app browser; it is NOT automatically a LIFF
- * browser. Route that entry through the LIFF permanent URL first so LINE can
- * establish the LIFF context and authenticated session.
- *
- * Customer checkout behavior remains unchanged because this helper is used
- * only by the AI Office route.
+ * Platform-admin surfaces must enter through the LIFF permanent URL when a raw
+ * Pages/domain URL is opened from LINE's generic in-app browser. This preserves
+ * LINE account context before customer_id / platform_admins checks run.
  */
-export async function ensureAiOfficeLineLogin(): Promise<"ready" | "redirecting"> {
-  // If the user reached the raw Pages route (even from inside LINE), enter the
-  // LIFF app properly. LINE carries this extra path through liff.state and
-  // restores it after liff.init().
+export async function ensurePlatformAdminLineLogin(
+  requestedPath = window.location.pathname + window.location.search,
+): Promise<"ready" | "redirecting"> {
+  const adminPath = normalizeAdminPath(requestedPath);
+
   if (!isLiffEntryUrl() && !window.location.search.includes("liff.state=")) {
-    window.location.replace(`https://liff.line.me/${LIFF_ID}${AI_OFFICE_PATH}`);
+    window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
     return "redirecting";
   }
 
   await initLiff();
 
-  // Inside a real LIFF browser the login context should already be available
-  // after init. In an external/in-app browser fallback, liff.login() is the
-  // supported way to establish the session.
   if (liff.isLoggedIn()) return "ready";
 
   if (!liff.isInClient()) {
-    liff.login({ redirectUri: `${window.location.origin}${AI_OFFICE_PATH}` });
+    liff.login({ redirectUri: `${window.location.origin}${adminPath}` });
     return "redirecting";
   }
 
-  // In a LIFF browser login is normally automatic during init. If no session
-  // exists even here, re-enter through the LIFF permanent link instead of
-  // showing a false "please login" dead-end.
-  window.location.replace(`https://liff.line.me/${LIFF_ID}${AI_OFFICE_PATH}`);
+  window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
   return "redirecting";
+}
+
+/**
+ * Backward-compatible AI Office wrapper.
+ */
+export async function ensureAiOfficeLineLogin(): Promise<"ready" | "redirecting"> {
+  return ensurePlatformAdminLineLogin(AI_OFFICE_PATH);
 }

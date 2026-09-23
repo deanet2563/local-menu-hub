@@ -33,6 +33,11 @@ function isAiOfficeRoute(): boolean {
   return window.location.pathname === "/sweet/ai-office";
 }
 
+function isPlatformAdminRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  return isAiOfficeRoute() || window.location.pathname === "/head-office" || window.location.pathname.startsWith("/head-office/");
+}
+
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
 export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -44,9 +49,9 @@ export function initLiff(): Promise<void> {
   if (!liffReady) {
     liffReady = liff.init({
       liffId: LIFF_ID,
-      // Customer raw-preview browsing must remain passive. AI Office is an
-      // admin surface, so it may actively establish the existing LINE session.
-      withLoginOnExternalBrowser: isAiOfficeRoute(),
+      // Customer raw-preview browsing must remain passive. Platform-admin
+      // surfaces may actively establish the existing LINE session.
+      withLoginOnExternalBrowser: isPlatformAdminRoute(),
     });
   }
   return liffReady;
