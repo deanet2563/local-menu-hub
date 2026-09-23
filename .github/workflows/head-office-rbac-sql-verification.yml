@@ -40,6 +40,8 @@ jobs:
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120200_head_office_rbac_production_policy_cleanup.sql
       - name: Apply storage policy cleanup
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120300_head_office_rbac_storage_policy_cleanup.sql
+      - name: Apply lifecycle race hardening
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120400_head_office_rbac_lifecycle_race_hardening.sql
       - name: Run RBAC and audit assertions
         run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/head_office_rbac_assertions.sql
       - name: Run Super Admin concurrency assertions
