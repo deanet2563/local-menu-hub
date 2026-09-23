@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_fixture.sql
--- Canonical blob SHA: a0da6887245408a5de605cc1f2843a4eb1d9d814
+-- Canonical blob SHA: 542786da06cc7d1f19428bf251fcd5507a6c93a7
 
 \set ON_ERROR_STOP on
 
@@ -146,7 +146,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare
   v_id uuid;
 begin
@@ -161,7 +161,7 @@ begin
   returning category_id into v_id;
   return v_id;
 end;
-$;
+$fn$;
 
 create or replace function public.fn_admin_update_shop_category(
   p_category_id uuid,
@@ -174,7 +174,7 @@ returns void
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 begin
   if not exists (
     select 1 from public.platform_admins pa
@@ -186,14 +186,14 @@ begin
   set label=p_label, icon=p_icon, sort_order=p_sort_order, is_active=p_is_active
   where category_id=p_category_id;
 end;
-$;
+$fn$;
 
 create or replace function public.fn_shop_request_delivery_v3(p_sub_id uuid)
 returns table(result text, sub_id uuid, shop_id text)
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare
   v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
 begin
@@ -208,7 +208,7 @@ begin
   end if;
   return query select 'ok'::text, p_sub_id, 'shop-test'::text;
 end;
-$;
+$fn$;
 
 create or replace function public.fn_shop_reoffer_delivery_v3(
   p_sub_id uuid,
@@ -219,7 +219,7 @@ returns table(result text, sub_id uuid, previous_assigned_rider_id uuid, shop_id
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare
   v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
 begin
@@ -234,7 +234,7 @@ begin
   end if;
   return query select 'ok'::text, p_sub_id, null::uuid, 'shop-test'::text;
 end;
-$;
+$fn$;
 
 create or replace function public.fn_shop_cancel_delivery_v3(
   p_sub_id uuid,
@@ -245,7 +245,7 @@ returns table(result text, sub_id uuid, previous_assigned_rider_id uuid)
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare
   v_actor_customer_id uuid := (auth.jwt() ->> 'customer_id')::uuid;
 begin
@@ -260,7 +260,7 @@ begin
   end if;
   return query select 'ok'::text, p_sub_id, null::uuid;
 end;
-$;
+$fn$;
 
 
 create or replace function public.fn_staff_shop_ids()
