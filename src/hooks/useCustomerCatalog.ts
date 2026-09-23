@@ -18,6 +18,7 @@ export type CatalogShop = {
   distance_km: number | null;
 };
 export type CatalogItem = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
+export type HubCatalogItem = CatalogItem & { is_available: boolean; shop_is_open: boolean };
 export type ShopPromotion = {
   id: string;
   shop_id: string;
@@ -33,9 +34,10 @@ export type CatalogState = "loading" | "ready" | "error";
 
 const LOCATION_REFRESH_MS = 2 * 60 * 1000;
 
-export function useCustomerCatalog() {
+export function useCustomerCatalog({ includeHubItems = false }: { includeHubItems?: boolean } = {}) {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [hubItems, setHubItems] = useState<HubCatalogItem[]>([]);
   const [promotions, setPromotions] = useState<ShopPromotion[]>([]);
   const [listingKeywords, setListingKeywords] = useState<ListingKeyword[]>([]);
   const [catalogState, setCatalogState] = useState<CatalogState>("loading");
@@ -50,7 +52,7 @@ export function useCustomerCatalog() {
     setCatalogState("loading");
     setCatalogError(null);
     try {
-      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: p, error: promotionError }, { data: k, error: keywordError }] = await Promise.all([
+      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: hm, error: hubItemError }, { data: p, error: promotionError }, { data: k, error: keywordError }] = await Promise.all([
         publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open").eq("is_approved", true).eq("is_banned", false),
         publicSupabase
           .from("menu_items")
@@ -59,6 +61,13 @@ export function useCustomerCatalog() {
           .eq("shops.is_open", true)
           .eq("shops.is_approved", true)
           .eq("shops.is_banned", false),
+        includeHubItems
+          ? publicSupabase
+              .from("menu_items")
+              .select("item_id,shop_id,name,price,image_url,category,is_available, shops!inner(is_open,is_approved,is_banned)")
+              .eq("shops.is_approved", true)
+              .eq("shops.is_banned", false)
+          : Promise.resolve({ data: null, error: null }),
         publicSupabase
           .from("daily_specials")
           .select("id,shop_id,special_text,created_at, shops!inner(name,logo_url,is_open,is_approved,is_banned)")
@@ -76,6 +85,35 @@ export function useCustomerCatalog() {
       if (itemError) throw itemError;
       setAllShops(((s as Omit<CatalogShop, "distance_km">[]) ?? []).map((shop) => ({ ...shop, distance_km: null })));
       setItems((m as CatalogItem[]) ?? []);
+      type HubItemRow = CatalogItem & {
+        is_available: boolean;
+        shops: { is_open: boolean } | { is_open: boolean }[];
+      };
+      if (!includeHubItems) {
+        setHubItems([]);
+      } else if (hubItemError) {
+        const openShopIds = new Set(((s as Omit<CatalogShop, "distance_km">[]) ?? []).filter((shop) => shop.is_open).map((shop) => shop.shop_id));
+        setHubItems(((m as CatalogItem[]) ?? []).map((item) => ({
+          ...item,
+          is_available: true,
+          shop_is_open: openShopIds.has(item.shop_id),
+        })));
+      } else {
+        setHubItems(((hm as unknown as HubItemRow[]) ?? []).flatMap((item) => {
+          const relatedShop = Array.isArray(item.shops) ? item.shops[0] : item.shops;
+          if (!relatedShop) return [];
+          return [{
+            item_id: item.item_id,
+            shop_id: item.shop_id,
+            name: item.name,
+            price: item.price,
+            image_url: item.image_url,
+            category: item.category,
+            is_available: item.is_available,
+            shop_is_open: relatedShop.is_open,
+          }];
+        }));
+      }
       if (promotionError) {
         // Promotions are optional home content. A promotion read must never
         // turn the whole ordering home into a blank/error screen.
@@ -192,6 +230,7 @@ export function useCustomerCatalog() {
   return {
     shops,
     items,
+    hubItems,
     promotions,
     loading: catalogState === "loading",
     catalogState,
