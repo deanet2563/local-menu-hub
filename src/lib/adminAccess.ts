@@ -91,12 +91,28 @@ async function getLegacyAdminAccessContext(): Promise<AdminAccessContext> {
   };
 }
 
+function isMissingAdminAccessRpcError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "PGRST202" ||
+    error.code === "42883" ||
+    /fn_admin_access_context/i.test(error.message ?? "") &&
+      /not found|does not exist|schema cache/i.test(error.message ?? "")
+  );
+}
+
 export async function getAdminAccessContext(): Promise<AdminAccessContext> {
   const { data, error } = await supabase.rpc("fn_admin_access_context");
 
   if (!error) return parseAdminAccessContext(data);
 
-  return getLegacyAdminAccessContext();
+  // Compatibility is allowed only while the RPC genuinely does not exist yet.
+  // Any post-migration permission/network/schema-cache failure must fail closed
+  // so a disabled administrator cannot regain access through the legacy row.
+  if (isMissingAdminAccessRpcError(error)) {
+    return getLegacyAdminAccessContext();
+  }
+
+  throw error;
 }
 
 export function hasAdminPermission(
