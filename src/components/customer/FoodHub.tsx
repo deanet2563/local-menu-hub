@@ -110,7 +110,7 @@ export function FoodHub() {
     refreshNearbyShops,
     shopName,
     shopKeywords,
-  } = useCustomerCatalog();
+  } = useCustomerCatalog({ includeHubItems: true });
 
   const currentCart = useCart();
   const [query, setQuery] = useState("");
