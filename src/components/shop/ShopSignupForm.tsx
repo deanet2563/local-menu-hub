@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
 import { getCurrentLocation } from "@/lib/geolocation";
 import { linkRichMenu } from "@/lib/richmenu";
+import { loadActiveShopCategories, type ShopCategoryMaster } from "@/lib/shopCategories";
 
 // ============================================================
 // MyTree — Shop onboarding (5 fields, per original spec):
@@ -25,7 +26,10 @@ const DAYS: { key: string; label: string }[] = [
 export function ShopSignupForm() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<ShopCategoryMaster[]>([]);
+  const [categoryId, setCategoryId] = useState("");
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [openTime, setOpenTime] = useState("08:00");
   const [closeTime, setCloseTime] = useState("18:00");
@@ -37,6 +41,25 @@ export function ShopSignupForm() {
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadActiveShopCategories()
+      .then((rows) => {
+        if (!active) return;
+        setCategories(rows);
+        setCategoriesError(rows.length ? null : "ยังไม่มีหมวดร้านที่เปิดใช้งาน");
+      })
+      .catch(() => {
+        if (!active) return;
+        setCategories([]);
+        setCategoriesError("โหลดหมวดร้านไม่สำเร็จ กรุณาลองใหม่");
+      })
+      .finally(() => {
+        if (active) setCategoriesLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const toggleDay = (d: string) =>
     setOpenDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
@@ -54,6 +77,8 @@ export function ShopSignupForm() {
 
   async function handleSubmit() {
     if (!name.trim()) { setError("กรอกชื่อร้าน"); return; }
+    const selectedCategory = categories.find((entry) => entry.category_id === categoryId);
+    if (!selectedCategory) { setError("กรุณาเลือกหมวดร้าน"); return; }
     if (openDays.length === 0) { setError("เลือกวันเปิดร้านอย่างน้อย 1 วัน"); return; }
 
     setSubmitting(true);
@@ -65,7 +90,7 @@ export function ShopSignupForm() {
 
       const { data, error: rpcErr } = await supabase.rpc("fn_register_shop", {
         p_name: name.trim(),
-        p_category: category.trim() || null,
+        p_category: selectedCategory.label,
         p_phone: phone.trim() || null,
         p_open_time: openTime || null,
         p_close_time: closeTime || null,
@@ -98,7 +123,21 @@ export function ShopSignupForm() {
       <div className="space-y-2">
         <p className="text-sm font-medium text-gray-700">1. ชื่อร้าน + หมวดอาหาร</p>
         <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="ชื่อร้าน" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="w-full rounded-lg border border-gray-200 p-2 text-sm" placeholder="หมวด เช่น อาหารตามสั่ง, เครื่องดื่ม" value={category} onChange={(e) => setCategory(e.target.value)} />
+        <select
+          className="w-full rounded-lg border border-gray-200 bg-white p-2.5 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          disabled={categoriesLoading || categories.length === 0}
+        >
+          <option value="">{categoriesLoading ? "กำลังโหลดหมวดร้าน..." : "เลือกหมวดร้าน"}</option>
+          {categories.map((entry) => (
+            <option key={entry.category_id} value={entry.category_id}>
+              {entry.icon ? `${entry.icon} ` : ""}{entry.label}
+            </option>
+          ))}
+        </select>
+        {categoriesError && <p className="text-xs text-red-500">{categoriesError}</p>}
+        {!categoriesLoading && categories.length > 0 && <p className="text-xs text-gray-400">หมวดร้านกำหนดโดย MyTree Head Office</p>}
       </div>
 
       <div className="space-y-2">
@@ -142,7 +181,7 @@ export function ShopSignupForm() {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      <button onClick={handleSubmit} disabled={submitting} className="w-full rounded-lg bg-orange-500 text-white py-3 text-sm font-medium disabled:opacity-50">
+      <button onClick={handleSubmit} disabled={submitting || categoriesLoading || categories.length === 0} className="w-full rounded-lg bg-orange-500 text-white py-3 text-sm font-medium disabled:opacity-50">
         {submitting ? "กำลังสมัคร..." : "สมัครร้านค้า"}
       </button>
     </div>
