@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/migrations/20260923120000_head_office_rbac_audit_foundation.sql
--- Canonical blob SHA: 8f4ac90155c9a04e61e3bee4c1f29f617406d16e
+-- Canonical blob SHA: c84d1af045355d5abbe5dd342aab526781bbc1d3
 
 -- MyTree Head Office RBAC, permission enforcement, and append-oriented audit foundation.
 -- Canonical migration owner: deanet2563/mytree-worker.
@@ -411,6 +411,181 @@ create policy active_admin_read_role_permissions
   for select
   to authenticated
   using (public.fn_admin_has_permission('system.read'));
+
+-- ---------------------------------------------------------------------------
+-- 5b. Production-drift hardening for admin predicates added after the
+-- original remote-schema baseline. Preserve business behavior; only replace
+-- the administrative bypass with RBAC-aware checks.
+-- ---------------------------------------------------------------------------
+
+do $drift$
+begin
+  if to_regclass('public.shop_category_master') is not null then
+    execute 'drop policy if exists "platform admins can read all shop categories" on public.shop_category_master';
+    execute $policy$
+      create policy "platform admins can read all shop categories"
+        on public.shop_category_master
+        for select
+        to authenticated
+        using (public.fn_admin_has_permission('shops.read'))
+    $policy$;
+  end if;
+end
+$drift$;
+
+do $drift$
+begin
+  if to_regprocedure('public.fn_admin_create_shop_category(text,text,integer)') is not null then
+    execute $sql$
+      create or replace function public.fn_admin_create_shop_category(
+        p_label text,
+        p_icon text default null::text,
+        p_sort_order integer default 100
+      )
+      returns uuid
+      language plpgsql
+      security definer
+      set search_path = ''
+      as $fn$
+      declare
+        v_label text := btrim(coalesce(p_label, ''));
+        v_category_id uuid;
+      begin
+        if not public.fn_admin_has_permission('shops.action') then
+          raise exception 'permission denied: shops.action';
+        end if;
+
+        if length(v_label) < 1 or length(v_label) > 80 then
+          raise exception 'invalid category label';
+        end if;
+
+        insert into public.shop_category_master(label, icon, sort_order, is_active, updated_at)
+        values (
+          v_label,
+          nullif(btrim(coalesce(p_icon, '')), ''),
+          greatest(0, least(coalesce(p_sort_order, 100), 10000)),
+          true,
+          now()
+        )
+        returning category_id into v_category_id;
+
+        return v_category_id;
+      end;
+      $fn$
+    $sql$;
+
+    execute 'revoke all on function public.fn_admin_create_shop_category(text,text,integer) from public, anon';
+    execute 'grant execute on function public.fn_admin_create_shop_category(text,text,integer) to authenticated, service_role';
+  end if;
+
+  if to_regprocedure('public.fn_admin_update_shop_category(uuid,text,text,integer,boolean)') is not null then
+    execute $sql$
+      create or replace function public.fn_admin_update_shop_category(
+        p_category_id uuid,
+        p_label text,
+        p_icon text,
+        p_sort_order integer,
+        p_is_active boolean
+      )
+      returns void
+      language plpgsql
+      security definer
+      set search_path = ''
+      as $fn$
+      declare
+        v_old_label text;
+        v_new_label text := btrim(coalesce(p_label, ''));
+      begin
+        if not public.fn_admin_has_permission('shops.action') then
+          raise exception 'permission denied: shops.action';
+        end if;
+
+        if length(v_new_label) < 1 or length(v_new_label) > 80 then
+          raise exception 'invalid category label';
+        end if;
+
+        select label into v_old_label
+        from public.shop_category_master
+        where category_id = p_category_id;
+
+        if v_old_label is null then
+          raise exception 'category not found';
+        end if;
+
+        update public.shop_category_master
+        set
+          label = v_new_label,
+          icon = nullif(btrim(coalesce(p_icon, '')), ''),
+          sort_order = greatest(0, least(coalesce(p_sort_order, 100), 10000)),
+          is_active = coalesce(p_is_active, false),
+          updated_at = now()
+        where category_id = p_category_id;
+
+        if v_old_label is distinct from v_new_label then
+          update public.shops
+          set category = v_new_label
+          where category = v_old_label;
+        end if;
+      end;
+      $fn$
+    $sql$;
+
+    execute 'revoke all on function public.fn_admin_update_shop_category(uuid,text,text,integer,boolean) from public, anon';
+    execute 'grant execute on function public.fn_admin_update_shop_category(uuid,text,text,integer,boolean) to authenticated, service_role';
+  end if;
+end
+$drift$;
+
+create or replace function private.admin_can_override_order_action()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $fn$
+  select public.fn_admin_has_permission('orders.action');
+$fn$;
+
+revoke all on function private.admin_can_override_order_action() from public, anon, authenticated;
+
+do $drift$
+declare
+  r record;
+  v_def text;
+  v_hardened text;
+begin
+  for r in
+    select p.oid, p.proname
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prokind = 'f'
+      and p.proname in (
+        'fn_shop_request_delivery_v3',
+        'fn_shop_reoffer_delivery_v3',
+        'fn_shop_cancel_delivery_v3'
+      )
+  loop
+    v_def := pg_get_functiondef(r.oid);
+    v_hardened := regexp_replace(
+      v_def,
+      'or[[:space:]]+exists[[:space:]]*\\([[:space:]]*select[[:space:]]+1[[:space:]]+from[[:space:]]+public\\.platform_admins[[:space:]]+pa[[:space:]]+where[[:space:]]+pa\\.customer_id[[:space:]]*=[[:space:]]*v_actor_customer_id[[:space:]]*\\)',
+      'or private.admin_can_override_order_action()',
+      'gi'
+    );
+
+    if v_hardened = v_def then
+      raise exception 'admin bypass pattern not found in %', r.proname;
+    end if;
+
+    if v_hardened ilike '%from public.platform_admins pa%' then
+      raise exception 'could not fully harden admin bypass in %', r.proname;
+    end if;
+
+    execute v_hardened;
+  end loop;
+end
+$drift$;
 
 -- ---------------------------------------------------------------------------
 -- 6. Permission-aware reads on existing sensitive admin datasets.
