@@ -128,7 +128,7 @@ export function FoodHub() {
 
   const visibleItems = useMemo(() => hubItems.filter((item) => {
     const matchesCategory = !category || item.category === category;
-    const matchesAvailability = availabilityFilter === "all" || item.is_available;
+    const matchesAvailability = availabilityFilter === "all" || (item.is_available && item.shop_is_open);
     const matchesShopState = shopFilter === "all" || item.shop_is_open;
     const haystack = `${item.name} ${item.category ?? ""} ${shopName(item.shop_id)} ${shopKeywords(item.shop_id)}`.toLocaleLowerCase("th");
     return matchesCategory && matchesAvailability && matchesShopState && (!normalizedQuery || haystack.includes(normalizedQuery));
