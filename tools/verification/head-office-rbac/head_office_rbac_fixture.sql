@@ -109,17 +109,17 @@ create or replace function public.fn_staff_shop_ids()
 returns setof text
 language sql
 stable
-as $
+as $fn$
   select ss.shop_id
   from public.shop_staff ss
   where ss.customer_id = (auth.jwt() ->> 'customer_id')::uuid
-$;
+$fn$;
 
 create or replace function public.fn_my_hub_order_ids()
 returns setof uuid
 language sql
 stable
-as $ select null::uuid where false $;
+as $fn$ select null::uuid where false $fn$;
 
 create or replace function public.fn_customer_related_to_caller(p_customer_id uuid)
 returns boolean
@@ -394,7 +394,7 @@ returns public.riders
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare v_row public.riders;
 begin
   if not public.fn_is_platform_admin() then raise exception 'not authorized: platform admin only'; end if;
@@ -406,7 +406,7 @@ begin
   if not found then raise exception 'rider % not found', p_rider_id; end if;
   return v_row;
 end;
-$;
+$fn$;
 
 
 create or replace function public.fn_verify_rider_document(p_rider_id uuid)
@@ -414,7 +414,7 @@ returns public.riders
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
-as $
+as $fn$
 declare
   v_admin uuid := (auth.jwt() ->> 'customer_id')::uuid;
   v_row public.riders;
@@ -442,7 +442,7 @@ begin
 
   return v_row;
 end;
-$;
+$fn$;
 
 create or replace function public.fn_ban_customer(p_customer_id uuid, p_reason text)
 returns public.customers
