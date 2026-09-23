@@ -27,6 +27,7 @@ export type ShopPromotion = {
   shop_logo_url: string | null;
   shop_is_open: boolean;
 };
+type ListingKeyword = { id: string; shop_id: string; keyword: string };
 export type LocationState = "idle" | "loading" | "ready" | "error";
 export type CatalogState = "loading" | "ready" | "error";
 
@@ -36,6 +37,7 @@ export function useCustomerCatalog() {
   const [allShops, setAllShops] = useState<CatalogShop[]>([]);
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [promotions, setPromotions] = useState<ShopPromotion[]>([]);
+  const [listingKeywords, setListingKeywords] = useState<ListingKeyword[]>([]);
   const [catalogState, setCatalogState] = useState<CatalogState>("loading");
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [nearOrder, setNearOrder] = useState<string[] | null>(null);
@@ -48,7 +50,7 @@ export function useCustomerCatalog() {
     setCatalogState("loading");
     setCatalogError(null);
     try {
-      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: p, error: promotionError }] = await Promise.all([
+      const [{ data: s, error: shopError }, { data: m, error: itemError }, { data: p, error: promotionError }, { data: k, error: keywordError }] = await Promise.all([
         publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open").eq("is_approved", true).eq("is_banned", false),
         publicSupabase
           .from("menu_items")
@@ -64,6 +66,11 @@ export function useCustomerCatalog() {
           .eq("shops.is_banned", false)
           .order("created_at", { ascending: false })
           .limit(8),
+        publicSupabase
+          .from("listing_keywords")
+          .select("id,shop_id,keyword, shops!inner(is_approved,is_banned)")
+          .eq("shops.is_approved", true)
+          .eq("shops.is_banned", false),
       ]);
       if (shopError) throw shopError;
       if (itemError) throw itemError;
@@ -95,6 +102,16 @@ export function useCustomerCatalog() {
             shop_logo_url: relatedShop.logo_url,
             shop_is_open: relatedShop.is_open,
           }];
+        }));
+      }
+      if (keywordError) {
+        // Keyword metadata enriches search but must never block the public
+        // catalog if the optional table or its policy is temporarily unavailable.
+        setListingKeywords([]);
+      } else {
+        setListingKeywords(((k as unknown as ListingKeyword[]) ?? []).flatMap((entry) => {
+          const keyword = entry.keyword?.trim();
+          return keyword ? [{ id: entry.id, shop_id: entry.shop_id, keyword }] : [];
         }));
       }
       setCatalogState("ready");
@@ -170,6 +187,7 @@ export function useCustomerCatalog() {
   );
 
   const shopName = (id: string) => allShops.find((x) => x.shop_id === id)?.name ?? "";
+  const shopKeywords = (id: string) => listingKeywords.filter((entry) => entry.shop_id === id).map((entry) => entry.keyword).join(" ");
 
   return {
     shops,
@@ -185,5 +203,6 @@ export function useCustomerCatalog() {
     refreshNearbyShops,
     cats,
     shopName,
+    shopKeywords,
   };
 }
