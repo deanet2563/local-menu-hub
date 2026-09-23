@@ -46,10 +46,18 @@ function isAiOfficeRoute(): boolean {
   return window.location.pathname === "/sweet/ai-office";
 }
 
+/** Public discovery routes must never start LINE Login just because the
+ * authenticated Supabase client eagerly asks for its initial realtime token. */
+export function isPublicBrowsePath(pathname: string): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  return normalized === "/"
+    || normalized === "/hub"
+    || normalized === "/map"
+    || normalized.startsWith("/shop/");
+}
+
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
-export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+export { publicSupabase } from "@/lib/publicSupabase";
 
 /** Initialise the environment-selected LIFF app exactly once. A hung
  * liff.init() (real-device observed) would otherwise leave liffReady a
@@ -82,6 +90,7 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  if (typeof window !== "undefined" && isPublicBrowsePath(window.location.pathname)) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
