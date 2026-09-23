@@ -1,6 +1,6 @@
 -- VERIFICATION-ONLY MIRROR. DO NOT APPLY FROM local-menu-hub.
 -- Canonical source: deanet2563/mytree-worker/supabase/tests/head_office_rbac_assertions.sql
--- Canonical blob SHA: d796788103c72e90e7579ea6673006e3362fbe4c
+-- Canonical blob SHA: c10ad3995b28b1320579a2b5de122837e2ed32f8
 
 \set ON_ERROR_STOP on
 
@@ -61,48 +61,50 @@ values
 insert into public.hub_orders(order_id, customer_id)
 values ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001');
 
-insert into public.sub_orders(sub_id, order_id, shop_id, assigned_rider_id)
+insert into public.sub_orders(sub_id, order_id, shop_id, assigned_rider_id, delivery_status)
 values
   (
     '31000000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    null
+    null,
+    'needs_rider'
   ),
   (
     '31000000-0000-0000-0000-000000000002',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    null
+    null,
+    'needs_rider'
   ),
   (
     '31000000-0000-0000-0000-000000000003',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    null
+    null,
+    'needs_rider'
   ),
   (
     '31000000-0000-0000-0000-000000000004',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    '20000000-0000-0000-0000-000000000001'
+    '20000000-0000-0000-0000-000000000001',
+    'rider_called'
   ),
   (
     '31000000-0000-0000-0000-000000000005',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    null
+    null,
+    'needs_rider'
   ),
   (
     '31000000-0000-0000-0000-000000000006',
     '30000000-0000-0000-0000-000000000001',
     'shop-test',
-    null
+    null,
+    'needs_rider'
   );
-
-update public.sub_orders
-set delivery_status='rider_called'
-where sub_id='31000000-0000-0000-0000-000000000004';
 
 insert into public.order_items(item_id, sub_id, shop_id)
 values (
