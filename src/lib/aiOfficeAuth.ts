@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff, LIFF_ID } from "@/lib/supabase";
+import { initLiff, PLATFORM_ADMIN_LIFF_ID } from "@/lib/supabase";
 
 const AI_OFFICE_PATH = "/sweet/ai-office";
 const LIFF_HOST = "liff.line.me";
@@ -23,8 +23,12 @@ export async function ensurePlatformAdminLineLogin(
 ): Promise<"ready" | "redirecting"> {
   const adminPath = normalizeAdminPath(requestedPath);
 
+  if (!PLATFORM_ADMIN_LIFF_ID) {
+    throw new Error("platform_admin_liff_not_configured");
+  }
+
   if (!isLiffEntryUrl() && !window.location.search.includes("liff.state=")) {
-    window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
+    window.location.replace(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}${adminPath}`);
     return "redirecting";
   }
 
@@ -37,7 +41,7 @@ export async function ensurePlatformAdminLineLogin(
     return "redirecting";
   }
 
-  window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
+  window.location.replace(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}${adminPath}`);
   return "redirecting";
 }
 
