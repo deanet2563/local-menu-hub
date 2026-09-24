@@ -1,0 +1,50 @@
+name: Head Office RBAC SQL Verification
+
+on:
+  pull_request:
+    paths:
+      - 'tools/verification/head-office-rbac/**'
+      - '.github/workflows/head-office-rbac-sql-verification.yml'
+
+jobs:
+  postgres-rbac:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mytree_rbac_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mytree_rbac_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create production-baseline fixture
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/head_office_rbac_fixture.sql
+      - name: Apply RBAC foundation migration
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120000_head_office_rbac_audit_foundation.sql
+      - name: Apply legacy Support canonicalization
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120100_head_office_support_role_canonicalize.sql
+      - name: Apply production policy cleanup
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120200_head_office_rbac_production_policy_cleanup.sql
+      - name: Apply storage policy cleanup
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120300_head_office_rbac_storage_policy_cleanup.sql
+      - name: Apply lifecycle race hardening
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120400_head_office_rbac_lifecycle_race_hardening.sql
+      - name: Apply delivery guard hardening
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/20260923120500_head_office_rbac_delivery_guard_hardening.sql
+      - name: Run RBAC and audit assertions
+        run: psql -h localhost -U postgres -d mytree_rbac_test -v ON_ERROR_STOP=1 -f tools/verification/head-office-rbac/head_office_rbac_assertions.sql
+      - name: Run Super Admin concurrency assertions
+        run: bash tools/verification/head-office-rbac/head_office_rbac_concurrency.sh

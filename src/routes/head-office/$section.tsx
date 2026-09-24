@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PlatformAdminGate } from "@/components/admin/PlatformAdminGate";
 import { HeadOfficeShell } from "@/components/head-office/HeadOfficeShell";
+import { CommunityManagement } from "@/components/head-office/CommunityManagement";
 import { isHeadOfficeSection } from "@/components/head-office/headOfficeNav";
 
 export const Route = createFileRoute("/head-office/$section")({
@@ -11,9 +12,11 @@ function HeadOfficeSectionRoute() {
   const { section } = Route.useParams();
 
   return (
-    <PlatformAdminGate>
+    <PlatformAdminGate requiredPermission={section === "communities" ? "communities.read" : undefined}>
       {isHeadOfficeSection(section) && section !== "overview" ? (
-        <HeadOfficeShell section={section} />
+        <HeadOfficeShell section={section}>
+          {section === "communities" ? <CommunityManagement /> : undefined}
+        </HeadOfficeShell>
       ) : (
         <HeadOfficeNotFound />
       )}
