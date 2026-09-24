@@ -5,18 +5,40 @@ on:
     paths:
       - '.github/workflows/head-office-production-route-smoke.yml'
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   production-routes:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Head Office production routes
+      - name: Check and report Head Office production routes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
+          report="## Production route smoke"$'\n'
+          failed=0
           for path in /head-office /head-office/communities; do
+            key="$(echo "$path" | tr '/' '_' | sed 's/^_//')"
             url="https://mytree.cc${path}"
-            code="$(curl -sS -L --max-time 30 -o "/tmp/route.html" -w '%{http_code}' "$url")"
-            echo "$url -> HTTP $code"
-            test "$code" = "200"
-            grep -qi '<div id="root"' /tmp/route.html
+            body="/tmp/${key}.html"
+            err="/tmp/${key}.err"
+            code="$(curl -sS -L --max-time 30 -o "$body" -w '%{http_code}' "$url" 2>"$err")"
+            curl_status=$?
+            bytes="$(wc -c < "$body" 2>/dev/null || echo 0)"
+            if grep -qi '<div id="root"' "$body" 2>/dev/null; then root=yes; else root=no; fi
+            err_text="$(tr '\n' ' ' < "$err" | head -c 300)"
+            report+="- \`${url}\`: curl_exit=${curl_status}, HTTP=${code:-none}, bytes=${bytes}, root=${root}"
+            if [ -n "$err_text" ]; then report+=", error=\`${err_text}\`"; fi
+            report+=$'\n'
+            if [ "$curl_status" -ne 0 ] || [ "$code" != "200" ] || [ "$root" != "yes" ]; then failed=1; fi
           done
+          printf '%s\n' "$report"
+          gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$report"
+          exit "$failed"
