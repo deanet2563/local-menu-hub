@@ -74,3 +74,69 @@ Use these repo-local skills when their trigger matches the task. More than one m
 See `docs/CODEX_SKILL_STACK.md` for routing examples and conflict rules.
 
 If Superpowers is installed, use it only as a general reasoning/debugging/development discipline. If Firecrawl is installed, use it only as a research tool when fresh external evidence materially helps. Neither may override the Bible, this file, repo-local MyTree skills, or verified runtime/security invariants.
+
+---
+
+# MyTree AI Software Factory v1
+
+## Product North Star
+MyTree is **MyTree Community Thailand**: a Thailand-first hyperlocal community platform. Food/local commerce is the initial daily-use engine, not the final product boundary.
+
+## AI-first operating model
+MyTree is being built for **AI-First Operations / Minimal Human Ops**. Prefer event-driven automation, specialist agents, deterministic policy boundaries, confidence thresholds, audit logs, human escalation for high-risk decisions, and agent-specific kill switches.
+
+## Parallel development rules
+- One task = one branch/worktree.
+- One lane owns a file/domain at a time unless an explicit integration task says otherwise.
+- Do not modify another lane's files to “help” without documenting the dependency.
+- Keep PRs focused and independently reviewable.
+- Prefer additive/backward-compatible changes while multiple agents are active.
+- Never merge your own work merely because tests pass; QA/integration review is required.
+- Check existing open PRs before starting work in the same domain.
+
+## Ownership lanes
+1. **Customer lane** — customer web/LIFF UX, cart, checkout, customer orders, discovery/home.
+2. **Shop lane** — `apps/shop-native/**` and Shop-specific UX.
+3. **Rider lane** — `apps/rider-native/**` and Rider-specific UX.
+4. **Backend/DB lane** — `mytree-worker/**`, Supabase migrations, RPCs, RLS, triggers, server validation, shared event contracts.
+5. **Community lane** — community feed, neighborhoods/groups, events, marketplace, local services, Community Map product surfaces.
+6. **AI Ops lane** — event bus/orchestrator, moderation/fraud/support/monitoring agents, policy engine, exception queue, AI audit log.
+7. **QA/Release lane** — cross-lane regression, security checks, CI, staging/release verification.
+
+## Database ownership rule
+Production schema is single-owner during parallel work.
+
+Feature lane → schema request/spec → Backend/DB lane migration → CI/security review → staging verification → integration.
+
+Customer, Shop, Rider, Community, and AI Ops agents must not independently apply production SQL.
+
+## Required PR evidence
+Every PR must state:
+- scope and non-goals,
+- files/domains touched,
+- data/schema/API changes,
+- security/RLS impact,
+- backward-compatibility impact,
+- tests run and results,
+- real-device/manual verification still required,
+- dependencies on other PRs/migrations,
+- rollback/disable strategy for high-risk changes.
+
+## Factory release gates
+A slice is not “done” until all applicable gates are green:
+- TypeScript/static checks,
+- build,
+- unit/contract tests,
+- migration compatibility checks,
+- RLS/security checks,
+- Worker dry-run,
+- Shop CI,
+- Rider CI,
+- cross-flow regression,
+- staging verification,
+- real-device/LIFF/APK verification where applicable.
+
+CI green does not automatically authorize production deployment.
+
+## Escalate instead of guessing
+Escalate when a task would change a canonical product rule, money flow, identity/auth, security boundary, Rider assignment semantics, legal/compliance posture, require destructive migration, or conflict with another active lane.
