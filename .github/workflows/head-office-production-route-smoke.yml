@@ -14,22 +14,16 @@ jobs:
   production-routes:
     runs-on: ubuntu-latest
     steps:
-      - name: Diagnose production domain and Pages routes
+      - name: Diagnose production domain and Pages binding
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set +e
-          report="## Production domain diagnostics"$'\n'
-          report+="### DNS"$'\n'
-          for host in mytree.cc www.mytree.cc local-menu-hub.pages.dev; do
-            a="$(dig +short A "$host" | tr '\n' ' ' | head -c 300)"
-            aaaa="$(dig +short AAAA "$host" | tr '\n' ' ' | head -c 300)"
-            cname="$(dig +short CNAME "$host" | tr '\n' ' ' | head -c 300)"
-            report+="- \`${host}\`: A=\`${a:-none}\`, AAAA=\`${aaaa:-none}\`, CNAME=\`${cname:-none}\`"$'\n'
-          done
+          report="## Production domain + Pages binding diagnostics"$'\n'
           report+="### HTTP"$'\n'
           urls=(
             "https://mytree.cc/head-office"
@@ -50,11 +44,16 @@ jobs:
             bytes="$(wc -c < "$body" 2>/dev/null || echo 0)"
             if grep -qi '<div id="root"' "$body" 2>/dev/null; then root=yes; else root=no; fi
             server="$(grep -i '^server:' "$headers" | tail -1 | tr -d '\r' | cut -d: -f2- | xargs)"
-            cf_ray="$(grep -i '^cf-ray:' "$headers" | tail -1 | tr -d '\r' | cut -d: -f2- | xargs)"
-            err_text="$(tr '\n' ' ' < "$err" | head -c 200)"
-            report+="- \`${url}\`: exit=${curl_status}, HTTP=${code:-none}, bytes=${bytes}, root=${root}, server=\`${server:-none}\`, cf-ray=\`${cf_ray:-none}\`"
-            if [ -n "$err_text" ]; then report+=", error=\`${err_text}\`"; fi
-            report+=$'\n'
+            report+="- \`${url}\`: exit=${curl_status}, HTTP=${code:-none}, bytes=${bytes}, root=${root}, server=\`${server:-none}\`"$'\n'
           done
+          report+="### Cloudflare Pages custom-domain API"$'\n'
+          if [ -z "${CF_API_TOKEN:-}" ]; then
+            report+="- repository secret \`CLOUDFLARE_API_TOKEN\`: not configured/available to this workflow"$'\n'
+          else
+            api_body="/tmp/cf_domains.json"
+            api_code="$(curl -sS --max-time 30 -o "$api_body" -w '%{http_code}'               -H "Authorization: Bearer $CF_API_TOKEN"               -H "Content-Type: application/json"               "https://api.cloudflare.com/client/v4/accounts/a2808d9640e339098e6bb8230c1b431c/pages/projects/local-menu-hub/domains")"
+            summary="$(jq -c '{success,domains:[.result[]? | {name,status,verification_data}]}' "$api_body" 2>/dev/null | head -c 3000)"
+            report+="- API HTTP=${api_code}; response=\`${summary:-unparseable}\`"$'\n'
+          fi
           printf '%s\n' "$report"
           gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$report"
