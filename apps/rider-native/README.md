@@ -7,7 +7,7 @@ MyTree-owned React Native + Expo application for food-delivery riders.
 - Food delivery only. No passenger transport. No errand service.
 - All approved riders are Free-tier eligible in Phase 1.
 - Native push notification is a critical capability for nearby-job offers and assignment changes.
-- Rider expresses **interest** in a nearby job; the shop remains the final rider selector.
+- Rider uses **First Accept** for a nearby job; the backend performs Atomic Auto Lock and the shop is notified after assignment succeeds.
 - Delivery money is paid directly between the relevant parties. MyTree does not operate a rider wallet in Phase 1.
 - Proof of Delivery stays inside MyTree.
 
@@ -61,9 +61,9 @@ Approved rider
   -> Online
   -> Nearby-job push
   -> View job
-  -> Interested
-  -> Shop selects rider
-  -> Assignment push
+  -> First Accept
+  -> Atomic Auto Lock
+  -> Shop notified + Rider assignment push
   -> Navigate to shop
   -> Pickup
   -> Navigate to customer
@@ -80,8 +80,8 @@ Security-sensitive decisions stay server-side:
 
 - rider approval / suspension
 - nearby-job eligibility
-- candidate interest validation
-- final assignment locking
+- first-accept eligibility validation
+- first-accept assignment locking
 - delivery status transition validation
 - proof metadata validation
 - future Premium entitlements

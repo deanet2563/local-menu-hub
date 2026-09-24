@@ -40,7 +40,10 @@
         {
           "cameraPermission": "Allow MyTree Rider to take a delivery proof photo."
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-audio",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
