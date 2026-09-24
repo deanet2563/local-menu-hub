@@ -30,14 +30,40 @@ export function isOrderingPreview(): boolean {
   return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
+function isPlatformAdminPath(pathname: string): boolean {
+  return (
+    pathname === "/sweet/ai-office" ||
+    pathname === "/sweet/admin" ||
+    pathname === "/head-office" ||
+    pathname.startsWith("/head-office/")
+  );
+}
+
+function getLiffStatePath(): string | null {
+  if (typeof window === "undefined") return null;
+  const state = new URLSearchParams(window.location.search).get("liff.state");
+  if (!state) return null;
+
+  // URLSearchParams already decodes the common %2Fhead-office form. Keep one
+  // defensive decode for nested encoding while failing safely on malformed input.
+  try {
+    return decodeURIComponent(state);
+  } catch {
+    return state;
+  }
+}
+
 function isAiOfficeRoute(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.pathname === "/sweet/ai-office";
 }
 
-function isPlatformAdminRoute(): boolean {
+export function isPlatformAdminRoute(): boolean {
   if (typeof window === "undefined") return false;
-  return isAiOfficeRoute() || window.location.pathname === "/head-office" || window.location.pathname.startsWith("/head-office/");
+  if (isPlatformAdminPath(window.location.pathname)) return true;
+
+  const liffStatePath = getLiffStatePath();
+  return liffStatePath ? isPlatformAdminPath(liffStatePath) : false;
 }
 
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
