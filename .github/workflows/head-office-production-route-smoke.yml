@@ -1,0 +1,22 @@
+name: Head Office Production Route Smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/head-office-production-route-smoke.yml'
+
+jobs:
+  production-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Head Office production routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /head-office /head-office/communities; do
+            url="https://mytree.cc${path}"
+            code="$(curl -sS -L --max-time 30 -o "/tmp/route.html" -w '%{http_code}' "$url")"
+            echo "$url -> HTTP $code"
+            test "$code" = "200"
+            grep -qi '<div id="root"' /tmp/route.html
+          done
