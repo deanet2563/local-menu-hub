@@ -15,11 +15,12 @@ import { safeStoragePath } from "@/lib/storageKey";
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
+export const PLATFORM_ADMIN_LIFF_ID = import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || "";
 const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-let liffReady: Promise<void> | null = null;
+let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
 
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
@@ -43,18 +44,33 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-/** Initialise the environment-selected LIFF app exactly once. */
+function activeLiffId(): string {
+  if (isPlatformAdminRoute()) {
+    if (!PLATFORM_ADMIN_LIFF_ID) {
+      throw new Error("platform_admin_liff_not_configured");
+    }
+    return PLATFORM_ADMIN_LIFF_ID;
+  }
+  return LIFF_ID;
+}
+
+/** Initialise the route-appropriate LIFF app exactly once per page lifecycle. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
-  if (!liffReady) {
-    liffReady = liff.init({
-      liffId: LIFF_ID,
-      // Customer raw-preview browsing must remain passive. Platform-admin
-      // surfaces may actively establish the existing LINE session.
-      withLoginOnExternalBrowser: isPlatformAdminRoute(),
-    });
+
+  const liffId = activeLiffId();
+  if (!liffReady || liffReady.liffId !== liffId) {
+    liffReady = {
+      liffId,
+      promise: liff.init({
+        liffId,
+        // Customer raw-preview browsing must remain passive. Platform-admin
+        // surfaces use a dedicated LIFF app and may establish the LINE session.
+        withLoginOnExternalBrowser: isPlatformAdminRoute(),
+      }),
+    };
   }
-  return liffReady;
+  return liffReady.promise;
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
@@ -79,7 +95,7 @@ export async function getAccessToken(): Promise<string> {
       // in-app browser rather than a LIFF context. Re-enter through the LIFF
       // permanent link so the existing LINE account context is available.
       if (isLineWebView && !enteredViaLiff) {
-        const liffUrl = new URL(`https://liff.line.me/${LIFF_ID}/sweet/ai-office`);
+        const liffUrl = new URL(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}/sweet/ai-office`);
         liffUrl.searchParams.set("aiOfficeLiff", "1");
         window.location.replace(liffUrl.toString());
         return "";
