@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { getCurrentCustomerId, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId } from "@/lib/supabase";
 import { ensurePlatformAdminLineLogin } from "@/lib/aiOfficeAuth";
+import {
+  getAdminAccessContext,
+  hasAdminPermission,
+} from "@/lib/adminAccess";
 
-type AccessState = "loading" | "no-auth" | "not-admin" | "error" | "ok";
+type AccessState =
+  | "loading"
+  | "no-auth"
+  | "not-admin"
+  | "disabled"
+  | "forbidden"
+  | "error"
+  | "ok";
 
-export function PlatformAdminGate({ children }: { children: ReactNode }) {
+export function PlatformAdminGate({
+  children,
+  requiredPermission,
+}: {
+  children: ReactNode;
+  requiredPermission?: string;
+}) {
   const [state, setState] = useState<AccessState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -23,24 +40,29 @@ export function PlatformAdminGate({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("platform_admins")
-        .select("customer_id")
-        .eq("customer_id", customerId)
-        .maybeSingle();
+      const access = await getAdminAccessContext();
 
-      if (error) {
-        setErrorMessage(error.message);
-        setState("error");
+      if (!access.role_key) {
+        setState("not-admin");
         return;
       }
 
-      setState(data ? "ok" : "not-admin");
+      if (!access.is_active) {
+        setState("disabled");
+        return;
+      }
+
+      if (requiredPermission && !hasAdminPermission(access, requiredPermission)) {
+        setState("forbidden");
+        return;
+      }
+
+      setState("ok");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "ไม่สามารถตรวจสอบสิทธิ์ได้");
-      setState("no-auth");
+      setState("error");
     }
-  }, []);
+  }, [requiredPermission]);
 
   useEffect(() => {
     void verify();
@@ -61,7 +83,7 @@ export function PlatformAdminGate({ children }: { children: ReactNode }) {
     return (
       <AccessMessage
         title="ต้องเข้าสู่ระบบก่อน"
-        description="Head Office ใช้สิทธิ์ Platform Admin เดียวกับระบบ Admin ปัจจุบัน"
+        description="Head Office ใช้บัญชี Platform Admin เดียวกับระบบ Admin ปัจจุบัน"
         actionLabel="ลองอีกครั้ง"
         onAction={() => void verify()}
       />
@@ -73,6 +95,24 @@ export function PlatformAdminGate({ children }: { children: ReactNode }) {
       <AccessMessage
         title="ไม่มีสิทธิ์เข้าถึง"
         description="บัญชีนี้ไม่ได้อยู่ในรายชื่อ Platform Admin"
+      />
+    );
+  }
+
+  if (state === "disabled") {
+    return (
+      <AccessMessage
+        title="บัญชีผู้ดูแลถูกระงับ"
+        description="บัญชี Platform Admin นี้ถูกปิดการใช้งาน กรุณาติดต่อ Super Admin"
+      />
+    );
+  }
+
+  if (state === "forbidden") {
+    return (
+      <AccessMessage
+        title="ไม่มี Permission สำหรับส่วนนี้"
+        description="บัญชีผู้ดูแลนี้ไม่มีสิทธิ์ที่กำหนดสำหรับหน้าหรือการทำงานนี้"
       />
     );
   }
