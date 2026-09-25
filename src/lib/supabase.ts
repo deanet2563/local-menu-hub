@@ -113,23 +113,12 @@ export async function getAccessToken(): Promise<string> {
     // configured staging LIFF URL.
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
 
-    if (isAiOfficeRoute()) {
-      const current = new URL(window.location.href);
-      const isLineWebView = /Line\//i.test(window.navigator.userAgent);
-      const enteredViaLiff = current.searchParams.get("aiOfficeLiff") === "1";
-
-      // A raw Pages URL opened from a LINE message can run in LINE's generic
-      // in-app browser rather than a LIFF context. Re-enter through the LIFF
-      // permanent link so the existing LINE account context is available.
-      if (isLineWebView && !enteredViaLiff) {
-        const liffUrl = new URL(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}/sweet/ai-office`);
-        liffUrl.searchParams.set("aiOfficeLiff", "1");
-        window.location.replace(liffUrl.toString());
+    if (isPlatformAdminRoute()) {
+      if (!liff.isInClient()) {
+        liff.login({ redirectUri: window.location.href });
         return "";
       }
-
-      liff.login({ redirectUri: window.location.href });
-      return "";
+      throw new Error("platform_admin_line_session_unavailable");
     }
 
     liff.login();
@@ -139,9 +128,12 @@ export async function getAccessToken(): Promise<string> {
   const idToken = liff.getIDToken();
   if (!idToken) {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
-    if (isAiOfficeRoute()) {
-      liff.login({ redirectUri: window.location.href });
-      return "";
+    if (isPlatformAdminRoute()) {
+      if (!liff.isInClient()) {
+        liff.login({ redirectUri: window.location.href });
+        return "";
+      }
+      throw new Error("no LINE idToken");
     }
     throw new Error("no LINE idToken");
   }
