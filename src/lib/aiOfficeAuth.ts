@@ -1,33 +1,29 @@
 import liff from "@line/liff";
-import { initLiff, LIFF_ID } from "@/lib/supabase";
+import { initLiff, PLATFORM_ADMIN_LIFF_ID } from "@/lib/supabase";
 
 const AI_OFFICE_PATH = "/sweet/ai-office";
-const LIFF_HOST = "liff.line.me";
-
-function isLiffEntryUrl(): boolean {
-  return window.location.hostname === LIFF_HOST;
-}
-
 function normalizeAdminPath(path: string): string {
   if (!path.startsWith("/")) return `/${path}`;
   return path;
 }
 
 /**
- * Platform-admin surfaces must enter through the LIFF permanent URL when a raw
- * Pages/domain URL is opened from LINE's generic in-app browser. This preserves
- * LINE account context before customer_id / platform_admins checks run.
+ * Platform-admin surfaces initialize the dedicated Admin LIFF directly on the
+ * canonical MyTree URL. If no LINE session exists, LIFF login returns to the
+ * same admin path without bouncing through the Customer LIFF or a preview host.
  */
 export async function ensurePlatformAdminLineLogin(
   requestedPath = window.location.pathname + window.location.search,
 ): Promise<"ready" | "redirecting"> {
   const adminPath = normalizeAdminPath(requestedPath);
 
-  if (!isLiffEntryUrl() && !window.location.search.includes("liff.state=")) {
-    window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
-    return "redirecting";
+  if (!PLATFORM_ADMIN_LIFF_ID) {
+    throw new Error("platform_admin_liff_not_configured");
   }
 
+  // Initialize the dedicated Admin LIFF on the current MyTree URL first.
+  // This supports both direct https://mytree.cc/head-office entry and the
+  // LIFF secondary redirect without bouncing back to liff.line.me.
   await initLiff();
 
   if (liff.isLoggedIn()) return "ready";
@@ -37,8 +33,7 @@ export async function ensurePlatformAdminLineLogin(
     return "redirecting";
   }
 
-  window.location.replace(`https://liff.line.me/${LIFF_ID}${adminPath}`);
-  return "redirecting";
+  throw new Error("platform_admin_line_session_unavailable");
 }
 
 /**

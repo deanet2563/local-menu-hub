@@ -59,7 +59,14 @@ export function PlatformAdminGate({
 
       setState("ok");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "ไม่สามารถตรวจสอบสิทธิ์ได้");
+      const message = error instanceof Error ? error.message : "ไม่สามารถตรวจสอบสิทธิ์ได้";
+      setErrorMessage(
+        message === "platform_admin_liff_not_configured"
+          ? "ยังไม่ได้ตั้งค่า Platform Admin LIFF สำหรับ Head Office"
+          : message === "platform_admin_line_session_unavailable"
+            ? "ไม่พบ LINE session สำหรับ Head Office กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่ผ่าน LINE"
+            : message,
+      );
       setState("error");
     }
   }, [requiredPermission]);
