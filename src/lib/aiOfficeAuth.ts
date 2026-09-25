@@ -2,12 +2,6 @@ import liff from "@line/liff";
 import { initLiff, PLATFORM_ADMIN_LIFF_ID } from "@/lib/supabase";
 
 const AI_OFFICE_PATH = "/sweet/ai-office";
-const LIFF_HOST = "liff.line.me";
-
-function isLiffEntryUrl(): boolean {
-  return window.location.hostname === LIFF_HOST;
-}
-
 function normalizeAdminPath(path: string): string {
   if (!path.startsWith("/")) return `/${path}`;
   return path;
@@ -27,11 +21,9 @@ export async function ensurePlatformAdminLineLogin(
     throw new Error("platform_admin_liff_not_configured");
   }
 
-  if (!isLiffEntryUrl() && !window.location.search.includes("liff.state=")) {
-    window.location.replace(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}${adminPath}`);
-    return "redirecting";
-  }
-
+  // Initialize the dedicated Admin LIFF on the current MyTree URL first.
+  // This supports both direct https://mytree.cc/head-office entry and the
+  // LIFF secondary redirect without bouncing back to liff.line.me.
   await initLiff();
 
   if (liff.isLoggedIn()) return "ready";
@@ -41,8 +33,7 @@ export async function ensurePlatformAdminLineLogin(
     return "redirecting";
   }
 
-  window.location.replace(`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}${adminPath}`);
-  return "redirecting";
+  throw new Error("platform_admin_line_session_unavailable");
 }
 
 /**
