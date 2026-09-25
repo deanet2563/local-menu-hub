@@ -45,11 +45,19 @@ function getLiffStatePath(): string | null {
   if (!state) return null;
 
   // URLSearchParams already decodes the common %2Fhead-office form. Keep one
-  // defensive decode for nested encoding while failing safely on malformed input.
+  // defensive decode for nested encoding, then classify using pathname only so
+  // admin URLs with query/hash (e.g. /head-office?tab=shops) remain admin routes.
+  let decoded = state;
   try {
-    return decodeURIComponent(state);
+    decoded = decodeURIComponent(state);
   } catch {
-    return state;
+    // Keep the URLSearchParams-decoded value.
+  }
+
+  try {
+    return new URL(decoded, window.location.origin).pathname;
+  } catch {
+    return decoded.split(/[?#]/, 1)[0] || null;
   }
 }
 
