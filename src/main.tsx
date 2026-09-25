@@ -14,10 +14,10 @@ declare module "@tanstack/react-router" {
 }
 
 async function bootstrap() {
-  // A LIFF permanent URL first lands on the endpoint root with `liff.state`.
-  // Initialize the dedicated admin LIFF before mounting the router so LIFF can
-  // complete its secondary redirect to /head-office or the legacy admin path.
-  if (isPlatformAdminRoute() && new URLSearchParams(window.location.search).has("liff.state")) {
+  // Initialize Platform Admin LIFF before mounting the router for both direct
+  // MyTree admin URLs and LIFF primary/secondary redirects. This prevents the
+  // router from briefly rendering customer surfaces and avoids redirect loops.
+  if (isPlatformAdminRoute()) {
     try {
       await initLiff();
     } catch (error) {
