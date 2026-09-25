@@ -31,11 +31,12 @@ export function isOrderingPreview(): boolean {
 }
 
 function isPlatformAdminPath(pathname: string): boolean {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   return (
-    pathname === "/sweet/ai-office" ||
-    pathname === "/sweet/admin" ||
-    pathname === "/head-office" ||
-    pathname.startsWith("/head-office/")
+    normalizedPath === "/sweet/ai-office" ||
+    normalizedPath === "/sweet/admin" ||
+    normalizedPath === "/head-office" ||
+    normalizedPath.startsWith("/head-office/")
   );
 }
 
