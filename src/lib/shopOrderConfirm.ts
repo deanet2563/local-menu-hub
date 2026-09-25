@@ -1,7 +1,8 @@
 import liff from "@line/liff";
 import { initLiff } from "@/lib/supabase";
+import { MYTREE_WORKER_URL } from "@/lib/workerEndpoint";
 
-const CONFIRM_URL = "https://mytree-worker.kompakorn-t.workers.dev/shop/order/confirm";
+const CONFIRM_URL = `${MYTREE_WORKER_URL}/shop/order/confirm`;
 
 export async function confirmShopOrder(subId: string): Promise<{ ok: boolean; error?: string; notificationSent?: boolean }> {
   await initLiff();

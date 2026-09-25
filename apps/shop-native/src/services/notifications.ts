@@ -9,13 +9,45 @@ export type ShopPushReadiness = {
   reason: string | null;
 };
 
+export type ShopForegroundNotification = {
+  title: string;
+  body: string;
+  subId: string | null;
+  type: string | null;
+  rawData: Record<string, unknown>;
+};
+
+let presentationConfigured = false;
+
+export function configureShopNotificationPresentation() {
+  if (presentationConfigured) return;
+  presentationConfigured = true;
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
+
 export async function ensureShopPushReadiness(): Promise<ShopPushReadiness> {
+  configureShopNotificationPresentation();
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('shop-orders', {
       name: 'Shop orders',
       importance: Notifications.AndroidImportance.MAX,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+    await Notifications.setNotificationChannelAsync('shop-admin', {
+      name: 'MyTree Admin',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 200, 100, 200],
     });
   }
 
@@ -49,5 +81,22 @@ export function installShopNotificationResponseHandler(onOrder: (subId: string) 
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as { subId?: unknown };
     if (typeof data?.subId === 'string' && data.subId) onOrder(data.subId);
+  });
+}
+
+export function installShopForegroundNotificationHandler(
+  onNotification: (notification: ShopForegroundNotification) => void,
+) {
+  configureShopNotificationPresentation();
+  return Notifications.addNotificationReceivedListener((notification) => {
+    const content = notification.request.content;
+    const data = (content.data ?? {}) as Record<string, unknown>;
+    onNotification({
+      title: content.title?.trim() || 'MyTree Shop',
+      body: content.body?.trim() || 'มีการแจ้งเตือนใหม่',
+      subId: typeof data.subId === 'string' && data.subId ? data.subId : null,
+      type: typeof data.type === 'string' && data.type ? data.type : null,
+      rawData: data,
+    });
   });
 }
