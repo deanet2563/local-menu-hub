@@ -8,9 +8,9 @@ function normalizeAdminPath(path: string): string {
 }
 
 /**
- * Platform-admin surfaces must enter through the LIFF permanent URL when a raw
- * Pages/domain URL is opened from LINE's generic in-app browser. This preserves
- * LINE account context before customer_id / platform_admins checks run.
+ * Platform-admin surfaces initialize the dedicated Admin LIFF directly on the
+ * canonical MyTree URL. If no LINE session exists, LIFF login returns to the
+ * same admin path without bouncing through the Customer LIFF or a preview host.
  */
 export async function ensurePlatformAdminLineLogin(
   requestedPath = window.location.pathname + window.location.search,
