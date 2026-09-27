@@ -15,10 +15,25 @@ import { safeStoragePath } from "@/lib/storageKey";
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 const DEFAULT_PLATFORM_ADMIN_LIFF_ID = "2010936243-ESwnUf8N";
+const STAGING_PLATFORM_ADMIN_LIFF_ID = "2010936243-hG7sC3Wd";
+const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
+const STAGING_AUTH_BROKER = "https://mytree-worker-staging.kompakorn-t.workers.dev/auth/line";
+
+function isCloudflarePreviewHost(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname.endsWith(".local-menu-hub.pages.dev")
+    && window.location.hostname !== "local-menu-hub.pages.dev";
+}
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
-export const PLATFORM_ADMIN_LIFF_ID = import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
-const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+export const PLATFORM_ADMIN_LIFF_ID = isCloudflarePreviewHost()
+  ? STAGING_PLATFORM_ADMIN_LIFF_ID
+  : import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
+const AUTH_BROKER = isCloudflarePreviewHost()
+  ? STAGING_AUTH_BROKER
+  : "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+const SUPABASE_URL = isCloudflarePreviewHost()
+  ? STAGING_SUPABASE_URL
+  : import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let liffReady: { liffId: string; promise: Promise<void> } | null = null;
