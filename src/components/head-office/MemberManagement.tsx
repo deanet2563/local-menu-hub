@@ -1,4 +1,4 @@
-import { useCallback,useEffect,useMemo,useState,type FormEvent } from "react";
+import { useCallback,useEffect,useMemo,useState,type FormEvent,type ReactNode } from "react";
 import { getAdminAccessContext,hasAdminPermission,type AdminAccessContext } from "@/lib/adminAccess";
 import { addMemberNote,decideMemberDeletion,getMember,listMembers,setMemberStatus,updateMemberProfile,type MemberDetail,type MemberListItem,type MemberStatus } from "@/lib/memberAdmin";
 
@@ -48,4 +48,4 @@ export function MemberManagement(){
 }
 function Badge({value}:{value:string}){const cls=value==="active"?"bg-emerald-100 text-emerald-700":value==="suspended"?"bg-amber-100 text-amber-700":"bg-red-100 text-red-700";return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cls}`}>{value}</span>}
 function State({text}:{text:string}){return <div className="p-10 text-center text-sm text-gray-500">{text}</div>}
-function Block({title,children}:{title:string;children:React.ReactNode}){return <section className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600"><h4 className="mb-2 font-semibold text-gray-900">{title}</h4>{children}</section>}
+function Block({title,children}:{title:string;children:ReactNode}){return <section className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600"><h4 className="mb-2 font-semibold text-gray-900">{title}</h4>{children}</section>}
