@@ -1,6 +1,6 @@
 ﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
-import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId, initLiff, PLATFORM_ADMIN_LIFF_ID, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/account")({ component: AccountPage });
 
@@ -85,18 +85,18 @@ function AccountPage() {
       </div>
 
       {isAdmin && (
-        <Link
-          to="/sweet/admin"
+        <a
+          href={`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}/head-office`}
           className="block rounded-2xl border border-orange-200 bg-orange-50 p-4"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-orange-800">🛡️ Admin Dashboard</p>
-              <p className="mt-0.5 text-xs text-orange-700">อนุมัติร้าน/วิน จัดการลูกค้า รายงาน และ Blacklist</p>
+              <p className="text-sm font-bold text-orange-800">🛡️ MyTree Head Office</p>
+              <p className="mt-0.5 text-xs text-orange-700">เข้าสู่ระบบบริหาร MyTree ด้วย Platform Admin LIFF</p>
             </div>
             <span className="text-xl text-orange-600">›</span>
           </div>
-        </Link>
+        </a>
       )}
 
       <form onSubmit={save} className="space-y-4 rounded-xl border border-gray-200 p-4">

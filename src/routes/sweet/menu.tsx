@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { MenuCatalogManager } from "@/components/shop/MenuCatalogManager";
-import { supabase, getCurrentCustomerId, initLiff } from "@/lib/supabase";
+import { supabase, getCurrentCustomerId, initLiff, PLATFORM_ADMIN_LIFF_ID } from "@/lib/supabase";
 import { linkRichMenu } from "@/lib/richmenu";
 
 type Search = { welcome?: number };
@@ -13,10 +13,10 @@ export const Route = createFileRoute("/sweet/menu")({
 function AdminEntry() {
   return (
     <a
-      href="/sweet/admin"
+      href={`https://liff.line.me/${PLATFORM_ADMIN_LIFF_ID}/head-office`}
       className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700"
     >
-      <span>🛡️ Admin Dashboard</span>
+      <span>🛡️ MyTree Head Office</span>
       <span aria-hidden>→</span>
     </a>
   );

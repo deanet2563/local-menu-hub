@@ -14,12 +14,14 @@ import { safeStoragePath } from "@/lib/storageKey";
 // ============================================================
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
+const DEFAULT_PLATFORM_ADMIN_LIFF_ID = "2010936243-ESwnUf8N";
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
+export const PLATFORM_ADMIN_LIFF_ID = import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
 const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-let liffReady: Promise<void> | null = null;
+let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
 
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
@@ -28,14 +30,49 @@ export function isOrderingPreview(): boolean {
   return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
+function isPlatformAdminPath(pathname: string): boolean {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  return (
+    normalizedPath === "/sweet/ai-office" ||
+    normalizedPath === "/sweet/admin" ||
+    normalizedPath === "/head-office" ||
+    normalizedPath.startsWith("/head-office/")
+  );
+}
+
+function getLiffStatePath(): string | null {
+  if (typeof window === "undefined") return null;
+  const state = new URLSearchParams(window.location.search).get("liff.state");
+  if (!state) return null;
+
+  // URLSearchParams already decodes the common %2Fhead-office form. Keep one
+  // defensive decode for nested encoding, then classify using pathname only so
+  // admin URLs with query/hash (e.g. /head-office?tab=shops) remain admin routes.
+  let decoded = state;
+  try {
+    decoded = decodeURIComponent(state);
+  } catch {
+    // Keep the URLSearchParams-decoded value.
+  }
+
+  try {
+    return new URL(decoded, window.location.origin).pathname;
+  } catch {
+    return decoded.split(/[?#]/, 1)[0] || null;
+  }
+}
+
 function isAiOfficeRoute(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.pathname === "/sweet/ai-office";
 }
 
-function isPlatformAdminRoute(): boolean {
+export function isPlatformAdminRoute(): boolean {
   if (typeof window === "undefined") return false;
-  return isAiOfficeRoute() || window.location.pathname === "/head-office" || window.location.pathname.startsWith("/head-office/");
+  if (isPlatformAdminPath(window.location.pathname)) return true;
+
+  const liffStatePath = getLiffStatePath();
+  return liffStatePath ? isPlatformAdminPath(liffStatePath) : false;
 }
 
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
@@ -43,18 +80,33 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-/** Initialise the environment-selected LIFF app exactly once. */
+function activeLiffId(): string {
+  if (isPlatformAdminRoute()) {
+    if (!PLATFORM_ADMIN_LIFF_ID) {
+      throw new Error("platform_admin_liff_not_configured");
+    }
+    return PLATFORM_ADMIN_LIFF_ID;
+  }
+  return LIFF_ID;
+}
+
+/** Initialise the route-appropriate LIFF app exactly once per page lifecycle. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
-  if (!liffReady) {
-    liffReady = liff.init({
-      liffId: LIFF_ID,
-      // Customer raw-preview browsing must remain passive. Platform-admin
-      // surfaces may actively establish the existing LINE session.
-      withLoginOnExternalBrowser: isPlatformAdminRoute(),
-    });
+
+  const liffId = activeLiffId();
+  if (!liffReady || liffReady.liffId !== liffId) {
+    liffReady = {
+      liffId,
+      promise: liff.init({
+        liffId,
+        // Customer raw-preview browsing must remain passive. Platform-admin
+        // surfaces use a dedicated LIFF app and may establish the LINE session.
+        withLoginOnExternalBrowser: isPlatformAdminRoute(),
+      }),
+    };
   }
-  return liffReady;
+  return liffReady.promise;
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
@@ -70,23 +122,12 @@ export async function getAccessToken(): Promise<string> {
     // configured staging LIFF URL.
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
 
-    if (isAiOfficeRoute()) {
-      const current = new URL(window.location.href);
-      const isLineWebView = /Line\//i.test(window.navigator.userAgent);
-      const enteredViaLiff = current.searchParams.get("aiOfficeLiff") === "1";
-
-      // A raw Pages URL opened from a LINE message can run in LINE's generic
-      // in-app browser rather than a LIFF context. Re-enter through the LIFF
-      // permanent link so the existing LINE account context is available.
-      if (isLineWebView && !enteredViaLiff) {
-        const liffUrl = new URL(`https://liff.line.me/${LIFF_ID}/sweet/ai-office`);
-        liffUrl.searchParams.set("aiOfficeLiff", "1");
-        window.location.replace(liffUrl.toString());
+    if (isPlatformAdminRoute()) {
+      if (!liff.isInClient()) {
+        liff.login({ redirectUri: window.location.href });
         return "";
       }
-
-      liff.login({ redirectUri: window.location.href });
-      return "";
+      throw new Error("platform_admin_line_session_unavailable");
     }
 
     liff.login();
@@ -96,9 +137,12 @@ export async function getAccessToken(): Promise<string> {
   const idToken = liff.getIDToken();
   if (!idToken) {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
-    if (isAiOfficeRoute()) {
-      liff.login({ redirectUri: window.location.href });
-      return "";
+    if (isPlatformAdminRoute()) {
+      if (!liff.isInClient()) {
+        liff.login({ redirectUri: window.location.href });
+        return "";
+      }
+      throw new Error("no LINE idToken");
     }
     throw new Error("no LINE idToken");
   }
