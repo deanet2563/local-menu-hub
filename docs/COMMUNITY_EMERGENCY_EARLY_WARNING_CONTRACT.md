@@ -46,3 +46,7 @@ Warnings are deduplicated by risk/incident identity + material change. Notificat
 
 ## Customer staging trigger — 2026-09-28
 Cloudflare Pages Preview is configured with `mytree-staging` public Supabase credentials and `VITE_MYTREE_WORKER_URL` pointing to the isolated staging Worker. This documentation-only commit triggers Preview deployment only; it does not authorize a Production deployment or merge.
+
+
+## Customer staging retrigger — 2026-09-28
+Cloudflare Git access was re-authorized. This documentation-only commit retriggers the Emergency Preview deployment from the staging feature branch; Production branch/configuration remains unchanged.
