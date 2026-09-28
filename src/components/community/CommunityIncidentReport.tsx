@@ -24,6 +24,7 @@ export function CommunityIncidentReport() {
   const [communities, setCommunities] = useState<MyCommunity[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(true);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [category, setCategory] = useState<IncidentCategory | null>(null);
   const [needs, setNeeds] = useState<string[]>([]);
   const [roadImpact, setRoadImpact] = useState<RoadImpact>("unknown");
@@ -33,6 +34,16 @@ export function CommunityIncidentReport() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string|null>(null);
   const [error, setError] = useState<string|null>(null);
+
+  useEffect(() => {
+    if (!photo) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
 
   useEffect(() => {
     void listMyActiveCommunities().then((items) => {
@@ -82,7 +93,7 @@ export function CommunityIncidentReport() {
       <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">2. เกิดเหตุอะไร?</h2><div className="mt-3 grid grid-cols-2 gap-2">{CATEGORIES.map((c)=><button key={c.key} type="button" onClick={()=>setCategory(c.key)} className={`min-h-20 rounded-2xl border p-3 text-left text-sm font-bold ${category===c.key?"border-[#b42318] bg-red-50":"border-gray-200"}`}><span className="mr-2 text-xl">{c.icon}</span>{c.label}</button>)}</div></section>
       <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">3. ต้องการอะไร?</h2><div className="mt-3 flex flex-wrap gap-2">{NEEDS.map(([key,label])=><button key={key} type="button" onClick={()=>toggleNeed(key)} className={`rounded-full border px-3 py-2 text-sm font-semibold ${needs.includes(key)?"border-[#1f6a45] bg-[#eef7e9] text-[#1f6a45]":"border-gray-200"}`}>{label}</button>)}</div></section>
       <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">4. ถนนบริเวณนี้</h2><div className="mt-3 grid grid-cols-2 gap-2">{([["unknown","ไม่ทราบ"],["passable","ผ่านได้"],["difficult","ผ่านยาก"],["closed","ผ่านไม่ได้"]] as const).map(([key,label])=><button key={key} type="button" onClick={()=>setRoadImpact(key)} className={`rounded-xl border p-3 text-sm font-bold ${roadImpact===key?"border-amber-500 bg-amber-50":"border-gray-200"}`}>{label}</button>)}</div></section>
-      <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">5. รายละเอียดเพิ่มเติม</h2><textarea value={description} onChange={(e)=>setDescription(e.target.value)} rows={4} placeholder="เช่น น้ำสูงประมาณเข่า มีผู้สูงอายุ 2 คน รถเล็กผ่านไม่ได้" className="mt-3 w-full rounded-2xl border p-3 text-sm" /><label className="mt-3 block cursor-pointer rounded-2xl border border-dashed p-4 text-center text-sm text-gray-600">📷 {photo?photo.name:"ถ่ายรูป / เลือกรูปเหตุการณ์"}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(e)=>setPhoto(e.target.files?.[0]??null)} /></label><p className="mt-2 text-xs text-gray-500">รูปเหตุการณ์เก็บในพื้นที่ส่วนตัวและไม่เปิดเป็น public URL โดยอัตโนมัติ</p></section>
+      <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">5. รายละเอียดเพิ่มเติม</h2><textarea value={description} onChange={(e)=>setDescription(e.target.value)} rows={4} placeholder="เช่น น้ำสูงประมาณเข่า มีผู้สูงอายุ 2 คน รถเล็กผ่านไม่ได้" className="mt-3 w-full rounded-2xl border p-3 text-sm" /><label className="mt-3 block cursor-pointer overflow-hidden rounded-2xl border border-dashed p-3 text-center text-sm text-gray-600">{photoPreviewUrl?<><img src={photoPreviewUrl} alt="ตัวอย่างรูปเหตุการณ์ที่เลือก" className="mx-auto max-h-72 w-full rounded-xl object-cover" /><span className="mt-2 block font-semibold">📷 {photo?.name}</span><span className="mt-1 block text-xs text-gray-500">แตะเพื่อถ่ายใหม่ / เลือกรูปใหม่</span></>:<>📷 ถ่ายรูป / เลือกรูปเหตุการณ์</>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(e)=>setPhoto(e.target.files?.[0]??null)} /></label><p className="mt-2 text-xs text-gray-500">รูปเหตุการณ์เก็บในพื้นที่ส่วนตัวและไม่เปิดเป็น public URL โดยอัตโนมัติ</p></section>
       {error&&<div role="alert" className="rounded-2xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       <button type="button" disabled={submitting||!category||!point||!communityId} onClick={()=>void submit()} className="w-full rounded-2xl bg-[#b42318] px-5 py-4 text-lg font-black text-white disabled:opacity-40">{submitting?"กำลังส่ง…":"ส่งแจ้งเหตุ"}</button>
     </div>
