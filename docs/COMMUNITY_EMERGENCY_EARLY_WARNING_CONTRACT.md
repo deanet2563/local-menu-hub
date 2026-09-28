@@ -42,3 +42,7 @@ Google remains the geographic/traffic/navigation provider. MyTree adds incident/
 
 ## Notification contract
 Warnings are deduplicated by risk/incident identity + material change. Notifications include community/area, hazard/incident, level, provenance, freshness/window and one clear action. Emergency presentation is reserved for official emergency alerts or confirmed active incidents under the approved escalation rules.
+
+
+## Customer staging trigger — 2026-09-28
+Cloudflare Pages Preview is configured with `mytree-staging` public Supabase credentials and `VITE_MYTREE_WORKER_URL` pointing to the isolated staging Worker. This documentation-only commit triggers Preview deployment only; it does not authorize a Production deployment or merge.
