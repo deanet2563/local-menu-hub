@@ -11,6 +11,7 @@ function incidentMarkerIcon(incident: PublicIncident): Record<string,unknown>|un
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56"><path d="M24 55 16 42h16L24 55Z" fill="${stroke}"/><circle cx="24" cy="22" r="20" fill="#fff" stroke="${stroke}" stroke-width="4"/><text x="24" y="29" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="800">${incidentGlyph(incident.category)}</text></svg>`;
   return {url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,scaledSize:new google.maps.Size(48,56),anchor:new google.maps.Point(24,56)};
 }
+// Shared loader extracted from the approved Main Map behavior; safety markers remain a separate overlay contract.
 export function IncidentGoogleMap({incidents,risks,onSelectIncident}:{incidents:PublicIncident[];risks:CommunityRisk[];onSelectIncident?:(incident:PublicIncident)=>void}) {
  const el=useRef<HTMLDivElement|null>(null); const map=useRef<MyTreeGoogleMap|null>(null);
  const handles=useRef<Array<{marker:MyTreeGoogleMarker;listener:GoogleMapListener}>>([]);
