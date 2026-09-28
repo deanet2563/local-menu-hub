@@ -143,3 +143,26 @@ export async function getCommunitySafetySnapshot(communityId: string): Promise<{
   const [incidents, risks] = await Promise.all([listCommunityIncidents(communityId), listCommunityRisks(communityId)]);
   return { incidents: incidents as PublicIncident[], risks: risks as CommunityRisk[] };
 }
+
+
+export type CommunityResponsePoint = {
+  response_point_id: string;
+  community_id: string;
+  name: string;
+  contact_type: "official-emergency" | "community" | "volunteer" | "medical" | "shelter" | "other";
+  phone: string | null;
+  contact_metadata: Record<string, unknown>;
+  status: "active";
+  lat: number | null;
+  lng: number | null;
+  location_precision: PublicLocationPrecision;
+  is_nearby: boolean;
+};
+
+export async function listCommunityResponsePoints(communityId: string): Promise<CommunityResponsePoint[]> {
+  const { data, error } = await supabase.rpc("fn_list_community_response_points", {
+    p_community_id: communityId, p_include_nearby: true,
+  });
+  rpcError(error);
+  return Array.isArray(data) ? data as CommunityResponsePoint[] : [];
+}
