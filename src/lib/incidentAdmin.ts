@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
 export type AdminIncidentListItem = {
- incident_id:string;community_id:string;community_name:string;category:string;severity:string;status:string;
+ incident_id:string;community_id:string|null;community_name:string;category:string;severity:string;status:string;
  verification_state:string;verification_count:number;title:string|null;description:string|null;need_tags:string[];
  road_impact:string;public_lat:number|null;public_lng:number|null;public_location_precision:string;
  created_at:string;updated_at:string;evidence_count:number;
@@ -32,4 +32,22 @@ export async function revealAdminIncidentPrivateLocation(incidentId:string,reaso
 }
 export async function listAdminIncidentEvidence(incidentId:string) {
  const {data,error}=await supabase.rpc("fn_admin_list_incident_evidence",{p_incident_id:incidentId});if(error)throw new Error(error.message);return Array.isArray(data)?data as Array<{evidence_id:string;storage_bucket:string;storage_path:string;created_at:string}>:[];
+}
+
+export async function enforceIncidentReporter(
+  incidentId:string,
+  enforcementType:"warning"|"reporting-restricted"|"emergency-ban",
+  reasonCode:"false-report"|"spam"|"duplicate-abuse"|"harassment"|"dangerous-misinformation"|"other",
+  reason:string,
+  durationHours:number|null,
+) {
+ const {data,error}=await supabase.rpc("fn_admin_enforce_incident_reporter",{
+  p_incident_id:incidentId,
+  p_enforcement_type:enforcementType,
+  p_reason_code:reasonCode,
+  p_reason:reason,
+  p_duration_hours:durationHours,
+ });
+ if(error)throw new Error(error.message);
+ return data as string;
 }
