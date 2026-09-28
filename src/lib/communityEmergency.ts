@@ -102,3 +102,44 @@ export async function uploadIncidentEvidence(incidentId: string, file: File): Pr
   if (typeof data !== "string") throw new Error("incident_evidence_invalid_response");
   return data;
 }
+
+
+export type PublicIncident = {
+  incident_id: string;
+  community_id: string;
+  category: IncidentCategory;
+  severity: IncidentSeverity;
+  status: string;
+  title: string | null;
+  description: string | null;
+  need_tags: string[];
+  road_impact: RoadImpact;
+  public_lat: number | null;
+  public_lng: number | null;
+  public_location_precision: PublicLocationPrecision;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityRisk = {
+  risk_id: string;
+  community_id: string | null;
+  provenance: "official" | "forecast";
+  hazard: string;
+  level: "advisory" | "watch" | "warning" | "emergency";
+  confidence: number | null;
+  area_label: string | null;
+  public_lat: number | null;
+  public_lng: number | null;
+  window_start: string;
+  window_end: string;
+  generated_at: string;
+  updated_at: string;
+  expires_at: string;
+  preparation_guidance: unknown;
+};
+
+export async function getCommunitySafetySnapshot(communityId: string): Promise<{incidents: PublicIncident[]; risks: CommunityRisk[]}> {
+  const [incidents, risks] = await Promise.all([listCommunityIncidents(communityId), listCommunityRisks(communityId)]);
+  return { incidents: incidents as PublicIncident[], risks: risks as CommunityRisk[] };
+}
