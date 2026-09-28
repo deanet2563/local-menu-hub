@@ -950,3 +950,82 @@ Existing code, DB functions or old documents may still reflect these older flows
 ---
 
 **This Bible snapshot dated 2026-08-20 is the approved master roadmap until a later decision explicitly supersedes it.**
+
+
+---
+
+# Addendum — Community Emergency, Incident Map & AI Early Warning — APPROVED 2026-09-28
+
+This approved addendum extends MyTree Community Thailand with a safety-oriented Community Emergency & Incident capability. It does not replace official emergency services or official warnings.
+
+## Product flow
+
+`Forecast -> Risk -> Prepare -> Incident -> Response -> Recovery`
+
+MyTree must support both pre-incident preparedness and live community incident coordination.
+
+## Incident Map
+
+- Reuse the canonical Community domain and `community_id`; do not create a parallel community boundary model.
+- Reuse the MyTree/Google basemap integration; do not create a second map source of truth.
+- Residents can report an incident with category, needs, description, location and photo evidence.
+- Initial categories must cover medical/injury, flood, fire, road/traffic obstruction, accident, utility/infrastructure hazard, missing person, evacuation/rescue need, food/water/medicine need, and other.
+- An incident keeps an append-only update/evidence timeline. Later reports must not silently overwrite earlier evidence.
+- Lifecycle: reported -> verifying -> coordinating -> help-en-route -> assisted -> resolved/closed, with duplicate/invalid handling.
+- Road impact is explicit: unknown, passable, difficult, or closed. Community reports are evidence, not guaranteed road-safety truth.
+
+## Privacy
+
+- Exact/private incident coordinates and public display coordinates are separate concepts.
+- Sensitive incidents, homes and patient locations must not expose exact coordinates publicly by default.
+- Public map precision follows community/privacy policy; authorized responders/moderators may receive more precise location only when required.
+- Photos and free text are treated as potentially sensitive user-generated evidence.
+
+## Community response
+
+- Each community may configure response/contact points and phone numbers.
+- Nearby community response points may be surfaced when appropriate.
+- Official emergency contacts must be visually distinguished from community/volunteer contacts.
+- MyTree must not delay or replace direct official emergency contact for immediate life-threatening danger.
+
+## AI Early Warning
+
+AI/risk intelligence is advisory and must never fabricate an official warning or confirmed incident.
+
+Three provenance classes must remain explicit in data and UI:
+
+1. Official alert / authoritative source.
+2. AI/rules-derived forecast or risk assessment.
+3. Community/user incident report.
+
+Forecast records must include hazard, affected area/community, forecast window, risk level, confidence/quality metadata, source references, generated/updated time and expiry. Preparation guidance may include food, drinking water, medicines, charging/power preparation, moving vehicles/property, evacuation readiness and route avoidance when supported by the hazard context.
+
+Risk UX should support advisory/watch/warning/emergency presentation, while clearly identifying whether the level is an official alert, MyTree forecast, or confirmed community incident.
+
+## AI boundary
+
+- Deterministic source ingestion, geospatial rules, expiry, permissions and incident state remain Rules/SQL/backend authority.
+- AI may summarize, classify, explain risk and draft preparation guidance through the AI Gateway.
+- AI must not autonomously issue an official evacuation order, mark a road safe, invent forecast data, close a confirmed incident, expose private coordinates, or bypass human/official authority.
+- Forecast output requires structured validation, source provenance and expiry before user notification.
+
+## Navigation and UX
+
+- Customer navigation must expose a prominent, easy-to-tap “แจ้งเหตุ / ขอความช่วยเหลือ” entry.
+- Reporting must be mobile-first and minimize steps: location -> incident type -> need -> photo/details -> submit.
+- Incident Map must show live incident/risk layers, freshness, verification state and response status without implying unverified reports are facts.
+- Routing may use Google traffic/navigation plus MyTree road-impact evidence, but MyTree must not claim a route is guaranteed safe.
+
+## Engineering sequence
+
+M0 — Early Warning / provenance / risk contract.
+M1 — Incident schema, privacy, evidence timeline, RLS and audited moderation.
+M2 — Report UX, camera/photo and location.
+M3 — Live Incident Map and incident detail/update flow.
+M4 — Community response centers and emergency/community contacts.
+M5 — Verification, duplicate handling and moderation.
+M6 — Incident-aware road impact and navigation handoff.
+M7 — Head Office Incident Command.
+M8 — LINE/push warnings, forecast notifications and production QA.
+
+This addendum is authoritative over older roadmap text where Community Emergency or AI Early Warning was previously unspecified.
