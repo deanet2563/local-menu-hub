@@ -19,6 +19,7 @@ function RiskCard({risk}:{risk:CommunityRisk}) {
 function IncidentCard({incident}:{incident:PublicIncident}) {
  return <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-[#b42318]">รายงานจากชุมชน</p><h3 className="mt-1 font-black">{INCIDENT_LABEL[incident.category]||incident.category}</h3></div><span className="text-xs text-gray-500">{ageLabel(incident.updated_at)}</span></div>{incident.description&&<p className="mt-2 line-clamp-3 text-sm text-gray-700">{incident.description}</p>}<div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs">{incident.status}</span>{incident.road_impact!=="unknown"&&<span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">ถนน: {incident.road_impact}</span>}</div><p className="mt-3 text-[11px] text-gray-500">ตำแหน่งที่แสดงเป็นระดับ {incident.public_location_precision} และอาจไม่ใช่จุดบ้าน/ผู้ประสบเหตุที่แน่นอน</p></article>;
 }
+// Google basemap/marker renderer is intentionally injected in the next integration step from the canonical MyTree Map implementation; this component owns only safety-domain data/UI.
 export function CommunityIncidentMap() {
  const [communities,setCommunities]=useState<MyCommunity[]>([]); const [communityId,setCommunityId]=useState("");
  const [incidents,setIncidents]=useState<PublicIncident[]>([]); const [risks,setRisks]=useState<CommunityRisk[]>([]);
