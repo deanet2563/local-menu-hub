@@ -4,3 +4,5 @@ import { CommunityIncidentReport } from "@/components/community/CommunityInciden
 export const Route = createFileRoute("/community/report")({
   component: CommunityIncidentReport,
 });
+
+// Route intentionally relies on TanStack Router generation during build; routeTree.gen.ts is never hand-edited.
