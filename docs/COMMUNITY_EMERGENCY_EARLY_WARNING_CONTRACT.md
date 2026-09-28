@@ -50,3 +50,19 @@ Cloudflare Pages Preview is configured with `mytree-staging` public Supabase cre
 
 ## Customer staging retrigger — 2026-09-28
 Cloudflare Git access was re-authorized. This documentation-only commit retriggers the Emergency Preview deployment from the staging feature branch; Production branch/configuration remains unchanged.
+
+## Emergency UX v2 — Location-first reporting and accountability
+
+Approved 2026-09-28.
+
+Emergency reporting is location-first, not membership-first. An authenticated MyTree user may report an incident they encounter even when they are not an active member of the detected community. Community membership is a trust/verification signal, not a reporting gate.
+
+The client requests device location on Emergency entry and resolves the best available MyTree coverage area automatically. When the point is outside configured MyTree coverage, reporting remains allowed with no community_id; the incident keeps private exact coordinates and a public-safe approximate location. Current staging coverage uses an explicit radius fallback; production-grade community polygons/boundaries may replace that resolver later without changing the reporting contract.
+
+After the reporter selects incident type and at least one need, the UI surfaces verified emergency call actions before MyTree submission. Safety-critical phone numbers come from a reviewed registry with source provenance and verification timestamps. Generative AI may classify/rank which verified contacts are most relevant, but must never invent, rewrite, or hallucinate an emergency phone number.
+
+Initial verified registry includes national medical emergency 1669, police emergency 191, DDPM 1784, and Bangkok fire emergency 199 when the detected area is Bangkok. Contact scope is location-aware and may later include verified community response centers.
+
+Emergency abuse controls are identity-bound and audited. Every report remains attributable to the authenticated customer/session. Automatic protection includes a short-window submission rate limit. Privileged operators may issue a warning, temporary reporting restriction, or indefinite MyTree Emergency ban only with a reason code and free-text reason; every enforcement action is written to the incident timeline and admin audit log. Permanent/indefinite enforcement requires a human privileged action; AI may flag suspicious patterns but does not autonomously ban a user.
+
+The reporter UI must disclose that deliberately false reports, prank submissions, or spam may result in warning, restriction, or Emergency ban. This notice must not block or materially slow legitimate emergency reporting.
