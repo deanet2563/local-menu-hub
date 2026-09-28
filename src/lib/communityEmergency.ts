@@ -166,3 +166,12 @@ export async function listCommunityResponsePoints(communityId: string): Promise<
   rpcError(error);
   return Array.isArray(data) ? data as CommunityResponsePoint[] : [];
 }
+
+
+export async function confirmCommunityIncident(incidentId: string, confirmation: "confirm" | "dispute", note?: string) {
+  const { data, error } = await supabase.rpc("fn_confirm_community_incident", {
+    p_incident_id: incidentId, p_confirmation: confirmation, p_note: note?.trim() || null,
+  });
+  rpcError(error);
+  return data as string;
+}
