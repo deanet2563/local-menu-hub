@@ -22,6 +22,10 @@ const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+function isEmergencyStagingRuntime(): boolean {
+  return MYTREE_WORKER_URL.includes("mytree-worker-staging.");
+}
+
 let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
 
@@ -131,7 +135,11 @@ export async function getAccessToken(): Promise<string> {
       throw new Error("platform_admin_line_session_unavailable");
     }
 
-    liff.login();
+    if (isEmergencyStagingRuntime()) {
+      liff.login({ redirectUri: window.location.href });
+    } else {
+      liff.login();
+    }
     return "";
   }
 
