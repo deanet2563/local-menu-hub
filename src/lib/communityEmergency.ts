@@ -177,3 +177,39 @@ export async function confirmCommunityIncident(incidentId: string, confirmation:
   rpcError(error);
   return data as string;
 }
+
+
+export type SafetyRouteOption = {
+  routeIndex: number;
+  distanceMeters: number;
+  durationSeconds: number;
+  encodedPolyline: string;
+  impactScore: number;
+  impacts: Array<{
+    incidentId: string;
+    impact: "difficult" | "closed";
+    verification: string;
+    updatedAt: string;
+    ageHours: number;
+    distanceFromRouteMeters: number;
+    stale: boolean;
+    weight: number;
+  }>;
+};
+
+export async function analyzeCommunitySafetyRoutes(
+  communityId: string,
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+): Promise<{ advisory: string; routes: SafetyRouteOption[] }> {
+  const token = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
+  if (!token) throw new Error("authentication required");
+  const response = await fetch("https://mytree-worker.kompakorn-t.workers.dev/community/safety-route", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ communityId, origin, destination }),
+  });
+  const payload = await response.json() as { advisory?: string; routes?: SafetyRouteOption[]; error?: string };
+  if (!response.ok) throw new Error(payload.error || "safety_route_failed");
+  return { advisory: payload.advisory || "", routes: payload.routes || [] };
+}
