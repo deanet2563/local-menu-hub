@@ -110,6 +110,8 @@ export type PublicIncident = {
   category: IncidentCategory;
   severity: IncidentSeverity;
   status: string;
+  verification_state?: "unverified" | "community-confirmed" | "moderator-verified" | "official-confirmed" | "disputed";
+  verification_count?: number;
   title: string | null;
   description: string | null;
   need_tags: string[];
