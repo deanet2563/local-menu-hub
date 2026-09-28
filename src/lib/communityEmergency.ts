@@ -7,8 +7,37 @@ export type IncidentSeverity = "unknown" | "low" | "moderate" | "high" | "critic
 export type RoadImpact = "unknown" | "passable" | "difficult" | "closed";
 export type PublicLocationPrecision = "exact" | "entrance" | "block" | "community-centroid" | "hidden";
 
+export type EmergencyAreaResolution = {
+  community_id: string | null;
+  community_name: string | null;
+  area_label: string;
+  province: string | null;
+  district: string | null;
+  distance_m: number | null;
+  resolution_method: "coverage-radius" | "outside-coverage";
+  inside_coverage: boolean;
+};
+
+export type EmergencyContact = {
+  contact_id: string;
+  service_key: "medical" | "police" | "disaster" | "fire" | "water" | "road" | "other";
+  name: string;
+  phone: string;
+  scope_type: "national" | "province" | "community";
+  priority: number;
+  verified_source_label: string;
+  verified_at: string;
+};
+
+export type EmergencyReportingAccess = {
+  allowed: boolean;
+  reason?: string;
+  reason_code?: string;
+  ends_at?: string | null;
+};
+
 export type CreateIncidentInput = {
-  communityId: string;
+  communityId: string | null;
   category: IncidentCategory;
   severity: IncidentSeverity;
   title?: string;
@@ -24,6 +53,35 @@ export type CreateIncidentInput = {
 
 function rpcError(error: { message: string } | null) {
   if (error) throw new Error(error.message);
+}
+
+export async function resolveEmergencyArea(lat: number, lng: number): Promise<EmergencyAreaResolution> {
+  const { data, error } = await supabase.rpc("fn_resolve_emergency_area", { p_lat: lat, p_lng: lng });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("emergency_area_resolution_failed");
+  return data as EmergencyAreaResolution;
+}
+
+export async function recommendEmergencyContacts(
+  category: IncidentCategory,
+  needTags: string[],
+  area: EmergencyAreaResolution | null,
+): Promise<EmergencyContact[]> {
+  const { data, error } = await supabase.rpc("fn_recommend_emergency_contacts", {
+    p_category: category,
+    p_need_tags: needTags,
+    p_community_id: area?.community_id ?? null,
+    p_province: area?.province ?? null,
+  });
+  rpcError(error);
+  return Array.isArray(data) ? data as EmergencyContact[] : [];
+}
+
+export async function getEmergencyReportingAccess(): Promise<EmergencyReportingAccess> {
+  const { data, error } = await supabase.rpc("fn_get_my_emergency_reporting_access");
+  rpcError(error);
+  if (!data || typeof data !== "object") return { allowed: true };
+  return data as EmergencyReportingAccess;
 }
 
 export async function createCommunityIncident(input: CreateIncidentInput): Promise<string> {
@@ -106,7 +164,7 @@ export async function uploadIncidentEvidence(incidentId: string, file: File): Pr
 
 export type PublicIncident = {
   incident_id: string;
-  community_id: string;
+  community_id: string | null;
   category: IncidentCategory;
   severity: IncidentSeverity;
   status: string;
