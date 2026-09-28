@@ -1,6 +1,7 @@
 export const HEAD_OFFICE_SECTIONS = [
   { key: "overview", label: "Overview", shortLabel: "OV" },
   { key: "communities", label: "Communities", shortLabel: "CO" },
+  { key: "incidents", label: "Incident Command", shortLabel: "IC" },
   { key: "members", label: "Members", shortLabel: "ME" },
   { key: "shops", label: "Shops", shortLabel: "SH" },
   { key: "riders", label: "Riders", shortLabel: "RI" },
