@@ -61,3 +61,44 @@ export async function listCommunityRisks(communityId: string) {
   rpcError(error);
   return Array.isArray(data) ? data : [];
 }
+
+
+export type MyCommunity = {
+  community_id: string;
+  name: string;
+  slug: string;
+  geography_summary: string | null;
+  boundary_type: string;
+  location_precision: string;
+  approx_center_lat: number | null;
+  approx_center_lng: number | null;
+};
+
+export async function listMyActiveCommunities(): Promise<MyCommunity[]> {
+  const { data, error } = await supabase.rpc("fn_my_active_communities");
+  rpcError(error);
+  return Array.isArray(data) ? data as MyCommunity[] : [];
+}
+
+export async function uploadIncidentEvidence(incidentId: string, file: File): Promise<string> {
+  const customerId = await import("@/lib/supabase").then(({ getCurrentCustomerId }) => getCurrentCustomerId());
+  if (!customerId) throw new Error("authentication required");
+  const extension = (file.name.split(".").pop() || "jpg").replace(/[^A-Za-z0-9]/g, "").toLowerCase() || "jpg";
+  const objectName = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const path = `${customerId}/${incidentId}/${objectName}`;
+  const bucket = "community-incident-evidence";
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+  const { data, error } = await supabase.rpc("fn_register_incident_evidence", {
+    p_incident_id: incidentId,
+    p_storage_bucket: bucket,
+    p_storage_path: path,
+    p_captured_at: null,
+  });
+  rpcError(error);
+  if (typeof data !== "string") throw new Error("incident_evidence_invalid_response");
+  return data;
+}
