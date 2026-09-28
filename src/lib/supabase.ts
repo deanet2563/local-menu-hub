@@ -17,7 +17,8 @@ const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 const DEFAULT_PLATFORM_ADMIN_LIFF_ID = "2010936243-ESwnUf8N";
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 export const PLATFORM_ADMIN_LIFF_ID = import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
-const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+const MYTREE_WORKER_URL = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
