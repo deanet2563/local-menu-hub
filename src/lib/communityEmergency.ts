@@ -204,7 +204,8 @@ export async function analyzeCommunitySafetyRoutes(
 ): Promise<{ advisory: string; routes: SafetyRouteOption[] }> {
   const token = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
   if (!token) throw new Error("authentication required");
-  const response = await fetch("https://mytree-worker.kompakorn-t.workers.dev/community/safety-route", {
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(`${workerBase}/community/safety-route`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ communityId, origin, destination }),
