@@ -25,22 +25,36 @@ export function PlatformAdminGate({
   const [state, setState] = useState<AccessState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  async function withTransientRetry<T>(stage: string, run: () => Promise<T>): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        return await run();
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+    }
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`${stage}: ${message}`);
+  }
+
   const verify = useCallback(async () => {
     setState("loading");
     setErrorMessage(null);
 
     try {
-      const loginState = await ensurePlatformAdminLineLogin();
+      const loginState = await withTransientRetry("LIFF", () => ensurePlatformAdminLineLogin());
       if (loginState === "redirecting") return;
 
-      const customerId = await getCurrentCustomerId();
+      const customerId = await withTransientRetry("TOKEN", () => getCurrentCustomerId());
 
       if (!customerId) {
         setState("no-auth");
         return;
       }
 
-      const access = await getAdminAccessContext();
+      const access = await withTransientRetry("ADMIN_RPC", () => getAdminAccessContext());
 
       if (!access.role_key) {
         setState("not-admin");
