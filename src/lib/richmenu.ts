@@ -7,7 +7,7 @@ import { initLiff } from "@/lib/supabase";
 // LINE OA message quota (it's a menu-management API call, not a message).
 // ============================================================
 
-const RICHMENU_URL = "https://mytree-worker.kompakorn-t.workers.dev/richmenu/link";
+const RICHMENU_URL = `${(import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "")}/richmenu/link`;
 
 export async function linkRichMenu(target: "customer" | "shop" | "rider"): Promise<void> {
   try {
