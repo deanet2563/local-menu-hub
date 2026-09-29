@@ -13,7 +13,28 @@ declare module "@tanstack/react-router" {
   }
 }
 
+function restoreLiffStateRoute() {
+  const raw = new URLSearchParams(window.location.search).get("liff.state");
+  if (!raw) return;
+  let decoded = raw;
+  try { decoded = decodeURIComponent(raw); } catch { /* keep URLSearchParams-decoded value */ }
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) return;
+  try {
+    const target = new URL(decoded, window.location.origin);
+    if (target.origin !== window.location.origin) return;
+    const next = `${target.pathname}${target.search}${target.hash}`;
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (next !== current) window.history.replaceState(window.history.state, "", next);
+  } catch {
+    // Invalid LIFF state is ignored rather than navigating outside the app.
+  }
+}
+
 async function bootstrap() {
+  // LIFF deep links arrive at the configured Endpoint URL with liff.state.
+  // Restore the requested in-app route before TanStack Router mounts so the
+  // user never flashes through the home/production-looking surface first.
+  restoreLiffStateRoute();
   // Initialize Platform Admin LIFF before mounting the router for both direct
   // MyTree admin URLs and LIFF primary/secondary redirects. This prevents the
   // router from briefly rendering customer surfaces and avoids redirect loops.
