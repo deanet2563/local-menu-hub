@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { EmergencyNav } from "@/components/community/EmergencyNav";
 import { ReopenedIncidentView } from "@/components/community/ReopenedIncidentView";
 
 export const Route = createFileRoute("/community/responding/$incidentId")({
@@ -7,5 +8,10 @@ export const Route = createFileRoute("/community/responding/$incidentId")({
 
 function ResponderIncidentRoute() {
   const { incidentId } = Route.useParams();
-  return <ReopenedIncidentView role="responder" incidentId={incidentId} />;
+  return (
+    <>
+      <EmergencyNav />
+      <ReopenedIncidentView role="responder" incidentId={incidentId} />
+    </>
+  );
 }
