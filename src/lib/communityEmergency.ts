@@ -513,6 +513,19 @@ export async function listEmergencyCommunities(): Promise<EmergencyCommunityOpti
   return Array.isArray(data) ? data as EmergencyCommunityOption[] : [];
 }
 
+export async function listBrowseCommunityIncidents(
+  communityId: string,
+): Promise<Array<PublicIncident & { community_name: string }>> {
+  const { data, error } = await supabase.rpc("fn_list_browse_community_incidents", {
+    p_community_id: communityId,
+    p_limit: 100,
+  });
+  rpcError(error);
+  return Array.isArray(data)
+    ? data as Array<PublicIncident & { community_name: string }>
+    : [];
+}
+
 export async function listNearbyPublicIncidents(
   lat: number,
   lng: number,
