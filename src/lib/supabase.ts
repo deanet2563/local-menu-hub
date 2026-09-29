@@ -17,12 +17,18 @@ const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 const DEFAULT_PLATFORM_ADMIN_LIFF_ID = "2010936243-ESwnUf8N";
 export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 export const PLATFORM_ADMIN_LIFF_ID = import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
-const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+const MYTREE_WORKER_URL = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+export function isEmergencyStagingRuntime(): boolean {
+  return MYTREE_WORKER_URL.includes("mytree-worker-staging.");
+}
+
 let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
+let tokenPromise: Promise<string> | null = null;
 
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
 export function isOrderingPreview(): boolean {
@@ -110,7 +116,7 @@ export function initLiff(): Promise<void> {
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
-export async function getAccessToken(): Promise<string> {
+async function issueAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
@@ -130,7 +136,11 @@ export async function getAccessToken(): Promise<string> {
       throw new Error("platform_admin_line_session_unavailable");
     }
 
-    liff.login();
+    if (isEmergencyStagingRuntime()) {
+      liff.login({ redirectUri: window.location.href });
+    } else {
+      liff.login();
+    }
     return "";
   }
 
@@ -157,6 +167,27 @@ export async function getAccessToken(): Promise<string> {
 
   cached = { token: data.access_token, exp: now + data.expires_in };
   return data.access_token;
+}
+
+/**
+ * Get a valid MyTree access token.
+ *
+ * Multiple mounted components can request authentication at the same time
+ * (profile, area resolver, Emergency contacts, incident access). Keep exactly
+ * one broker exchange in flight so one page load cannot create several
+ * app_sessions or surface a transient auth race.
+ */
+export async function getAccessToken(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (cached && cached.exp - 60 > now) return cached.token;
+  if (tokenPromise) return tokenPromise;
+
+  tokenPromise = issueAccessToken();
+  try {
+    return await tokenPromise;
+  } finally {
+    tokenPromise = null;
+  }
 }
 
 /** The current MyTree customer_id (from the LINE-issued token), or null. */

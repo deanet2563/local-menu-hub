@@ -1,0 +1,31 @@
+name: Community Emergency Client CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/community/**'
+      - 'src/lib/communityEmergency.ts'
+      - 'src/routes/community/**'
+      - 'docs/COMMUNITY_EMERGENCY_EARLY_WARNING_CONTRACT.md'
+      - 'docs/MYTREE_BIBLE.md'
+      - '.github/workflows/community-emergency-client-ci.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build and generate TanStack routes
+        run: bun run build
+      - name: Verify generated Emergency routes
+        run: |
+          grep -F '/community/report' src/routeTree.gen.ts
+          grep -F '/community/incidents' src/routeTree.gen.ts
+          grep -F '/community/incidents/$incidentId' src/routeTree.gen.ts
+          grep -F '/community/help/$token' src/routeTree.gen.ts
+          grep -F '/community/my-incidents/' src/routeTree.gen.ts
+          grep -F '/community/my-incidents/$incidentId' src/routeTree.gen.ts
+          grep -F '/community/responding/$incidentId' src/routeTree.gen.ts
