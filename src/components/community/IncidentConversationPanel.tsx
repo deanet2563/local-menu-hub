@@ -67,6 +67,8 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
   }, [mode.kind]);
 
   const accepted = mode.kind === "accepted-responder" || (mode.kind === "responder" && !!conversation?.viewer_responder);
+  const viewerIsReporter = mode.kind === "responder" && conversation?.viewer_is_reporter === true;
+  const canAccept = mode.kind === "responder" ? conversation?.can_accept !== false : true;
   const responders = conversation?.responders ?? [];
   const messages = conversation?.messages ?? [];
 
@@ -160,7 +162,17 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
         </div>
       )}
 
-      {mode.kind === "responder" && !accepted && (
+      {mode.kind === "responder" && viewerIsReporter && (
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <p className="font-black text-amber-900">บัญชีนี้เป็นผู้แจ้งเหตุรายการนี้</p>
+          <p className="mt-1 text-sm leading-6 text-amber-800">
+            ผู้แจ้งไม่สามารถกดรับเรื่องของตัวเองได้ เพื่อป้องกันการสร้างเหตุและรับเรื่องเองเพื่อปั๊มสถานะหรือคะแนน
+            กรุณาส่งลิงก์นี้ให้ผู้ช่วยเหลือ แล้วเปิดด้วย LINE ของผู้ช่วยคนนั้น
+          </p>
+        </div>
+      )}
+
+      {mode.kind === "responder" && !accepted && !viewerIsReporter && canAccept && (
         <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3">
           <p className="font-black text-red-800">รับเรื่องนี้</p>
           <p className="mt-1 text-xs text-red-700">ชื่อและเบอร์โทรกลับเป็นข้อมูลบังคับ เพื่อให้ผู้แจ้งติดต่อกลับได้</p>
