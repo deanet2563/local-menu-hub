@@ -479,6 +479,18 @@ export type NearbyPublicIncident = PublicIncident & {
   distance_m: number;
 };
 
+export type PublicIncidentHelpState = {
+  viewer_is_reporter: boolean;
+  can_accept: boolean;
+  viewer_responder: {
+    responder_id: string;
+    name: string;
+    phone: string;
+    organization: string | null;
+    status: string;
+  } | null;
+};
+
 export type PublicIncidentDetail = {
   incident: PublicIncident & {
     community_name: string;
@@ -548,6 +560,32 @@ export async function getPublicIncidentDetail(incidentId: string): Promise<Publi
   rpcError(error);
   if (!data || typeof data !== "object") throw new Error("public_incident_detail_invalid_response");
   return data as PublicIncidentDetail;
+}
+
+export async function getPublicIncidentHelpState(incidentId: string): Promise<PublicIncidentHelpState> {
+  const { data, error } = await supabase.rpc("fn_get_public_incident_help_state", {
+    p_incident_id: incidentId,
+  });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("public_incident_help_state_invalid_response");
+  return data as PublicIncidentHelpState;
+}
+
+export async function acceptPublicIncident(
+  incidentId: string,
+  responderName: string,
+  responderPhone: string,
+  responderOrganization?: string,
+  message?: string,
+): Promise<void> {
+  await incidentConversationAction({
+    mode: "public-accept",
+    incidentId,
+    responderName,
+    responderPhone,
+    responderOrganization: responderOrganization?.trim() || null,
+    message: message?.trim() || null,
+  });
 }
 
 export async function uploadIncidentEvidence(incidentId: string, file: File): Promise<string> {
