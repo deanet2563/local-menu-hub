@@ -161,4 +161,8 @@ export const SHOP_READINESS_LABELS: Record<string, string> = {
   business_hours: "วันและเวลาทำการ",
   owner: "บัญชีเจ้าของร้าน",
   menu: "เมนูที่พร้อมขายอย่างน้อย 1 รายการ",
+  verification_storefront: "รูปหน้าร้าน / หน้าบ้าน",
+  verification_owner_selfie: "Selfie เจ้าของร้านกับสถานที่",
+  verification_workspace: "รูปพื้นที่ประกอบกิจการภายใน",
+  verification_review: "รอ Admin ตรวจหลักฐานยืนยันร้าน",
 };
