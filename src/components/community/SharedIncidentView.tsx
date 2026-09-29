@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSharedIncident, getSharedIncidentEvidenceUrl, type SharedIncidentPayload } from "@/lib/communityEmergency";
+import { IncidentConversationPanel } from "@/components/community/IncidentConversationPanel";
 
 export function SharedIncidentView({ token }: { token: string }) {
   const [data, setData] = useState<SharedIncidentPayload | null>(null);
@@ -63,6 +64,8 @@ export function SharedIncidentView({ token }: { token: string }) {
       </section>
 
       {data.evidence.length > 0 && <section className="rounded-3xl bg-white p-4 shadow-sm"><h2 className="font-black">รูป / หลักฐาน</h2><div className="mt-3 grid gap-3">{data.evidence.map((item) => images[item.evidence_id] ? <img key={item.evidence_id} src={images[item.evidence_id]} alt="หลักฐานเหตุการณ์" className="max-h-96 w-full rounded-2xl object-cover" /> : <div key={item.evidence_id} className="rounded-xl bg-gray-100 p-4 text-center text-sm text-gray-500">กำลังโหลดรูป…</div>)}</div></section>}
+
+      <IncidentConversationPanel mode={{ kind: "responder", token }} />
 
       <p className="px-2 text-xs leading-5 text-gray-500">ลิงก์แชร์มีวันหมดอายุและสามารถยกเลิกได้ ข้อมูลตำแหน่งละเอียดและข้อมูลติดต่อไม่ถูกเปิดใน Public Incident Map</p>
     </div>
