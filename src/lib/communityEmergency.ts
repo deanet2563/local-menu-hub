@@ -464,6 +464,32 @@ export async function listCommunityRisks(communityId: string) {
 }
 
 
+export type EmergencyCommunityOption = {
+  community_id: string;
+  name: string;
+  slug: string;
+  geography_summary: string | null;
+  privacy_mode: string;
+  approx_center_lat: number | null;
+  approx_center_lng: number | null;
+};
+
+export type NearbyPublicIncident = PublicIncident & {
+  community_name: string;
+  distance_m: number;
+};
+
+export type PublicIncidentDetail = {
+  incident: PublicIncident & {
+    community_name: string;
+    resolved_at: string | null;
+  };
+  summary: {
+    responder_count: number;
+    message_count: number;
+  };
+};
+
 export type MyCommunity = {
   community_id: string;
   name: string;
@@ -479,6 +505,36 @@ export async function listMyActiveCommunities(): Promise<MyCommunity[]> {
   const { data, error } = await supabase.rpc("fn_my_active_communities");
   rpcError(error);
   return Array.isArray(data) ? data as MyCommunity[] : [];
+}
+
+export async function listEmergencyCommunities(): Promise<EmergencyCommunityOption[]> {
+  const { data, error } = await supabase.rpc("fn_list_emergency_communities");
+  rpcError(error);
+  return Array.isArray(data) ? data as EmergencyCommunityOption[] : [];
+}
+
+export async function listNearbyPublicIncidents(
+  lat: number,
+  lng: number,
+  radiusMeters = 5000,
+): Promise<NearbyPublicIncident[]> {
+  const { data, error } = await supabase.rpc("fn_list_nearby_public_incidents", {
+    p_lat: lat,
+    p_lng: lng,
+    p_radius_meters: radiusMeters,
+    p_limit: 100,
+  });
+  rpcError(error);
+  return Array.isArray(data) ? data as NearbyPublicIncident[] : [];
+}
+
+export async function getPublicIncidentDetail(incidentId: string): Promise<PublicIncidentDetail> {
+  const { data, error } = await supabase.rpc("fn_get_public_incident_detail", {
+    p_incident_id: incidentId,
+  });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("public_incident_detail_invalid_response");
+  return data as PublicIncidentDetail;
 }
 
 export async function uploadIncidentEvidence(incidentId: string, file: File): Promise<string> {
