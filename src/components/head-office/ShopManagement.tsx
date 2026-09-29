@@ -4,6 +4,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { ShopVerificationReview } from "@/components/head-office/ShopVerificationReview";
 import {
   getAdminAccessContext,
   hasAdminPermission,
@@ -545,6 +546,12 @@ function ShopDetailPanel({
           <p>ยังไม่มีบัญชีเจ้าของร้าน / Staff linkage</p>
         )}
       </Block>
+
+      <ShopVerificationReview
+        shopId={shop.shop_id}
+        canAction={canAction}
+        onChanged={() => window.location.reload()}
+      />
 
       <Block title="ข้อมูลติดต่อ & ที่ตั้งร้าน">
         <DataRow label="เบอร์โทรร้าน" value={shop.phone} />
