@@ -36,6 +36,46 @@ export type EmergencyReportingAccess = {
   ends_at?: string | null;
 };
 
+export type EmergencyReporterProfile = {
+  customer_id: string;
+  name: string | null;
+  phone: string | null;
+  default_address: string | null;
+};
+
+export type SharedIncidentPayload = {
+  share_id: string;
+  expires_at: string;
+  incident: {
+    incident_id: string;
+    category: IncidentCategory;
+    severity: IncidentSeverity;
+    status: string;
+    title: string | null;
+    description: string | null;
+    need_tags: string[];
+    road_impact: RoadImpact;
+    exact_lat: number;
+    exact_lng: number;
+    detected_area_label: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  contact: {
+    name: string | null;
+    phone: string | null;
+    address: string | null;
+    submitted_map_url: string | null;
+  };
+  community: { community_id: string; name: string } | null;
+  evidence: Array<{
+    evidence_id: string;
+    media_type: "image";
+    captured_at: string | null;
+    created_at: string;
+  }>;
+};
+
 export type CreateIncidentInput = {
   communityId: string | null;
   category: IncidentCategory;
@@ -49,6 +89,10 @@ export type CreateIncidentInput = {
   publicLat?: number | null;
   publicLng?: number | null;
   publicLocationPrecision: PublicLocationPrecision;
+  reporterName?: string;
+  reporterPhone?: string;
+  incidentAddress?: string;
+  submittedMapUrl?: string;
 };
 
 function rpcError(error: { message: string } | null) {
@@ -84,8 +128,73 @@ export async function getEmergencyReportingAccess(): Promise<EmergencyReportingA
   return data as EmergencyReportingAccess;
 }
 
+export async function getMyEmergencyProfile(): Promise<EmergencyReporterProfile> {
+  const { data, error } = await supabase.rpc("fn_get_my_emergency_profile");
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("emergency_profile_unavailable");
+  return data as EmergencyReporterProfile;
+}
+
+export async function resolveEmergencyGoogleMapLink(value: string): Promise<{
+  lat: number;
+  lng: number;
+  formattedAddress?: string;
+  displayName?: string;
+}> {
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(`${workerBase}/location/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+  const payload = await response.json() as {
+    location?: { lat?: number; lng?: number; formattedAddress?: string; displayName?: string };
+    error?: string;
+  };
+  if (!response.ok || typeof payload.location?.lat !== "number" || typeof payload.location?.lng !== "number") {
+    throw new Error(payload.error || "google_maps_location_resolve_failed");
+  }
+  return {
+    lat: payload.location.lat,
+    lng: payload.location.lng,
+    formattedAddress: payload.location.formattedAddress,
+    displayName: payload.location.displayName,
+  };
+}
+
+export async function createIncidentShare(incidentId: string, expiresHours = 168): Promise<string> {
+  const { data, error } = await supabase.rpc("fn_create_incident_share", {
+    p_incident_id: incidentId,
+    p_expires_hours: expiresHours,
+  });
+  rpcError(error);
+  if (typeof data !== "string") throw new Error("incident_share_invalid_response");
+  return data;
+}
+
+export async function getSharedIncident(token: string): Promise<SharedIncidentPayload> {
+  const { data, error } = await supabase.rpc("fn_get_shared_incident", { p_token: token });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("shared_incident_invalid_response");
+  return data as SharedIncidentPayload;
+}
+
+export async function getSharedIncidentEvidenceUrl(token: string, evidenceId: string): Promise<string> {
+  const accessToken = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
+  if (!accessToken) throw new Error("authentication required");
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(`${workerBase}/community/shared-evidence-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ token, evidenceId }),
+  });
+  const payload = await response.json() as { url?: string; error?: string };
+  if (!response.ok || !payload.url) throw new Error(payload.error || "shared_evidence_failed");
+  return payload.url;
+}
+
 export async function createCommunityIncident(input: CreateIncidentInput): Promise<string> {
-  const { data, error } = await supabase.rpc("fn_create_community_incident", {
+  const { data, error } = await supabase.rpc("fn_create_community_incident_v3", {
     p_community_id: input.communityId,
     p_category: input.category,
     p_severity: input.severity,
@@ -98,6 +207,10 @@ export async function createCommunityIncident(input: CreateIncidentInput): Promi
     p_public_lat: input.publicLat ?? null,
     p_public_lng: input.publicLng ?? null,
     p_public_location_precision: input.publicLocationPrecision,
+    p_reporter_name: input.reporterName?.trim() || null,
+    p_reporter_phone: input.reporterPhone?.trim() || null,
+    p_incident_address: input.incidentAddress?.trim() || null,
+    p_submitted_map_url: input.submittedMapUrl?.trim() || null,
   });
   rpcError(error);
   if (typeof data !== "string") throw new Error("incident_create_invalid_response");
