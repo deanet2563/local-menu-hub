@@ -6,6 +6,7 @@ import {
   type PublicIncidentDetail,
 } from "@/lib/communityEmergency";
 import { IncidentGoogleMap } from "@/components/community/IncidentGoogleMap";
+import { PublicIncidentHelpPanel } from "@/components/community/PublicIncidentHelpPanel";
 
 const STATUS_LABEL: Record<string,string>={
   reported:"รอรับเรื่อง",verifying:"กำลังตรวจสอบ",coordinating:"กำลังประสานงาน",
@@ -78,6 +79,8 @@ export function PublicIncidentDetailView({ incidentId }: { incidentId: string })
             </div>
           </section>
         )}
+
+        <PublicIncidentHelpPanel detail={data} />
 
         <section className="rounded-3xl bg-white p-4 shadow-sm">
           <h2 className="font-black">ช่วยยืนยันข้อมูลจากชุมชน</h2>
