@@ -294,7 +294,7 @@ export function CommunityIncidentMap() {
             <span className="text-xs font-semibold text-[#b42318]">{mapped.length} เหตุ</span>
           </div>
           <div className="relative">
-            <IncidentGoogleMap incidents={filteredIncidents} risks={risks} onSelectIncident={setSelectedIncident} />
+            <IncidentGoogleMap incidents={filteredIncidents} risks={risks} onSelectIncident={setSelectedIncident} focusPoint={scope==="nearby"?point:null} />
             {selectedIncident&&(
               <div className="absolute inset-x-3 bottom-3 z-20 rounded-2xl border border-red-100 bg-white p-4 shadow-2xl">
                 <button type="button" onClick={()=>setSelectedIncident(null)} aria-label="ปิดรายละเอียดเหตุ" className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full border bg-white text-xl">×</button>
