@@ -79,6 +79,9 @@ export function CommunityIncidentReport() {
   const [result, setResult] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const [retryingPhoto, setRetryingPhoto] = useState(false);
+  const [photoUploaded, setPhotoUploaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoLocateStarted = useRef(false);
 
@@ -241,12 +244,49 @@ export function CommunityIncidentReport() {
         incidentAddress,
         submittedMapUrl: mapLink,
       });
-      if (photo) await uploadIncidentEvidence(id, photo);
+
+      // The incident is authoritative as soon as creation succeeds. Never make
+      // a later evidence-upload failure look like the whole report failed,
+      // otherwise a user may submit the same emergency twice.
       setResult(id);
+
+      if (photo) {
+        try {
+          await uploadIncidentEvidence(id, photo);
+          setPhotoUploaded(true);
+          setPhotoUploadError(null);
+        } catch (uploadError) {
+          setPhotoUploaded(false);
+          setPhotoUploadError(
+            uploadError instanceof Error
+              ? uploadError.message
+              : "รูปยังอัปโหลดไม่สำเร็จ",
+          );
+        }
+      }
     } catch (submitError) {
       setError(friendlyError(submitError));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function retryPhotoUpload() {
+    if (!result || !photo) return;
+    setRetryingPhoto(true);
+    setPhotoUploadError(null);
+    try {
+      await uploadIncidentEvidence(result, photo);
+      setPhotoUploaded(true);
+    } catch (uploadError) {
+      setPhotoUploaded(false);
+      setPhotoUploadError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "รูปยังอัปโหลดไม่สำเร็จ",
+      );
+    } finally {
+      setRetryingPhoto(false);
     }
   }
 
@@ -285,6 +325,23 @@ export function CommunityIncidentReport() {
           <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
             หากมีอันตรายต่อชีวิต โปรดติดต่อหน่วยฉุกเฉินโดยตรง อย่ารอการตอบกลับจาก MyTree
           </p>
+          {photo && photoUploadError && (
+            <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+              <p className="font-black text-amber-900">รับแจ้งเหตุแล้ว แต่รูปหลักฐานยังส่งไม่สำเร็จ</p>
+              <p className="mt-1 text-xs text-amber-800">ไม่ต้องกดแจ้งเหตุใหม่ เหตุถูกบันทึกแล้ว สามารถลองส่งเฉพาะรูปอีกครั้งได้</p>
+              <button
+                type="button"
+                disabled={retryingPhoto}
+                onClick={() => void retryPhotoUpload()}
+                className="mt-3 w-full rounded-xl bg-amber-700 px-3 py-3 text-sm font-black text-white disabled:opacity-50"
+              >
+                {retryingPhoto ? "กำลังส่งรูป…" : "ลองส่งรูปอีกครั้ง"}
+              </button>
+            </div>
+          )}
+          {photo && photoUploaded && (
+            <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">✓ รูปหลักฐานถูกบันทึกแล้ว</div>
+          )}
           <button
             type="button"
             onClick={() => void shareIncident()}
