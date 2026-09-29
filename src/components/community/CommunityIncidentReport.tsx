@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import liff from "@line/liff";
 import {
   createCommunityIncident,
   createIncidentShare,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/communityEmergency";
 import { EmergencyLocationMap } from "@/components/community/EmergencyLocationMap";
 import { IncidentConversationPanel } from "@/components/community/IncidentConversationPanel";
-import { LIFF_ID } from "@/lib/supabase";
+import { LIFF_ID, initLiff, isEmergencyStagingRuntime } from "@/lib/supabase";
 import { Link } from "@tanstack/react-router";
 
 const CATEGORIES: Array<{ key: IncidentCategory; icon: string; label: string }> = [
@@ -83,7 +84,24 @@ export function CommunityIncidentReport() {
   const [retryingPhoto, setRetryingPhoto] = useState(false);
   const [photoUploaded, setPhotoUploaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lineRuntime, setLineRuntime] = useState<"checking" | "inside-line" | "outside-line">("checking");
   const autoLocateStarted = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isEmergencyStagingRuntime()) {
+      setLineRuntime("inside-line");
+      return () => { cancelled = true; };
+    }
+    void initLiff()
+      .then(() => {
+        if (!cancelled) setLineRuntime(liff.isInClient() ? "inside-line" : "outside-line");
+      })
+      .catch(() => {
+        if (!cancelled) setLineRuntime("outside-line");
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!photo) {
@@ -96,6 +114,7 @@ export function CommunityIncidentReport() {
   }, [photo]);
 
   useEffect(() => {
+    if (lineRuntime !== "inside-line") return;
     void Promise.all([
       getEmergencyReportingAccess().then(setReportingAccess).catch(() => setReportingAccess({ allowed: true })),
       getMyEmergencyProfile()
@@ -107,15 +126,17 @@ export function CommunityIncidentReport() {
         .catch(() => undefined)
         .finally(() => setProfileLoaded(true)),
     ]);
-  }, []);
+  }, [lineRuntime]);
 
   useEffect(() => {
+    if (lineRuntime !== "inside-line") return;
     if (autoLocateStarted.current) return;
     autoLocateStarted.current = true;
     locate();
-  }, []);
+  }, [lineRuntime]);
 
   async function loadEmergencyContacts() {
+    if (lineRuntime !== "inside-line") return;
     if (!category || needs.length === 0) {
       setContacts([]);
       setContactsError(null);
@@ -313,6 +334,45 @@ export function CommunityIncidentReport() {
     } finally {
       setSharing(false);
     }
+  }
+
+  if (lineRuntime === "checking") {
+    return (
+      <main className="min-h-dvh bg-[#f8fbf5] p-5 text-[#173c29]">
+        <div className="mx-auto max-w-lg rounded-3xl bg-white p-6 text-center shadow">
+          <p className="font-black">กำลังตรวจการเชื่อมต่อ LINE…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (lineRuntime === "outside-line") {
+    const liffUrl = `https://liff.line.me/${LIFF_ID}/community/report`;
+    return (
+      <main className="min-h-dvh bg-[#f8fbf5] p-5 text-[#173c29]">
+        <div className="mx-auto max-w-lg rounded-3xl bg-white p-6 shadow">
+          <div className="text-4xl">🌳🚨</div>
+          <h1 className="mt-3 text-2xl font-black">กรุณาเปิดผ่าน LINE</h1>
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            MyTree Emergency เวอร์ชันทดสอบใช้ LINE เพื่อยืนยันตัวตนและส่งการแจ้งเตือน
+            หน้านี้ถูกเปิดจาก browser ภายนอก จึงยังไม่ควรส่งเหตุจากหน้านี้
+          </p>
+          <a
+            href={liffUrl}
+            className="mt-5 block w-full rounded-2xl bg-[#1f6a45] px-4 py-4 text-center font-black text-white"
+          >
+            เปิด MyTree Emergency ใน LINE
+          </a>
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(liffUrl)}
+            className="mt-2 w-full rounded-xl border px-4 py-3 text-sm font-bold"
+          >
+            คัดลอกลิงก์ไปเปิดใน LINE
+          </button>
+        </div>
+      </main>
+    );
   }
 
   if (result) {
