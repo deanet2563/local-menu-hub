@@ -43,6 +43,34 @@ export type EmergencyReporterProfile = {
   default_address: string | null;
 };
 
+export type IncidentConversation = {
+  incident_id: string;
+  status: string;
+  viewer_responder?: {
+    responder_id: string;
+    name: string;
+    phone: string;
+    organization: string | null;
+    status: string;
+  } | null;
+  responders: Array<{
+    responder_id: string;
+    name: string;
+    phone: string;
+    organization: string | null;
+    status: string;
+    accepted_at: string;
+  }>;
+  messages: Array<{
+    message_id: string;
+    sender_kind: "reporter" | "responder";
+    sender_name: string;
+    action: "message" | "accepted" | "request-info" | "help-en-route" | "arrived" | "assisted";
+    body: string;
+    created_at: string;
+  }>;
+};
+
 export type SharedIncidentPayload = {
   share_id: string;
   expires_at: string;
@@ -191,6 +219,61 @@ export async function getSharedIncidentEvidenceUrl(token: string, evidenceId: st
   const payload = await response.json() as { url?: string; error?: string };
   if (!response.ok || !payload.url) throw new Error(payload.error || "shared_evidence_failed");
   return payload.url;
+}
+
+async function incidentConversationAction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const accessToken = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
+  if (!accessToken) throw new Error("authentication required");
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(`${workerBase}/community/incident-conversation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json() as Record<string, unknown> & { error?: string };
+  if (!response.ok) throw new Error(payload.error || "incident_conversation_action_failed");
+  return payload;
+}
+
+export async function getSharedIncidentConversation(token: string): Promise<IncidentConversation> {
+  const { data, error } = await supabase.rpc("fn_get_shared_incident_conversation", { p_token: token });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("incident_conversation_invalid_response");
+  return data as IncidentConversation;
+}
+
+export async function getReporterIncidentConversation(incidentId: string): Promise<IncidentConversation> {
+  const { data, error } = await supabase.rpc("fn_get_incident_conversation_for_reporter", { p_incident_id: incidentId });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("incident_conversation_invalid_response");
+  return data as IncidentConversation;
+}
+
+export async function acceptSharedIncident(
+  token: string,
+  responderName: string,
+  responderPhone: string,
+  responderOrganization?: string,
+): Promise<void> {
+  await incidentConversationAction({
+    mode: "accept",
+    token,
+    responderName,
+    responderPhone,
+    responderOrganization: responderOrganization?.trim() || null,
+  });
+}
+
+export async function sendResponderIncidentMessage(
+  token: string,
+  message: string,
+  action: "message" | "request-info" | "help-en-route" | "arrived" | "assisted" = "message",
+): Promise<void> {
+  await incidentConversationAction({ mode: "responder-message", token, message, action });
+}
+
+export async function sendReporterIncidentMessage(incidentId: string, message: string): Promise<void> {
+  await incidentConversationAction({ mode: "reporter-message", incidentId, message });
 }
 
 export async function createCommunityIncident(input: CreateIncidentInput): Promise<string> {
