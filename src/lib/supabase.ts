@@ -15,7 +15,7 @@ import { safeStoragePath } from "@/lib/storageKey";
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 const DEFAULT_PLATFORM_ADMIN_LIFF_ID = "2010936243-ESwnUf8N";
-const STAGING_PLATFORM_ADMIN_LIFF_ID = "2010936243-hG7sC3Wd";
+const STAGING_PLATFORM_ADMIN_LIFF_ID = "2010936243-lSLChhqP";
 const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
 const STAGING_AUTH_BROKER = "https://mytree-worker-staging.kompakorn-t.workers.dev/auth/line";
 
