@@ -53,6 +53,12 @@ export type IncidentConversation = {
     organization: string | null;
     status: string;
   } | null;
+  resolution?: {
+    thanks_mytree: boolean;
+    thanks_message: string | null;
+    good_deed_point_awarded: boolean;
+    resolved_at: string;
+  } | null;
   responders: Array<{
     responder_id: string;
     name: string;
@@ -60,6 +66,11 @@ export type IncidentConversation = {
     organization: string | null;
     status: string;
     accepted_at: string;
+    review?: {
+      rating: number;
+      comment: string | null;
+      updated_at: string;
+    } | null;
   }>;
   messages: Array<{
     message_id: string;
@@ -303,6 +314,75 @@ export async function sendAcceptedResponderIncidentMessage(
   action: "message" | "request-info" | "help-en-route" | "arrived" | "assisted" = "message",
 ): Promise<void> {
   await incidentConversationAction({ mode: "accepted-responder-message", incidentId, message, action });
+}
+
+export async function resolveReporterIncident(
+  incidentId: string,
+  thanksMyTree: boolean,
+  thanksMessage?: string,
+): Promise<{
+  incident_id: string;
+  status: "resolved";
+  good_deed_point_awarded: boolean;
+  good_deed_point_eligible: boolean;
+  good_deed_points_total: number;
+}> {
+  const { data, error } = await supabase.rpc("fn_reporter_resolve_incident", {
+    p_incident_id: incidentId,
+    p_thanks_mytree: thanksMyTree,
+    p_thanks_message: thanksMessage?.trim() || null,
+  });
+  rpcError(error);
+  if (!data || typeof data !== "object") throw new Error("incident_resolution_invalid_response");
+  return data as {
+    incident_id: string;
+    status: "resolved";
+    good_deed_point_awarded: boolean;
+    good_deed_point_eligible: boolean;
+    good_deed_points_total: number;
+  };
+}
+
+export async function reviewIncidentResponder(
+  incidentId: string,
+  responderId: string,
+  rating: number,
+  comment?: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("fn_reporter_review_responder", {
+    p_incident_id: incidentId,
+    p_responder_id: responderId,
+    p_rating: rating,
+    p_comment: comment?.trim() || null,
+  });
+  rpcError(error);
+  if (typeof data !== "string") throw new Error("responder_review_invalid_response");
+  return data;
+}
+
+export async function getMyGoodDeedPoints(): Promise<{
+  total: number;
+  history: Array<{
+    ledger_id: string;
+    points: number;
+    reason_code: string;
+    incident_id: string | null;
+    created_at: string;
+  }>;
+}> {
+  const { data, error } = await supabase.rpc("fn_get_my_good_deed_points");
+  rpcError(error);
+  if (!data || typeof data !== "object") return { total: 0, history: [] };
+  return data as {
+    total: number;
+    history: Array<{
+      ledger_id: string;
+      points: number;
+      reason_code: string;
+      incident_id: string | null;
+      created_at: string;
+    }>;
+  };
 }
 
 export async function getPrivateIncidentEvidenceUrl(
