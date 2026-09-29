@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   confirmCommunityIncident,
-  getCommunitySafetySnapshot,
+  listBrowseCommunityIncidents,
   listCommunityResponsePoints,
   listCommunityRisks,
   listEmergencyCommunities,
@@ -37,6 +37,17 @@ function ageLabel(value:string) {
   if(minutes<60)return `${minutes} นาทีที่แล้ว`;
   const hours=Math.round(minutes/60);
   return hours<24?`${hours} ชม.ที่แล้ว`:`${Math.round(hours/24)} วันที่แล้ว`;
+}
+
+function distanceMeters(a:{lat:number;lng:number},b:{lat:number;lng:number}) {
+  const toRad=(value:number)=>value*Math.PI/180;
+  const earth=6371000;
+  const dLat=toRad(b.lat-a.lat);
+  const dLng=toRad(b.lng-a.lng);
+  const lat1=toRad(a.lat);
+  const lat2=toRad(b.lat);
+  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return Math.round(2*earth*Math.asin(Math.min(1,Math.sqrt(h))));
 }
 
 function distanceLabel(value?: number) {
@@ -162,24 +173,52 @@ export function CommunityIncidentMap() {
         if(scope==="nearby"){
           if(!point){setIncidents([]);setRisks([]);setResponsePoints([]);return;}
           const detectedCommunity=area?.community_id||null;
-          const [nearby,nextRisks,nextPoints]=await Promise.all([
-            listNearbyPublicIncidents(point.lat,point.lng,radiusMeters),
-            detectedCommunity?listCommunityRisks(detectedCommunity):Promise.resolve([] as CommunityRisk[]),
-            detectedCommunity?listCommunityResponsePoints(detectedCommunity):Promise.resolve([] as CommunityResponsePoint[]),
+
+          const [legacyNearby,communityLists,nextRisks,nextPoints]=await Promise.all([
+            listNearbyPublicIncidents(point.lat,point.lng,radiusMeters).catch(()=>[] as NearbyPublicIncident[]),
+            Promise.all(
+              communities.map((community)=>
+                listBrowseCommunityIncidents(community.community_id).catch(()=>[])
+              )
+            ),
+            detectedCommunity
+              ? listCommunityRisks(detectedCommunity).catch(()=>[] as CommunityRisk[])
+              : Promise.resolve([] as CommunityRisk[]),
+            detectedCommunity
+              ? listCommunityResponsePoints(detectedCommunity).catch(()=>[] as CommunityResponsePoint[])
+              : Promise.resolve([] as CommunityResponsePoint[]),
           ]);
+
+          const byId=new Map<string,PublicIncident & Partial<NearbyPublicIncident>>();
+          for(const incident of legacyNearby)byId.set(incident.incident_id,incident);
+          for(const list of communityLists){
+            for(const incident of list){
+              if(incident.public_lat===null||incident.public_lng===null)continue;
+              const distance_m=distanceMeters(point,{lat:incident.public_lat,lng:incident.public_lng});
+              if(distance_m<=radiusMeters){
+                byId.set(incident.incident_id,{...incident,distance_m});
+              }
+            }
+          }
+          const nearby=Array.from(byId.values()).sort((a,b)=>
+            (a.distance_m??Number.MAX_SAFE_INTEGER)-(b.distance_m??Number.MAX_SAFE_INTEGER)
+            || new Date(b.updated_at).getTime()-new Date(a.updated_at).getTime()
+          );
+
           if(cancelled)return;
           setIncidents(nearby);
           setRisks(nextRisks);
           setResponsePoints(nextPoints);
         }else{
           if(!communityId){setIncidents([]);setRisks([]);setResponsePoints([]);return;}
-          const [snapshot,points]=await Promise.all([
-            getCommunitySafetySnapshot(communityId),
-            listCommunityResponsePoints(communityId),
+          const [browseIncidents,nextRisks,points]=await Promise.all([
+            listBrowseCommunityIncidents(communityId),
+            listCommunityRisks(communityId).catch(()=>[] as CommunityRisk[]),
+            listCommunityResponsePoints(communityId).catch(()=>[] as CommunityResponsePoint[]),
           ]);
           if(cancelled)return;
-          setIncidents(snapshot.incidents);
-          setRisks(snapshot.risks);
+          setIncidents(browseIncidents);
+          setRisks(nextRisks);
           setResponsePoints(points);
         }
       }catch(e){
@@ -190,7 +229,7 @@ export function CommunityIncidentMap() {
     }
     void load();
     return()=>{cancelled=true;};
-  },[scope,point,radiusMeters,communityId,area?.community_id]);
+  },[scope,point,radiusMeters,communityId,area?.community_id,communities]);
 
   const filteredIncidents=useMemo(()=>incidents.filter((incident)=>{
     const text=search.trim().toLowerCase();
