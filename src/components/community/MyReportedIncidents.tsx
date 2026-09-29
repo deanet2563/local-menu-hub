@@ -31,10 +31,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 function relativeTime(value: string) {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
   if (minutes < 1) return "เมื่อสักครู่";
-  if (minutes < 60) return \`\${minutes} นาทีที่แล้ว\`;
+  if (minutes < 60) return minutes + " นาทีที่แล้ว";
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return \`\${hours} ชม.ที่แล้ว\`;
-  return \`\${Math.round(hours / 24)} วันที่แล้ว\`;
+  if (hours < 24) return hours + " ชม.ที่แล้ว";
+  return Math.round(hours / 24) + " วันที่แล้ว";
 }
 
 function IncidentRow({ item }: { item: MyReportedIncident }) {
