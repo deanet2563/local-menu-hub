@@ -13,9 +13,12 @@ export function EmergencyNav() {
     <nav className="sticky top-0 z-40 border-b bg-white/95 px-3 py-2 backdrop-blur">
       <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto">
         {ITEMS.map((item) => {
-          const active = item.to === "/community/my-incidents"
-            ? pathname.startsWith("/community/my-incidents")
-            : pathname === item.to;
+          const active =
+            item.to === "/community/my-incidents"
+              ? pathname.startsWith("/community/my-incidents")
+              : item.to === "/community/incidents"
+                ? pathname.startsWith("/community/incidents")
+                : pathname === item.to;
           return (
             <Link
               key={item.to}
