@@ -52,6 +52,11 @@ export type IncidentConversation = {
     phone: string;
     organization: string | null;
     status: string;
+    review?: {
+      rating: number;
+      comment: string | null;
+      updated_at: string;
+    } | null;
   } | null;
   resolution?: {
     thanks_mytree: boolean;
@@ -341,6 +346,19 @@ export async function resolveReporterIncident(
     good_deed_point_eligible: boolean;
     good_deed_points_total: number;
   };
+}
+
+export async function updateReporterResolutionFeedback(
+  incidentId: string,
+  thanksMyTree: boolean,
+  thanksMessage?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("fn_reporter_update_resolution_feedback", {
+    p_incident_id: incidentId,
+    p_thanks_mytree: thanksMyTree,
+    p_thanks_message: thanksMessage?.trim() || null,
+  });
+  rpcError(error);
 }
 
 export async function reviewIncidentResponder(
