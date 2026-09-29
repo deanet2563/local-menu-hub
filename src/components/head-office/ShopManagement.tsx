@@ -45,6 +45,7 @@ export function ShopManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
 
   const canAction = !!access && hasAdminPermission(access, "shops.action");
 
@@ -130,16 +131,19 @@ export function ShopManagement() {
     setSaving(true);
     setError(null);
     setNotice(null);
+    setReminderFeedback("กำลังส่ง LINE แจ้งร้าน...");
     try {
       const result = await sendShopProfileReminder(selected);
-      setNotice(
-        result.ok
-          ? "ส่ง LINE แจ้งร้านให้กรอกข้อมูลเรียบร้อยแล้ว"
-          : "สร้างรายการแจ้งเตือนแล้ว",
-      );
+      const message = result.ok
+        ? "ส่ง LINE แจ้งร้านให้กรอกข้อมูลเรียบร้อยแล้ว"
+        : "สร้างรายการแจ้งเตือนแล้ว";
+      setNotice(message);
+      setReminderFeedback(message);
       await loadDetail(selected);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ส่งแจ้งเตือนไม่สำเร็จ");
+      const message = e instanceof Error ? e.message : "ส่งแจ้งเตือนไม่สำเร็จ";
+      setError(message);
+      setReminderFeedback(message);
     } finally {
       setSaving(false);
     }
@@ -311,6 +315,7 @@ export function ShopManagement() {
               saving={saving}
               act={act}
               remindShop={remindShop}
+              reminderFeedback={reminderFeedback}
             />
           )}
         </aside>
@@ -325,6 +330,7 @@ function ShopDetailPanel({
   saving,
   act,
   remindShop,
+  reminderFeedback,
 }: {
   detail: ShopDetail;
   canAction: boolean;
@@ -335,6 +341,7 @@ function ShopDetailPanel({
     danger?: boolean,
   ) => Promise<void>;
   remindShop: () => Promise<void>;
+  reminderFeedback: string | null;
 }) {
   const shop = detail.shop;
   const missing = detail.readiness?.missing ?? [];
@@ -391,14 +398,21 @@ function ShopDetailPanel({
         )}
 
         {canAction && !detail.readiness.ready && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void remindShop()}
-            className="mt-4 w-full rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            แจ้งร้านให้กรอกข้อมูลให้ครบ
-          </button>
+          <div className="mt-4 space-y-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void remindShop()}
+              className="w-full rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {saving ? "กำลังส่ง..." : "แจ้งร้านให้กรอกข้อมูลให้ครบ"}
+            </button>
+            {reminderFeedback && (
+              <p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-amber-900">
+                {reminderFeedback}
+              </p>
+            )}
+          </div>
         )}
       </section>
 
