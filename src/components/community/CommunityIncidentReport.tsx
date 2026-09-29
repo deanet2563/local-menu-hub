@@ -71,6 +71,7 @@ export function CommunityIncidentReport() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
   const [reportingAccess, setReportingAccess] = useState<EmergencyReportingAccess | null>(null);
   const [locating, setLocating] = useState(false);
   const [resolvingLink, setResolvingLink] = useState(false);
@@ -111,16 +112,27 @@ export function CommunityIncidentReport() {
     locate();
   }, []);
 
-  useEffect(() => {
+  async function loadEmergencyContacts() {
     if (!category || needs.length === 0) {
       setContacts([]);
+      setContactsError(null);
       return;
     }
     setContactsLoading(true);
-    void recommendEmergencyContacts(category, needs, area)
-      .then(setContacts)
-      .catch(() => setContacts([]))
-      .finally(() => setContactsLoading(false));
+    setContactsError(null);
+    try {
+      setContacts(await recommendEmergencyContacts(category, needs, area));
+    } catch (contactError) {
+      setContacts([]);
+      setContactsError(contactError instanceof Error ? contactError.message : "โหลดเบอร์ติดต่อไม่สำเร็จ");
+    } finally {
+      setContactsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadEmergencyContacts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, needs, area]);
 
   const callScript = useMemo(() => {
@@ -411,6 +423,15 @@ export function CommunityIncidentReport() {
               <p className="font-black text-red-800">☎️ ติดต่อฉุกเฉินทันที</p>
               <p className="mt-1 text-xs text-red-700">แสดงเฉพาะเบอร์ในทะเบียนที่ตรวจสอบแล้วตามเหตุและพื้นที่</p>
               {contactsLoading && <p className="mt-3 text-sm text-gray-600">กำลังเตรียมเบอร์ติดต่อ…</p>}
+              {!contactsLoading && contactsError && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-white p-3">
+                  <p className="text-sm font-semibold text-red-700">โหลดเบอร์ติดต่อไม่สำเร็จ</p>
+                  <button type="button" onClick={() => void loadEmergencyContacts()} className="mt-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-black text-red-800">ลองใหม่</button>
+                </div>
+              )}
+              {!contactsLoading && !contactsError && contacts.length === 0 && (
+                <p className="mt-3 text-sm text-gray-600">ยังไม่พบเบอร์ที่ตรงกับเหตุและความต้องการนี้</p>
+              )}
               <div className="mt-3 space-y-2">
                 {contacts.map((contact) => (
                   <a key={contact.contact_id} href={`tel:${contact.phone}`} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm">
