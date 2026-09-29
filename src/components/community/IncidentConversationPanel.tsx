@@ -135,6 +135,14 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
         <button type="button" onClick={() => void load()} className="rounded-xl border px-3 py-2 text-xs font-bold">รีเฟรช</button>
       </div>
 
+      {mode.kind !== "reporter" && conversation?.viewer_responder?.review && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-black text-amber-900">⭐ คะแนนจากผู้แจ้ง</p>
+          <p className="mt-1 text-2xl font-black text-amber-700">{conversation.viewer_responder.review.rating} / 5</p>
+          {conversation.viewer_responder.review.comment && <p className="mt-2 text-sm text-amber-900">{conversation.viewer_responder.review.comment}</p>}
+        </div>
+      )}
+
       {mode.kind === "reporter" && responders.length > 0 && (
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
           <p className="text-sm font-black text-emerald-800">มีผู้รับเรื่องแล้ว</p>
