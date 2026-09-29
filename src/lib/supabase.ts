@@ -22,7 +22,7 @@ const AUTH_BROKER = `${MYTREE_WORKER_URL}/auth/line`;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-function isEmergencyStagingRuntime(): boolean {
+export function isEmergencyStagingRuntime(): boolean {
   return MYTREE_WORKER_URL.includes("mytree-worker-staging.");
 }
 
