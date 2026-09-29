@@ -28,9 +28,10 @@ export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 export const PLATFORM_ADMIN_LIFF_ID = isCloudflarePreviewHost()
   ? STAGING_PLATFORM_ADMIN_LIFF_ID
   : import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
-const AUTH_BROKER = isCloudflarePreviewHost()
-  ? STAGING_AUTH_BROKER
-  : "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+export const WORKER_BASE = isCloudflarePreviewHost()
+  ? "https://mytree-worker-staging.kompakorn-t.workers.dev"
+  : "https://mytree-worker.kompakorn-t.workers.dev";
+const AUTH_BROKER = `${WORKER_BASE}/auth/line`;
 const SUPABASE_URL = isCloudflarePreviewHost()
   ? STAGING_SUPABASE_URL
   : import.meta.env.VITE_SUPABASE_URL;
