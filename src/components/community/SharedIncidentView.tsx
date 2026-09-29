@@ -6,6 +6,7 @@ export function SharedIncidentView({ token }: { token: string }) {
   const [data, setData] = useState<SharedIncidentPayload | null>(null);
   const [images, setImages] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,9 +28,9 @@ export function SharedIncidentView({ token }: { token: string }) {
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "เปิดข้อมูลที่แชร์ไม่สำเร็จ"));
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
 
-  if (error) return <main className="min-h-dvh bg-[#f8fbf5] p-5"><div className="mx-auto max-w-lg rounded-3xl bg-white p-6 shadow"><h1 className="text-xl font-black text-red-800">เปิดข้อมูลไม่ได้</h1><p className="mt-2 text-sm text-gray-600">{error}</p></div></main>;
+  if (error) return <main className="min-h-dvh bg-[#f8fbf5] p-5"><div className="mx-auto max-w-lg rounded-3xl bg-white p-6 shadow"><h1 className="text-xl font-black text-red-800">เปิดข้อมูลไม่ได้</h1><p className="mt-2 text-sm text-gray-600">{error}</p><button type="button" onClick={()=>{setError(null);setReloadKey((value)=>value+1);}} className="mt-4 w-full rounded-xl bg-[#1f6a45] px-4 py-3 font-black text-white">ลองใหม่</button></div></main>;
   if (!data) return <main className="min-h-dvh bg-[#f8fbf5] p-5"><div className="mx-auto max-w-lg rounded-3xl bg-white p-6 text-center shadow">กำลังโหลดข้อมูลเหตุ…</div></main>;
 
   const { incident, contact } = data;
