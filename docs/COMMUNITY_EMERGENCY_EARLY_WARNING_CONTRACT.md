@@ -66,3 +66,15 @@ Initial verified registry includes national medical emergency 1669, police emerg
 Emergency abuse controls are identity-bound and audited. Every report remains attributable to the authenticated customer/session. Automatic protection includes a short-window submission rate limit. Privileged operators may issue a warning, temporary reporting restriction, or indefinite MyTree Emergency ban only with a reason code and free-text reason; every enforcement action is written to the incident timeline and admin audit log. Permanent/indefinite enforcement requires a human privileged action; AI may flag suspicious patterns but does not autonomously ban a user.
 
 The reporter UI must disclose that deliberately false reports, prank submissions, or spam may result in warning, restriction, or Emergency ban. This notice must not block or materially slow legitimate emergency reporting.
+
+## Incident conversation & responder acknowledgement — 2026-09-29
+
+A shared Emergency incident is not read-only. An authenticated helper may explicitly **accept** the incident and then participate in a two-way Incident Conversation with the reporter.
+
+Responder acceptance requires a responder name and callback phone number. Organization/group is optional. Acceptance creates an append-only responder record, an accepted conversation message, an incident timeline event, and advances a newly reported/verifying incident to coordinating. Responder status updates may use request-info, help-en-route, arrived, or assisted; help-en-route and assisted advance the incident lifecycle accordingly.
+
+The reporter can reply in the same thread. Reporter-facing views expose accepted responder callback phone numbers so the reporter can call back. Shared helper views do not expose other responders' phone numbers; each responder can see only their own responder phone plus public responder identity/organization for coordination.
+
+MyTree attempts LINE push notification when a responder accepts, replies, or changes help status, and when the reporter replies. Notification delivery is best-effort and does not determine the authoritative incident state; the database conversation/timeline remains the source of truth if push delivery fails.
+
+Conversation history is append-only and identity-bound. Messages, responder acceptance, and lifecycle actions remain auditable and do not weaken existing private-location/evidence access controls.
