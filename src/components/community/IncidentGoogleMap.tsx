@@ -11,8 +11,13 @@ function incidentMarkerIcon(incident: PublicIncident): Record<string,unknown>|un
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56"><path d="M24 55 16 42h16L24 55Z" fill="${stroke}"/><circle cx="24" cy="22" r="20" fill="#fff" stroke="${stroke}" stroke-width="4"/><text x="24" y="29" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="800">${incidentGlyph(incident.category)}</text></svg>`;
   return {url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,scaledSize:new google.maps.Size(48,56),anchor:new google.maps.Point(24,56)};
 }
+function currentLocationIcon(): Record<string,unknown>|undefined {
+  const google=currentMyTreeMaps(); if(!google?.maps.Size||!google.maps.Point)return undefined;
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="14" fill="#2563eb" fill-opacity=".2"/><circle cx="17" cy="17" r="8" fill="#2563eb" stroke="#fff" stroke-width="4"/></svg>';
+  return {url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,scaledSize:new google.maps.Size(34,34),anchor:new google.maps.Point(17,17)};
+}
 // Shared loader extracted from the approved Main Map behavior; safety markers remain a separate overlay contract.
-export function IncidentGoogleMap({incidents,risks,onSelectIncident}:{incidents:PublicIncident[];risks:CommunityRisk[];onSelectIncident?:(incident:PublicIncident)=>void}) {
+export function IncidentGoogleMap({incidents,risks,onSelectIncident,focusPoint}:{incidents:PublicIncident[];risks:CommunityRisk[];onSelectIncident?:(incident:PublicIncident)=>void;focusPoint?:{lat:number;lng:number}|null}) {
  const el=useRef<HTMLDivElement|null>(null); const map=useRef<MyTreeGoogleMap|null>(null);
  const handles=useRef<Array<{marker:MyTreeGoogleMarker;listener:GoogleMapListener}>>([]);
  const [error,setError]=useState(false); const [ready,setReady]=useState(false);
@@ -22,7 +27,8 @@ export function IncidentGoogleMap({incidents,risks,onSelectIncident}:{incidents:
  useEffect(()=>{const g=currentMyTreeMaps(),m=map.current;if(!ready||!g||!m)return;handles.current.forEach(({marker,listener})=>{listener.remove();marker.setMap(null);});handles.current=[];const bounds=new g.maps.LatLngBounds();
  visible.forEach((incident)=>{const pos={lat:incident.public_lat!,lng:incident.public_lng!};bounds.extend(pos);const marker=new g.maps.Marker({map:m,position:pos,title:incident.title||incident.category,icon:incidentMarkerIcon(incident),zIndex:20000});const listener=marker.addListener("click",()=>onSelectIncident?.(incident));handles.current.push({marker,listener});});
  riskPoints.forEach((risk)=>{const pos={lat:risk.public_lat!,lng:risk.public_lng!};bounds.extend(pos);const marker=new g.maps.Marker({map:m,position:pos,title:`${risk.provenance}: ${risk.hazard}`,label:{text:risk.provenance==="official"?"⚠":"AI",fontWeight:"700"},zIndex:10000});const listener=marker.addListener("click",()=>{});handles.current.push({marker,listener});});
- if(visible.length+riskPoints.length>0)m.fitBounds(bounds,56);
- },[onSelectIncident,ready,riskPoints,visible]);
+ if(focusPoint){bounds.extend(focusPoint);const marker=new g.maps.Marker({map:m,position:focusPoint,title:"ตำแหน่งปัจจุบันของคุณ",icon:currentLocationIcon(),zIndex:30000});const listener=marker.addListener("click",()=>{});handles.current.push({marker,listener});}
+ if(visible.length+riskPoints.length+(focusPoint?1:0)>0)m.fitBounds(bounds,56);
+ },[focusPoint,onSelectIncident,ready,riskPoints,visible]);
  return <div className="relative h-[420px] min-h-[360px] overflow-hidden rounded-3xl border bg-[#eef3ec]"><div ref={el} className="h-full w-full"/>{error&&<div className="absolute inset-0 grid place-items-center bg-[#f8fbf5] p-6 text-center text-sm"><div><p className="font-black">เปิดแผนที่ไม่ได้ในขณะนี้</p><p className="mt-1 text-gray-600">รายการเหตุการณ์ด้านล่างยังใช้งานได้</p></div></div>}<div className="pointer-events-none absolute left-3 top-3 rounded-xl bg-white/95 px-3 py-2 text-xs shadow"><b>{visible.length}</b> เหตุบนแผนที่ · <b>{riskPoints.length}</b> จุดความเสี่ยง</div></div>;
 }
