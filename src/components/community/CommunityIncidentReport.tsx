@@ -15,6 +15,7 @@ import {
   type RoadImpact,
 } from "@/lib/communityEmergency";
 import { EmergencyLocationMap } from "@/components/community/EmergencyLocationMap";
+import { IncidentConversationPanel } from "@/components/community/IncidentConversationPanel";
 import { LIFF_ID } from "@/lib/supabase";
 
 const CATEGORIES: Array<{ key: IncidentCategory; icon: string; label: string }> = [
@@ -288,6 +289,10 @@ export function CommunityIncidentReport() {
             </button>
           )}
           {error && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+        </div>
+
+        <div className="mx-auto mt-4 max-w-lg">
+          <IncidentConversationPanel mode={{ kind: "reporter", incidentId: result }} />
         </div>
       </main>
     );
