@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   acceptSharedIncident,
   getMyEmergencyProfile,
@@ -15,6 +16,16 @@ type Mode =
   | { kind: "reporter"; incidentId: string }
   | { kind: "responder"; token: string }
   | { kind: "accepted-responder"; incidentId: string };
+
+function conversationErrorLabel(message: string): string {
+  if (message.includes("reporter_cannot_accept_own_incident")) return "คุณเป็นผู้แจ้งเหตุรายการนี้ จึงไม่สามารถกดรับเรื่องของตัวเองได้";
+  if (message.includes("responder_name_required")) return "กรุณากรอกชื่อผู้รับเรื่อง";
+  if (message.includes("responder_phone_required")) return "กรุณากรอกเบอร์โทรกลับ";
+  if (message.includes("invalid_responder_phone")) return "รูปแบบเบอร์โทรกลับไม่ถูกต้อง";
+  if (message.includes("share_link_invalid_or_expired")) return "ลิงก์รับเรื่องหมดอายุหรือถูกยกเลิกแล้ว";
+  if (message.includes("accept_incident_before_replying")) return "กรุณากดยืนยันรับเรื่องก่อนส่งข้อความ";
+  return message || "ดำเนินการไม่สำเร็จ";
+}
 
 const ACTION_LABEL: Record<string, string> = {
   accepted: "รับเรื่องแล้ว",
@@ -98,7 +109,7 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
       await acceptSharedIncident(mode.token, responderName, responderPhone, responderOrganization);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "รับเรื่องไม่สำเร็จ");
+      setError(conversationErrorLabel(e instanceof Error ? e.message : "รับเรื่องไม่สำเร็จ"));
     } finally {
       setBusy(false);
     }
@@ -120,7 +131,7 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
       setAction("message");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ส่งข้อความไม่สำเร็จ");
+      setError(conversationErrorLabel(e instanceof Error ? e.message : "ส่งข้อความไม่สำเร็จ"));
     } finally {
       setBusy(false);
     }
@@ -169,6 +180,13 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
             ผู้แจ้งไม่สามารถกดรับเรื่องของตัวเองได้ เพื่อป้องกันการสร้างเหตุและรับเรื่องเองเพื่อปั๊มสถานะหรือคะแนน
             กรุณาส่งลิงก์นี้ให้ผู้ช่วยเหลือ แล้วเปิดด้วย LINE ของผู้ช่วยคนนั้น
           </p>
+          <Link
+            to="/community/my-incidents/$incidentId"
+            params={{ incidentId: conversation!.incident_id }}
+            className="mt-3 block rounded-xl bg-amber-900 px-4 py-3 text-center text-sm font-black text-white"
+          >
+            เปิดสถานะเหตุของฉัน
+          </Link>
         </div>
       )}
 
