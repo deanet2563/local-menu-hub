@@ -6,6 +6,8 @@ import {
   type SharedIncidentPayload,
 } from "@/lib/communityEmergency";
 import { IncidentConversationPanel } from "@/components/community/IncidentConversationPanel";
+import { ReporterResolutionPanel } from "@/components/community/ReporterResolutionPanel";
+import { Link } from "@tanstack/react-router";
 
 export function ReopenedIncidentView({
   role,
@@ -120,6 +122,12 @@ export function ReopenedIncidentView({
             ? { kind: "reporter", incidentId }
             : { kind: "accepted-responder", incidentId }}
         />
+
+        {role === "reporter" && <ReporterResolutionPanel incidentId={incidentId} />}
+
+        <Link to="/community/incidents" className="block rounded-2xl border bg-white px-4 py-3 text-center text-sm font-black shadow-sm">
+          ดูเหตุการณ์ทั้งหมด / Incident List
+        </Link>
 
         <p className="px-2 text-xs leading-5 text-gray-500">
           ข้อมูลหน้านี้เป็นข้อมูลจำกัดสิทธิ์สำหรับผู้แจ้งหรือผู้ช่วยที่รับเรื่องแล้วเท่านั้น
