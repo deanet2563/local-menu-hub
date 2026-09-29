@@ -72,8 +72,8 @@ export type IncidentConversation = {
 };
 
 export type SharedIncidentPayload = {
-  share_id: string;
-  expires_at: string;
+  share_id?: string;
+  expires_at?: string;
   incident: {
     incident_id: string;
     category: IncidentCategory;
