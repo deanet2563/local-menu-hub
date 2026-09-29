@@ -505,6 +505,36 @@ export async function uploadIncidentEvidence(incidentId: string, file: File): Pr
 }
 
 
+export type MyReportedIncident = {
+  incident_id: string;
+  community_id: string | null;
+  community_name: string;
+  category: IncidentCategory;
+  severity: IncidentSeverity;
+  status: string;
+  verification_state: string;
+  title: string | null;
+  description: string | null;
+  need_tags: string[];
+  road_impact: RoadImpact;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  responder_count: number;
+  message_count: number;
+  last_message_at: string | null;
+  has_resolution: boolean;
+};
+
+export async function listMyReportedIncidents(status?: string): Promise<MyReportedIncident[]> {
+  const { data, error } = await supabase.rpc("fn_list_my_reported_incidents", {
+    p_status: status || null,
+    p_limit: 100,
+  });
+  rpcError(error);
+  return Array.isArray(data) ? data as MyReportedIncident[] : [];
+}
+
 export type PublicIncident = {
   incident_id: string;
   community_id: string | null;
