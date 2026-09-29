@@ -1,16 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { EmergencyNav } from "@/components/community/EmergencyNav";
-import { CommunityIncidentMap } from "@/components/community/CommunityIncidentMap";
 
 export const Route = createFileRoute("/community/incidents")({
-  component: CommunityIncidentsRoute,
+  component: CommunityIncidentsLayout,
 });
 
-function CommunityIncidentsRoute() {
+function CommunityIncidentsLayout() {
   return (
     <>
       <EmergencyNav />
-      <CommunityIncidentMap />
+      <Outlet />
     </>
   );
 }
