@@ -138,8 +138,15 @@ export async function sendShopProfileReminder(shopId: string) {
   };
 
   if (!response.ok) {
-    const status = data.delivery_status ? ` (${data.delivery_status})` : "";
-    throw new Error(`${data.error ?? "ส่งแจ้งเตือนไม่สำเร็จ"}${status}`);
+    const friendly: Record<string,string> = {
+      owner_missing: "ร้านนี้ยังไม่มีบัญชีเจ้าของร้าน จึงยังส่ง LINE ไม่ได้",
+      line_not_linked: "บัญชีเจ้าของร้านยังไม่ได้ผูก LINE จึงยังส่งแจ้งเตือนไม่ได้",
+    };
+    const status = data.delivery_status ?? "";
+    if (status.startsWith("line_failed_")) {
+      throw new Error(`LINE ส่งข้อความไม่สำเร็จ (${status})`);
+    }
+    throw new Error(friendly[status] ?? data.error ?? "ส่งแจ้งเตือนไม่สำเร็จ");
   }
 
   return data;
