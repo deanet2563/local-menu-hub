@@ -528,13 +528,20 @@ export async function listEmergencyCommunities(): Promise<EmergencyCommunityOpti
 export async function listBrowseCommunityIncidents(
   communityId: string,
 ): Promise<Array<PublicIncident & { community_name: string }>> {
-  const { data, error } = await supabase.rpc("fn_list_browse_community_incidents", {
-    p_community_id: communityId,
-    p_limit: 100,
-  });
-  rpcError(error);
-  return Array.isArray(data)
-    ? data as Array<PublicIncident & { community_name: string }>
+  const accessToken = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
+  if (!accessToken) throw new Error("authentication required");
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(
+    `${workerBase}/community/public-incidents?communityId=${encodeURIComponent(communityId)}&limit=100`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    const error = payload as { error?: string };
+    throw new Error(error.error || "public_incident_list_failed");
+  }
+  return Array.isArray(payload)
+    ? payload as Array<PublicIncident & { community_name: string }>
     : [];
 }
 
@@ -554,12 +561,17 @@ export async function listNearbyPublicIncidents(
 }
 
 export async function getPublicIncidentDetail(incidentId: string): Promise<PublicIncidentDetail> {
-  const { data, error } = await supabase.rpc("fn_get_public_incident_detail", {
-    p_incident_id: incidentId,
-  });
-  rpcError(error);
-  if (!data || typeof data !== "object") throw new Error("public_incident_detail_invalid_response");
-  return data as PublicIncidentDetail;
+  const accessToken = await import("@/lib/supabase").then(({ getAccessToken }) => getAccessToken());
+  if (!accessToken) throw new Error("authentication required");
+  const workerBase = (import.meta.env.VITE_MYTREE_WORKER_URL || "https://mytree-worker.kompakorn-t.workers.dev").replace(/\/$/, "");
+  const response = await fetch(
+    `${workerBase}/community/public-incidents/${encodeURIComponent(incidentId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const payload = await response.json() as PublicIncidentDetail & { error?: string };
+  if (!response.ok) throw new Error(payload.error || "public_incident_detail_failed");
+  if (!payload || typeof payload !== "object") throw new Error("public_incident_detail_invalid_response");
+  return payload;
 }
 
 export async function getPublicIncidentHelpState(incidentId: string): Promise<PublicIncidentHelpState> {
