@@ -42,6 +42,7 @@ export type ShopDetail = {
   readiness: ShopReadiness;
   staff: Array<{ customer_id: string; role: string; name: string | null; phone: string | null; created_at: string }>;
   menu: { total: number; available: number; unavailable: number };
+  menu_items: Array<{ item_id:string; name:string; price:number|string; category:string|null; is_available:boolean; image_url:string|null }>;
   commerce: { total_orders: number; pending_orders: number; paid_orders: number };
   reviews: { count: number; average_rating: number | null };
   capabilities: { branch_model: boolean; pos_model: boolean; promotion_model: boolean; community_link: boolean };
