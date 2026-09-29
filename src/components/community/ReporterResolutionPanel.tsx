@@ -4,6 +4,7 @@ import {
   getReporterIncidentConversation,
   resolveReporterIncident,
   reviewIncidentResponder,
+  updateReporterResolutionFeedback,
   type IncidentConversation,
 } from "@/lib/communityEmergency";
 
@@ -55,6 +56,31 @@ export function ReporterResolutionPanel({ incidentId }: { incidentId: string }) 
         ...patch,
       },
     }));
+  }
+
+  async function saveFeedback() {
+    setBusy(true);
+    setError(null);
+    setResultMessage(null);
+    try {
+      await updateReporterResolutionFeedback(incidentId, thanksMyTree, thanksMessage);
+      for (const responder of conversation?.responders ?? []) {
+        const review = reviews[responder.responder_id];
+        if (!review?.rating) continue;
+        await reviewIncidentResponder(
+          incidentId,
+          responder.responder_id,
+          review.rating,
+          review.comment,
+        );
+      }
+      setResultMessage("บันทึกดาว comment และคำขอบคุณเรียบร้อย");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "บันทึก feedback ไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function finishIncident() {
@@ -164,7 +190,7 @@ export function ReporterResolutionPanel({ incidentId }: { incidentId: string }) 
             />
           </div>
 
-          {!alreadyResolved && (
+          {!alreadyResolved ? (
             <div>
               <p className="mb-2 text-xs leading-5 text-gray-500">เมื่อยืนยัน ระบบจะเปลี่ยนสถานะเป็น “จบเหตุแล้ว” และให้ 1 Good Deed Point สูงสุด 1 ครั้งต่อเหตุที่มีผู้ช่วยรับเรื่องหรือได้รับการยืนยันแล้ว</p>
               <button type="button" disabled={busy} onClick={() => void finishIncident()} className="w-full rounded-2xl bg-[#1f6a45] px-4 py-4 font-black text-white disabled:opacity-50">
@@ -172,6 +198,10 @@ export function ReporterResolutionPanel({ incidentId }: { incidentId: string }) 
               </button>
               <button type="button" disabled={busy} onClick={() => setExpanded(false)} className="mt-2 w-full rounded-xl border px-4 py-3 text-sm font-bold">ยังไม่จบเหตุ</button>
             </div>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => void saveFeedback()} className="w-full rounded-2xl bg-gray-900 px-4 py-3 font-black text-white disabled:opacity-50">
+              {busy ? "กำลังบันทึก…" : "บันทึกดาว / comment / คำขอบคุณ"}
+            </button>
           )}
         </div>
       )}
