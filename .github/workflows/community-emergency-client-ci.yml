@@ -25,5 +25,6 @@ jobs:
           grep -F '/community/report' src/routeTree.gen.ts
           grep -F '/community/incidents' src/routeTree.gen.ts
           grep -F '/community/help/$token' src/routeTree.gen.ts
+          grep -F '/community/my-incidents/' src/routeTree.gen.ts
           grep -F '/community/my-incidents/$incidentId' src/routeTree.gen.ts
           grep -F '/community/responding/$incidentId' src/routeTree.gen.ts
