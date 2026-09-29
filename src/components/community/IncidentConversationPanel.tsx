@@ -3,7 +3,9 @@ import {
   acceptSharedIncident,
   getMyEmergencyProfile,
   getReporterIncidentConversation,
+  getResponderIncidentConversation,
   getSharedIncidentConversation,
+  sendAcceptedResponderIncidentMessage,
   sendReporterIncidentMessage,
   sendResponderIncidentMessage,
   type IncidentConversation,
@@ -11,7 +13,8 @@ import {
 
 type Mode =
   | { kind: "reporter"; incidentId: string }
-  | { kind: "responder"; token: string };
+  | { kind: "responder"; token: string }
+  | { kind: "accepted-responder"; incidentId: string };
 
 const ACTION_LABEL: Record<string, string> = {
   accepted: "รับเรื่องแล้ว",
@@ -36,7 +39,9 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
     try {
       const next = mode.kind === "reporter"
         ? await getReporterIncidentConversation(mode.incidentId)
-        : await getSharedIncidentConversation(mode.token);
+        : mode.kind === "accepted-responder"
+          ? await getResponderIncidentConversation(mode.incidentId)
+          : await getSharedIncidentConversation(mode.token);
       setConversation(next);
       setError(null);
     } catch (e) {
@@ -49,7 +54,7 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
     const timer = window.setInterval(() => void load(), 7000);
     return () => window.clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode.kind, mode.kind === "reporter" ? mode.incidentId : mode.token]);
+  }, [mode.kind, mode.kind === "responder" ? mode.token : mode.incidentId]);
 
   useEffect(() => {
     if (mode.kind !== "responder") return;
@@ -61,7 +66,7 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
       .catch(() => undefined);
   }, [mode.kind]);
 
-  const accepted = mode.kind === "responder" && !!conversation?.viewer_responder;
+  const accepted = mode.kind === "accepted-responder" || (mode.kind === "responder" && !!conversation?.viewer_responder);
   const responders = conversation?.responders ?? [];
   const messages = conversation?.messages ?? [];
 
@@ -104,6 +109,8 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
     try {
       if (mode.kind === "reporter") {
         await sendReporterIncidentMessage(mode.incidentId, message);
+      } else if (mode.kind === "accepted-responder") {
+        await sendAcceptedResponderIncidentMessage(mode.incidentId, message, action);
       } else {
         await sendResponderIncidentMessage(mode.token, message, action);
       }
@@ -183,7 +190,7 @@ export function IncidentConversationPanel({ mode }: { mode: Mode }) {
 
       {(mode.kind === "reporter" || accepted) && (
         <div className="mt-4 border-t pt-4">
-          {mode.kind === "responder" && (
+          {mode.kind !== "reporter" && (
             <div className="mb-2 flex flex-wrap gap-2">
               {([
                 ["message", "ข้อความ"],
