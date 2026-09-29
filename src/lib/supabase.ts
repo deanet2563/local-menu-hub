@@ -28,6 +28,7 @@ function isEmergencyStagingRuntime(): boolean {
 
 let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
+let tokenPromise: Promise<string> | null = null;
 
 /** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
 export function isOrderingPreview(): boolean {
@@ -115,7 +116,7 @@ export function initLiff(): Promise<void> {
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
-export async function getAccessToken(): Promise<string> {
+async function issueAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
@@ -166,6 +167,27 @@ export async function getAccessToken(): Promise<string> {
 
   cached = { token: data.access_token, exp: now + data.expires_in };
   return data.access_token;
+}
+
+/**
+ * Get a valid MyTree access token.
+ *
+ * Multiple mounted components can request authentication at the same time
+ * (profile, area resolver, Emergency contacts, incident access). Keep exactly
+ * one broker exchange in flight so one page load cannot create several
+ * app_sessions or surface a transient auth race.
+ */
+export async function getAccessToken(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (cached && cached.exp - 60 > now) return cached.token;
+  if (tokenPromise) return tokenPromise;
+
+  tokenPromise = issueAccessToken();
+  try {
+    return await tokenPromise;
+  } finally {
+    tokenPromise = null;
+  }
 }
 
 /** The current MyTree customer_id (from the LINE-issued token), or null. */
