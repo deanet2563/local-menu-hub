@@ -13,32 +13,20 @@ declare module "@tanstack/react-router" {
   }
 }
 
-function restoreLiffStateRoute() {
-  const raw = new URLSearchParams(window.location.search).get("liff.state");
-  if (!raw) return;
-  let decoded = raw;
-  try { decoded = decodeURIComponent(raw); } catch { /* keep URLSearchParams-decoded value */ }
-  if (!decoded.startsWith("/") || decoded.startsWith("//")) return;
-  try {
-    const target = new URL(decoded, window.location.origin);
-    if (target.origin !== window.location.origin) return;
-    const next = `${target.pathname}${target.search}${target.hash}`;
-    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (next !== current) window.history.replaceState(window.history.state, "", next);
-  } catch {
-    // Invalid LIFF state is ignored rather than navigating outside the app.
-  }
+function hasLiffState(): boolean {
+  return new URLSearchParams(window.location.search).has("liff.state");
 }
 
 async function bootstrap() {
-  // LIFF deep links arrive at the configured Endpoint URL with liff.state.
-  // Restore the requested in-app route before TanStack Router mounts so the
-  // user never flashes through the home/production-looking surface first.
-  restoreLiffStateRoute();
+  // LIFF primary redirects carry liff.state. LINE requires liff.init() to
+  // finish before any SPA router/history mutation; the SDK then performs the
+  // secondary redirect that restores the requested path.
+  const initializingLiffDeepLink = hasLiffState();
+
   // Initialize Platform Admin LIFF before mounting the router for both direct
   // MyTree admin URLs and LIFF primary/secondary redirects. This prevents the
   // router from briefly rendering customer surfaces and avoids redirect loops.
-  if (isPlatformAdminRoute()) {
+  if (isPlatformAdminRoute() || initializingLiffDeepLink) {
     try {
       await initLiff();
     } catch (error) {
@@ -46,7 +34,7 @@ async function bootstrap() {
       if (root) {
         root.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif"><div style="max-width:520px;text-align:center"><h1 style="font-size:20px;margin:0 0 8px">ไม่สามารถเปิด MyTree Head Office ได้</h1><p style="color:#6b7280;margin:0">กรุณาตรวจสอบการตั้งค่า Platform Admin LIFF แล้วลองอีกครั้ง</p></div></div>`;
       }
-      console.error("Platform Admin LIFF bootstrap failed", error);
+      console.error("LIFF bootstrap failed", error);
       return;
     }
   }
