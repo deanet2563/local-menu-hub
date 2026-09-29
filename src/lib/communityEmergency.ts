@@ -56,7 +56,7 @@ export type IncidentConversation = {
   responders: Array<{
     responder_id: string;
     name: string;
-    phone: string;
+    phone: string | null;
     organization: string | null;
     status: string;
     accepted_at: string;
