@@ -17,6 +17,7 @@ import {
 import { EmergencyLocationMap } from "@/components/community/EmergencyLocationMap";
 import { IncidentConversationPanel } from "@/components/community/IncidentConversationPanel";
 import { LIFF_ID } from "@/lib/supabase";
+import { Link } from "@tanstack/react-router";
 
 const CATEGORIES: Array<{ key: IncidentCategory; icon: string; label: string }> = [
   { key: "medical", icon: "🩺", label: "ผู้ป่วย / บาดเจ็บ" },
@@ -288,6 +289,21 @@ export function CommunityIncidentReport() {
               คัดลอกลิงก์แชร์
             </button>
           )}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Link
+              to="/community/my-incidents/$incidentId"
+              params={{ incidentId: result }}
+              className="rounded-xl border px-3 py-3 text-center text-sm font-black"
+            >
+              เปิดรายละเอียดเหตุของฉัน
+            </Link>
+            <Link
+              to="/community/incidents"
+              className="rounded-xl border px-3 py-3 text-center text-sm font-black"
+            >
+              ดูเหตุการณ์ทั้งหมด
+            </Link>
+          </div>
           {error && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         </div>
 
@@ -303,8 +319,15 @@ export function CommunityIncidentReport() {
       <header className="bg-[#b42318] px-4 pb-5 pt-[max(1rem,env(safe-area-inset-top))] text-white">
         <div className="mx-auto max-w-lg">
           <p className="text-sm font-bold">MyTree Community</p>
-          <h1 className="mt-1 text-2xl font-black">แจ้งเหตุ / ขอความช่วยเหลือ</h1>
-          <p className="mt-2 text-sm text-white/90">ระบุตำแหน่ง ผู้ติดต่อ และสิ่งที่ต้องการ เพื่อส่งต่อให้ผู้ช่วยเหลือได้รวดเร็ว</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="mt-1 text-2xl font-black">แจ้งเหตุ / ขอความช่วยเหลือ</h1>
+              <p className="mt-2 text-sm text-white/90">ระบุตำแหน่ง ผู้ติดต่อ และสิ่งที่ต้องการ เพื่อส่งต่อให้ผู้ช่วยเหลือได้รวดเร็ว</p>
+            </div>
+            <Link to="/community/incidents" className="shrink-0 rounded-full bg-white/15 px-3 py-2 text-xs font-black text-white">
+              เหตุการณ์ทั้งหมด
+            </Link>
+          </div>
         </div>
       </header>
 
