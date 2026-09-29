@@ -46,6 +46,8 @@ export type EmergencyReporterProfile = {
 export type IncidentConversation = {
   incident_id: string;
   status: string;
+  viewer_is_reporter?: boolean;
+  can_accept?: boolean;
   viewer_responder?: {
     responder_id: string;
     name: string;
