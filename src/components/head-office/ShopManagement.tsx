@@ -338,6 +338,7 @@ function ShopDetailPanel({
 }) {
   const shop = detail.shop;
   const missing = detail.readiness?.missing ?? [];
+  const businessHours = formatBusinessHours(shop.business_hours);
 
   return (
     <div className="space-y-5">
@@ -366,7 +367,7 @@ function ShopDetailPanel({
             <h4 className="font-semibold text-gray-900">Shop Readiness</h4>
             <p className="mt-1 text-sm text-gray-600">
               {detail.readiness.ready
-                ? "ข้อมูลบังคับครบ พร้อมให้ Admin อนุมัติ"
+                ? "ข้อมูลบังคับครบ ร้านผ่าน Readiness Gate"
                 : `ยังขาด ${detail.readiness.missing_count} รายการ — ร้านต้องอยู่ Pending`}
             </p>
           </div>
@@ -384,9 +385,7 @@ function ShopDetailPanel({
         {!detail.readiness.ready && (
           <ul className="mt-3 space-y-1 text-sm text-amber-900">
             {missing.map((key) => (
-              <li key={key}>
-                • {SHOP_READINESS_LABELS[key] ?? key}
-              </li>
+              <li key={key}>• {SHOP_READINESS_LABELS[key] ?? key}</li>
             ))}
           </ul>
         )}
@@ -403,22 +402,60 @@ function ShopDetailPanel({
         )}
       </section>
 
-      <Block title="Contact & Location">
-        <p>
-          {String(shop.phone || "ไม่มีเบอร์")} ·{" "}
-          {String(shop.email || "ไม่มีอีเมล")}
+      <Block title="ข้อมูลร้าน">
+        <DataRow label="ชื่อร้าน" value={shop.name} />
+        <DataRow label="หมวดร้าน" value={shop.category} />
+        <DataRow label="Shop ID" value={shop.shop_id} mono />
+        <DataRow label="สร้างเมื่อ" value={fmt(shop.created_at)} />
+        <DataRow label="อนุมัติเมื่อ" value={fmt(shop.approved_at)} />
+        <DataRow label="สถานะเปิดร้าน" value={shop.is_open === true ? "เปิด" : "ปิด"} />
+      </Block>
+
+      <Block title="บัญชีเจ้าของร้าน / ผู้ดูแลร้าน">
+        <p className="mb-3 text-xs text-gray-500">
+          Owner Account คือบัญชี MyTree ที่มีสิทธิ์จัดการร้านและรับการแจ้งเตือนสำคัญของร้าน
         </p>
-        <p className="mt-1">
-          {String(
-            shop.address ||
-              [shop.village, shop.soi, shop.zone].filter(Boolean).join(" · ") ||
-              "ไม่มีที่อยู่",
-          )}
-        </p>
-        <p className="mt-1 text-xs">
-          พิกัด: {String(shop.lat ?? "—")}, {String(shop.lng ?? "—")} · อัปเดต{" "}
-          {fmt(shop.location_updated_at)}
-        </p>
+        {detail.staff.length ? (
+          detail.staff.map((item) => (
+            <div key={item.customer_id} className="mb-3 rounded-xl border bg-white p-3">
+              <DataRow label="ชื่อบัญชี" value={item.name || "ไม่ระบุชื่อ"} />
+              <DataRow label="Role" value={item.role} />
+              <DataRow label="เบอร์บัญชี" value={item.phone || "ไม่มีเบอร์"} />
+              <DataRow label="Customer ID" value={item.customer_id} mono />
+              <DataRow label="ผูกกับร้านเมื่อ" value={fmt(item.created_at)} />
+            </div>
+          ))
+        ) : (
+          <p>ยังไม่มีบัญชีเจ้าของร้าน / Staff linkage</p>
+        )}
+      </Block>
+
+      <Block title="ข้อมูลติดต่อ & ที่ตั้งร้าน">
+        <DataRow label="เบอร์โทรร้าน" value={shop.phone} />
+        <DataRow label="อีเมล" value={shop.email} />
+        <DataRow label="ที่อยู่" value={shop.address} />
+        <DataRow label="หมู่บ้าน" value={shop.village} />
+        <DataRow label="โซน" value={shop.zone} />
+        <DataRow label="ซอย" value={shop.soi} />
+        <DataRow label="Latitude" value={shop.lat} />
+        <DataRow label="Longitude" value={shop.lng} />
+        <DataRow label="Google Maps" value={shop.google_maps_url || shop.google_maps_link} />
+        <DataRow label="อัปเดตพิกัดล่าสุด" value={fmt(shop.location_updated_at)} />
+      </Block>
+
+      <Block title="วันและเวลาทำการ">
+        {businessHours.length ? (
+          <div className="space-y-1">
+            {businessHours.map((line) => (
+              <p key={line.key} className="flex justify-between gap-4">
+                <span>{line.label}</span>
+                <span className="font-medium text-gray-900">{line.value}</span>
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p>ยังไม่มีข้อมูลเวลาทำการ</p>
+        )}
       </Block>
 
       <div className="grid grid-cols-3 gap-2">
@@ -427,28 +464,59 @@ function ShopDetailPanel({
         <Metric label="Reviews" value={detail.reviews.count} />
       </div>
 
-      <Block title="Owner / Staff">
-        {detail.staff.length ? (
-          detail.staff.map((item) => (
-            <div key={item.customer_id} className="mb-2">
-              <b>{item.name || item.customer_id}</b> · {item.role}
-              <p className="text-xs">{item.phone || "ไม่มีเบอร์"}</p>
-            </div>
-          ))
+      <Block title="เมนูร้าน">
+        {detail.menu_items?.length ? (
+          <div className="space-y-2">
+            {detail.menu_items.map((item) => (
+              <div key={item.item_id} className="flex items-start justify-between gap-3 rounded-xl border bg-white p-3">
+                <div>
+                  <p className="font-medium text-gray-900">{item.name}</p>
+                  <p className="text-xs text-gray-500">{item.category || "ไม่มีหมวดเมนู"}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">฿{Number(item.price).toLocaleString("th-TH")}</p>
+                  <p className={item.is_available ? "text-xs text-emerald-600" : "text-xs text-gray-400"}>
+                    {item.is_available ? "พร้อมขาย" : "ปิดขาย"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <p>ยังไม่มี Staff linkage</p>
+          <p>ยังไม่มีเมนู</p>
         )}
       </Block>
 
+      <Block title="การรับออเดอร์ & Delivery">
+        <DataRow label="Pickup" value={yesNo(shop.pickup_enabled)} />
+        <DataRow label="Delivery" value={yesNo(shop.delivery_enabled)} />
+        <DataRow label="Pre-order" value={yesNo(shop.accepts_preorders)} />
+        <DataRow label="เรียก MyTree Rider" value={yesNo(shop.rider_request_enabled)} />
+        <DataRow label="พื้นที่/หมายเหตุจัดส่ง" value={shop.service_area_note} />
+        <DataRow label="การคิดค่าจัดส่งลูกค้า" value={shop.customer_delivery_pricing_mode} />
+        <DataRow label="ค่าจัดส่งแบบ Flat" value={moneyOrDash(shop.customer_delivery_flat_fee)} />
+        <DataRow label="ขั้นต่ำส่งฟรี" value={moneyOrDash(shop.customer_free_delivery_min_order)} />
+      </Block>
+
+      <Block title="การชำระเงิน">
+        <DataRow label="เงินสด" value={yesNo(shop.payment_cash_enabled)} />
+        <DataRow label="QR / โอน" value={yesNo(shop.payment_qr_enabled)} />
+        <DataRow label="QR Code" value={shop.qr_code_url ? "มี QR Code" : "—"} />
+      </Block>
+
+      <Block title="ช่องทางออนไลน์">
+        <DataRow label="Website" value={shop.website_url} />
+        <DataRow label="LINE" value={shop.line_url} />
+        <DataRow label="Facebook" value={shop.facebook_url} />
+        <DataRow label="Instagram" value={shop.instagram_url} />
+        <DataRow label="TikTok" value={shop.tiktok_url} />
+      </Block>
+
       <Block title="Commerce summary">
-        <p>
-          Pending orders: {detail.commerce.pending_orders} · Paid orders:{" "}
-          {detail.commerce.paid_orders}
-        </p>
-        <p>
-          Rating: {detail.reviews.average_rating ?? "—"} ({detail.reviews.count}{" "}
-          รีวิว)
-        </p>
+        <DataRow label="Pending orders" value={detail.commerce.pending_orders} />
+        <DataRow label="Paid orders" value={detail.commerce.paid_orders} />
+        <DataRow label="Rating" value={detail.reviews.average_rating ?? "—"} />
+        <DataRow label="จำนวนรีวิว" value={detail.reviews.count} />
       </Block>
 
       <Block title="Integration availability">
@@ -518,9 +586,60 @@ function ShopDetailPanel({
             </div>
           ))
         ) : (
-          <p>ไม่มีข้อมูล หรือไม่มีสิทธิ์ system.audit.read</p>
+          <p>ยังไม่มี Audit history สำหรับร้านนี้</p>
         )}
       </Block>
+    </div>
+  );
+}
+
+function formatBusinessHours(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const hours = value as Record<string, { open?: string; close?: string; closed?: boolean }>;
+  const days = [
+    ["mon", "จันทร์"],
+    ["tue", "อังคาร"],
+    ["wed", "พุธ"],
+    ["thu", "พฤหัสบดี"],
+    ["fri", "ศุกร์"],
+    ["sat", "เสาร์"],
+    ["sun", "อาทิตย์"],
+  ] as const;
+  return days.map(([key, label]) => {
+    const item = hours[key];
+    const valueText = !item || item.closed
+      ? "ปิด"
+      : `${item.open || "—"}–${item.close || "—"}`;
+    return { key, label, value: valueText };
+  });
+}
+
+function yesNo(value: unknown) {
+  return value === true ? "เปิดใช้งาน" : "ไม่เปิดใช้งาน";
+}
+
+function moneyOrDash(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `฿${amount.toLocaleString("th-TH")}` : String(value);
+}
+
+function DataRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: unknown;
+  mono?: boolean;
+}) {
+  const text = value === null || value === undefined || value === "" ? "—" : String(value);
+  return (
+    <div className="grid grid-cols-[118px_minmax(0,1fr)] gap-3 py-1.5">
+      <span className="text-gray-500">{label}</span>
+      <span className={`break-words text-gray-900 ${mono ? "font-mono text-xs" : ""}`}>
+        {text}
+      </span>
     </div>
   );
 }
