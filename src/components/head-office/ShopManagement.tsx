@@ -46,6 +46,9 @@ export function ShopManagement() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [approvalReason, setApprovalReason] = useState("ข้อมูลครบถ้วน");
+  const [approvalOtherReason, setApprovalOtherReason] = useState("");
 
   const canAction = !!access && hasAdminPermission(access, "shops.action");
 
@@ -118,9 +121,41 @@ export function ShopManagement() {
     setNotice(null);
     try {
       await shopLifecycle(selected, action, reason);
+      if (action === "approve") setNotice("อนุมัติร้านเรียบร้อยแล้ว");
       await Promise.all([load(), loadDetail(selected)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "ดำเนินการไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function requestApprove() {
+    setApprovalReason("ข้อมูลครบถ้วน");
+    setApprovalOtherReason("");
+    setApprovalDialogOpen(true);
+  }
+
+  async function confirmApprove() {
+    if (!selected) return;
+    const reason = approvalReason === "เหตุผลอื่นๆ"
+      ? approvalOtherReason.trim()
+      : approvalReason;
+    if (!reason) {
+      setError("กรุณาระบุเหตุผลในการอนุมัติ");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await shopLifecycle(selected, "approve", reason);
+      setNotice("อนุมัติร้านเรียบร้อยแล้ว");
+      setApprovalDialogOpen(false);
+      await Promise.all([load(), loadDetail(selected)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "อนุมัติร้านไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
@@ -314,12 +349,77 @@ export function ShopManagement() {
               canAction={canAction}
               saving={saving}
               act={act}
+              requestApprove={requestApprove}
               remindShop={remindShop}
               reminderFeedback={reminderFeedback}
             />
           )}
         </aside>
       </div>
+
+      {approvalDialogOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-gray-900">อนุมัติร้านค้า</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              เลือกเหตุผลในการอนุมัติ เหตุผลนี้จะถูกบันทึกใน Audit history
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {[
+                "ข้อมูลครบถ้วน",
+                "ตรวจสอบข้อมูลร้านแล้ว",
+                "ข้อมูลและสถานที่ถูกต้อง",
+                "แก้ไขข้อมูลตามที่แจ้งครบแล้ว",
+                "เหตุผลอื่นๆ",
+              ].map((reason) => (
+                <label
+                  key={reason}
+                  className="flex items-center gap-3 rounded-xl border px-3 py-3 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name="approval-reason"
+                    value={reason}
+                    checked={approvalReason === reason}
+                    onChange={() => setApprovalReason(reason)}
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            {approvalReason === "เหตุผลอื่นๆ" && (
+              <textarea
+                value={approvalOtherReason}
+                onChange={(e) => setApprovalOtherReason(e.target.value)}
+                rows={3}
+                placeholder="ระบุเหตุผล"
+                className="mt-3 w-full rounded-xl border p-3 text-sm"
+              />
+            )}
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setApprovalDialogOpen(false)}
+                className="rounded-xl border px-4 py-3 text-sm font-semibold"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void confirmApprove()}
+                className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {saving ? "กำลังอนุมัติ..." : "ยืนยันอนุมัติ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -329,6 +429,7 @@ function ShopDetailPanel({
   canAction,
   saving,
   act,
+  requestApprove,
   remindShop,
   reminderFeedback,
 }: {
@@ -340,6 +441,7 @@ function ShopDetailPanel({
     label: string,
     danger?: boolean,
   ) => Promise<void>;
+  requestApprove: () => void;
   remindShop: () => Promise<void>;
   reminderFeedback: string | null;
 }) {
@@ -548,7 +650,7 @@ function ShopDetailPanel({
           {!shop.is_approved && (
             <button
               disabled={saving || !detail.readiness.ready}
-              onClick={() => void act("approve", "อนุมัติร้าน")}
+              onClick={requestApprove}
               className="rounded-xl bg-emerald-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               {detail.readiness.ready ? "Approve" : "Approve ไม่ได้ — ข้อมูลไม่ครบ"}
@@ -666,7 +768,7 @@ function Badge({ item }: { item: ShopListItem }) {
       : ["Pending", "bg-amber-100 text-amber-700"];
 
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
+    <span className={`inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold leading-none ${className}`}>
       {text}
     </span>
   );
