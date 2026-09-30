@@ -502,7 +502,9 @@ function ShopDetailPanel({
             <p className="mt-1 text-sm text-gray-600">
               {detail.readiness.ready
                 ? "ข้อมูลบังคับครบ ร้านผ่าน Readiness Gate"
-                : `ยังขาด ${detail.readiness.missing_count} รายการ — ร้านต้องอยู่ Pending`}
+                : detail.readiness.legacy_grace && shop.is_approved
+                  ? `Legacy approved — ยังขาด ${detail.readiness.missing_count} รายการ แต่ร้านเดิมยังคง Approved ตาม production grace; ต้องกรอกให้ครบก่อนการอนุมัติใหม่`
+                  : `ยังขาด ${detail.readiness.missing_count} รายการ — ร้านต้องอยู่ Pending`}
             </p>
           </div>
           <span
@@ -861,6 +863,14 @@ function ReadinessBadge({ item }: { item: ShopListItem }) {
     return (
       <span className="whitespace-nowrap text-xs font-medium text-emerald-700">
         Ready
+      </span>
+    );
+  }
+
+  if (item.readiness?.legacy_grace && item.is_approved) {
+    return (
+      <span className="whitespace-nowrap text-xs font-medium text-amber-700">
+        Legacy Approved · ขาด {item.readiness?.missing_count ?? "—"}
       </span>
     );
   }
