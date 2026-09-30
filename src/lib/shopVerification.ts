@@ -1,5 +1,4 @@
 import { getAccessToken, supabase, SUPABASE_URL } from "@/lib/supabase";
-import { shopStorageFolder, safeImageExtension } from "@/lib/storageKey";
 
 export type ShopVerificationEvidenceKind = "storefront" | "owner_selfie" | "workspace";
 
