@@ -1,4 +1,4 @@
-import { getCurrentCustomerId, supabase, WORKER_BASE } from "@/lib/supabase";
+import { getCurrentCustomerId, supabase } from "@/lib/supabase";
 import { shopStorageFolder, safeImageExtension } from "@/lib/storageKey";
 
 export type ShopVerificationEvidenceKind = "storefront" | "owner_selfie" | "workspace";
@@ -121,27 +121,20 @@ export async function getAdminVerificationEvidenceUrl(args: {
   evidenceId: string;
   reason: string;
 }) {
-  const token = await (await import("@/lib/supabase")).getAccessToken();
-  if (!token) throw new Error("ไม่พบ Admin access token");
-
-  const response = await fetch(`${WORKER_BASE}/admin/shop/verification-evidence-url`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+  const { data, error } = await supabase.functions.invoke(
+    "shop-verification-evidence-url",
+    {
+      body: {
+        evidenceId: args.evidenceId,
+        reason: args.reason,
+      },
     },
-    body: JSON.stringify({
-      evidenceId: args.evidenceId,
-      reason: args.reason,
-    }),
-  });
+  );
 
-  const payload = await response.json().catch(() => ({})) as {
-    url?: string;
-    error?: string;
-  };
-  if (!response.ok || !payload.url) {
-    throw new Error(payload.error ?? "เปิดหลักฐานไม่สำเร็จ");
+  if (error) throw new Error(error.message || "เปิดหลักฐานไม่สำเร็จ");
+  const payload = data as { url?: string; error?: string } | null;
+  if (!payload?.url) {
+    throw new Error(payload?.error ?? "เปิดหลักฐานไม่สำเร็จ");
   }
   return payload.url;
 }
