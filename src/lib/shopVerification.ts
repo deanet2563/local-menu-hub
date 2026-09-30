@@ -60,7 +60,7 @@ export async function uploadShopVerificationEvidence(args: {
   const timeout = window.setTimeout(() => controller.abort(), 45_000);
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/shop-verification-upload`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/shop-verification-upload-canonical`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
