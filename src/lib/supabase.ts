@@ -122,12 +122,13 @@ export function initLiff(): Promise<void> {
   if (!liffReady || liffReady.liffId !== liffId) {
     liffReady = {
       liffId,
-      promise: liff.init({
-        liffId,
-        // Customer raw-preview browsing must remain passive. Platform-admin
-        // surfaces use a dedicated LIFF app and may establish the LINE session.
-        withLoginOnExternalBrowser: isPlatformAdminRoute(),
-      }),
+      // Keep LIFF initialization passive for every route. In particular,
+      // Platform Admin authentication is controlled exclusively by
+      // ensurePlatformAdminLineLogin(), which supplies the canonical admin
+      // redirectUri. Enabling withLoginOnExternalBrowser here creates a second
+      // implicit login flow whose callback can fall back to the LIFF endpoint
+      // root (Food Hub) and lose the requested Head Office path.
+      promise: liff.init({ liffId }),
     };
   }
   return liffReady.promise;
