@@ -245,15 +245,25 @@ export function OrderManagement() {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const filterClass = "rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-gray-400";
 
+  function clearSelectionForQueryChange() {
+    detailRequestRef.current += 1;
+    setSelected(null);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  }
+
   function resetPage() {
-    // Event handlers call this synchronously, so an in-flight request becomes
-    // stale before React schedules the replacement debounced effect.
+    // Event handlers call this synchronously, so in-flight list/detail requests
+    // become stale before React schedules the replacement debounced effect.
     listRequestRef.current += 1;
+    clearSelectionForQueryChange();
     setPage(1);
   }
 
   function movePage(delta: number) {
     listRequestRef.current += 1;
+    clearSelectionForQueryChange();
     setPage((value) => value + delta);
   }
 
