@@ -23,7 +23,15 @@ function isCloudflarePreviewHost(): boolean {
   return window.location.hostname.endsWith(".local-menu-hub.pages.dev")
     && window.location.hostname !== "local-menu-hub.pages.dev";
 }
-export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
+
+function isHeadOfficeShopPreviewHost(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "codex-head-office-shop-manag.local-menu-hub.pages.dev";
+}
+
+export const LIFF_ID = isHeadOfficeShopPreviewHost()
+  ? STAGING_PLATFORM_ADMIN_LIFF_ID
+  : import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 export const PLATFORM_ADMIN_LIFF_ID = isCloudflarePreviewHost()
   ? STAGING_PLATFORM_ADMIN_LIFF_ID
   : import.meta.env.VITE_PLATFORM_ADMIN_LIFF_ID || DEFAULT_PLATFORM_ADMIN_LIFF_ID;
