@@ -79,7 +79,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
     options: Parameters<typeof cart.add>[0]["options"];
     note: string | null;
   }) {
-    if (!shop.is_open) {
+    if (!shop?.is_open) {
       setConfiguring(null);
       return;
     }
