@@ -218,6 +218,7 @@ export function ShopManagement() {
             <option value="ready">Ready</option>
             <option value="approved">Approved</option>
             <option value="pending">Pending</option>
+            <option value="rejected">Rejected</option>
             <option value="banned">Banned</option>
           </select>
           <select
@@ -660,13 +661,24 @@ function ShopDetailPanel({
       {canAction && (
         <div className="flex flex-wrap gap-2">
           {!shop.is_approved && (
-            <button
-              disabled={saving || !detail.readiness.ready}
-              onClick={requestApprove}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {detail.readiness.ready ? "Approve" : "Approve ไม่ได้ — ข้อมูลไม่ครบ"}
-            </button>
+            <>
+              <button
+                disabled={saving || !detail.readiness.ready}
+                onClick={requestApprove}
+                className="rounded-xl bg-emerald-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {detail.readiness.ready ? "Approve" : "Approve ไม่ได้ — ข้อมูลไม่ครบ"}
+              </button>
+              {!shop.approval_rejected_at && (
+                <button
+                  disabled={saving}
+                  onClick={() => void act("reject", "ปฏิเสธร้าน", true)}
+                  className="rounded-xl border border-amber-300 px-3 py-2 text-sm text-amber-800"
+                >
+                  Reject
+                </button>
+              )}
+            </>
           )}
           {!shop.is_banned ? (
             <button
@@ -686,6 +698,44 @@ function ShopDetailPanel({
             </button>
           )}
         </div>
+      )}
+
+      {shop.approval_rejected_at && (
+        <Block title="สถานะการปฏิเสธ">
+          <DataRow label="ปฏิเสธเมื่อ" value={fmt(shop.approval_rejected_at)} />
+          <DataRow label="เหตุผล" value={shop.approval_rejected_reason} />
+        </Block>
+      )}
+
+      {shop.deletion_requested_at && canAction && (
+        <Block title="คำขอลบร้าน">
+          <DataRow label="ขอเมื่อ" value={fmt(shop.deletion_requested_at)} />
+          <DataRow label="เหตุผล" value={shop.deletion_reason} />
+          <DataRow label="สถานะ" value={shop.deletion_status} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              disabled={saving}
+              onClick={() => void act("deletion_approve", "อนุมัติการลบร้าน", true)}
+              className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white"
+            >
+              อนุมัติลบ
+            </button>
+            <button
+              disabled={saving}
+              onClick={() => void act("deletion_reject", "ปฏิเสธการลบร้าน")}
+              className="rounded-xl border px-3 py-2 text-xs font-semibold"
+            >
+              ปฏิเสธ
+            </button>
+            <button
+              disabled={saving}
+              onClick={() => void act("deletion_defer", "เลื่อนการตัดสินใจลบร้าน")}
+              className="rounded-xl border px-3 py-2 text-xs font-semibold"
+            >
+              เลื่อนไว้ก่อน
+            </button>
+          </div>
+        </Block>
       )}
 
       {detail.reminders?.length > 0 && (
@@ -777,7 +827,9 @@ function Badge({ item }: { item: ShopListItem }) {
     ? ["Banned", "bg-red-100 text-red-700"]
     : item.is_approved
       ? ["Approved", "bg-emerald-100 text-emerald-700"]
-      : ["Pending", "bg-amber-100 text-amber-700"];
+      : item.approval_rejected_at
+        ? ["Rejected", "bg-orange-100 text-orange-800"]
+        : ["Pending", "bg-amber-100 text-amber-700"];
 
   return (
     <span className={`inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold leading-none ${className}`}>
