@@ -79,6 +79,10 @@ export function ShopPage({ shopId }: { shopId: string }) {
     options: Parameters<typeof cart.add>[0]["options"];
     note: string | null;
   }) {
+    if (!shop?.is_open) {
+      setConfiguring(null);
+      return;
+    }
     const payload = {
       itemId: input.product.itemId,
       shopId: input.product.shopId,
@@ -113,6 +117,15 @@ export function ShopPage({ shopId }: { shopId: string }) {
           </p>
         </div>
       </div>
+
+      {!shop.is_open && (
+        <div className="mx-4 mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-bold text-amber-800">ร้านปิดอยู่</p>
+          <p className="mt-1 text-xs leading-5 text-amber-700">
+            คุณสามารถดูข้อมูลร้านและเมนูได้ แต่ยังไม่สามารถเพิ่มสินค้าใหม่หรือสั่งซื้อได้จนกว่าร้านจะเปิด
+          </p>
+        </div>
+      )}
 
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -152,8 +165,12 @@ export function ShopPage({ shopId }: { shopId: string }) {
                   <p className="text-sm font-bold text-[#a85f2c]">฿{i.price}</p>
                   {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ใน{activeSetName} {qtyOf(i.item_id)} ชิ้น</p>}
                 </div>
-                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-[#3f6b4a] text-white text-sm px-3 py-1.5">
-                  {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
+                <button
+                  disabled={!shop.is_open}
+                  onClick={() => setConfiguring(i)}
+                  className="rounded-lg bg-[#3f6b4a] px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                >
+                  {!shop.is_open ? "ร้านปิด" : qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
                 </button>
               </div>
             ))}
@@ -168,7 +185,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
         </Link>
       )}
 
-      {configuring && (
+      {configuring && shop.is_open && (
         <ProductConfigurator
           product={{
             itemId: configuring.item_id,

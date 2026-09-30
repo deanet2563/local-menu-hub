@@ -27,7 +27,7 @@ import {
 // ============================================================
 
 export function FoodHub() {
-  const { items, loading, orderedShops, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
+  const { items, loading, allOrderedShops, locationState, refreshNearbyShops, shopName } = useCustomerCatalog();
   const [q, setQ] = useState("");
   const [bucket, setBucket] = useState<string | null>(null);
   const [segment, setSegment] = useState<FoodHubSegment>("food");
@@ -70,10 +70,10 @@ export function FoodHub() {
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
-  const shopIdsInSegment = new Set(
-    items.filter((i) => bucketBelongsToSegment(bucketKeyForCategory(i.category), segment)).map((i) => i.shop_id)
-  );
-  const nearbyShops = orderedShops.filter((s) => shopIdsInSegment.has(s.shop_id));
+  const nearbyShops = allOrderedShops.filter((shop) => {
+    const shopBucket = bucketKeyForCategory(shop.category);
+    return bucketBelongsToSegment(shopBucket, segment);
+  });
   const nearbyShopsHeading = segment === "food" ? "ร้านอาหารใกล้คุณ" : "ร้านขนมใกล้คุณ";
   const midpoint = Math.ceil(nearbyShops.length / 2);
   const shopsBeforeSponsor = nearbyShops.slice(0, midpoint);
@@ -188,7 +188,7 @@ export function FoodHub() {
                 <p className="text-sm font-medium truncate">{s.name}</p>
                 <p className="text-xs text-gray-400 truncate">{s.category}</p>
               </div>
-              <span className="shrink-0 rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]">เปิดอยู่</span>
+              <span className={s.is_open ? "shrink-0 rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]" : "shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500"}>{s.is_open ? "เปิดอยู่" : "ปิด"}</span>
             </Link>
           ))}
         </div>
@@ -208,7 +208,7 @@ export function FoodHub() {
                 <p className="text-sm font-medium truncate">{s.name}</p>
                 <p className="text-xs text-gray-400 truncate">{s.category}</p>
               </div>
-              <span className="shrink-0 rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]">เปิดอยู่</span>
+              <span className={s.is_open ? "shrink-0 rounded-full bg-[#e6ede4] px-2 py-0.5 text-[11px] font-medium text-[#3f6b4a]" : "shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500"}>{s.is_open ? "เปิดอยู่" : "ปิด"}</span>
             </Link>
           ))}
         </div>

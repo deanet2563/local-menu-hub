@@ -1,6 +1,6 @@
 ﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
-import { getCurrentCustomerId, initLiff, supabase } from "@/lib/supabase";
+import { getCurrentCustomerId, getShopOwnerLiffUrl, initLiff, isShopOwnerSession, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/account")({ component: AccountPage });
 
@@ -11,6 +11,7 @@ function AccountPage() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(true);
+  const [ownedShops, setOwnedShops] = useState<Array<{ shop_id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -22,7 +23,7 @@ function AccountPage() {
         if (!cid) return;
         setId(cid);
 
-        const [{ data: customer, error }, { data: admin }] = await Promise.all([
+        const [{ data: customer, error }, { data: admin }, { data: staffRows, error: staffError }] = await Promise.all([
           supabase
             .from("customers")
             .select("name,phone,default_address")
@@ -33,13 +34,32 @@ function AccountPage() {
             .select("customer_id")
             .eq("customer_id", cid)
             .maybeSingle(),
+          supabase
+            .from("shop_staff")
+            .select("shop_id")
+            .eq("customer_id", cid)
+            .eq("role", "owner"),
         ]);
 
         if (error) throw error;
+        if (staffError) throw staffError;
         setName(customer?.name ?? "");
         setPhone(customer?.phone ?? "");
         setAddress(customer?.default_address ?? "");
         setIsAdmin(!!admin);
+
+        const shopIds = (staffRows ?? []).map((row) => (row as { shop_id: string }).shop_id);
+        if (shopIds.length) {
+          const { data: shops, error: shopsError } = await supabase
+            .from("shops")
+            .select("shop_id,name")
+            .in("shop_id", shopIds)
+            .order("name");
+          if (shopsError) throw shopsError;
+          setOwnedShops((shops ?? []) as Array<{ shop_id: string; name: string }>);
+        } else {
+          setOwnedShops([]);
+        }
       } catch {
         setMessage("โหลดข้อมูลไม่สำเร็จ กรุณาเปิดผ่าน LINE แล้วลองใหม่");
       } finally {
@@ -83,6 +103,42 @@ function AccountPage() {
         <h1 className="text-xl font-bold">ข้อมูลของฉัน</h1>
         <p className="text-sm text-gray-500">My Account</p>
       </div>
+
+      {ownedShops.length > 0 && (
+        <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <div>
+            <p className="text-sm font-bold text-emerald-900">ร้านค้าของฉัน</p>
+            <p className="mt-0.5 text-xs text-emerald-700">
+              จัดการข้อมูลร้าน เมนู ออเดอร์ และสถานะร้านจากบัญชีนี้
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {ownedShops.map((shop) => (
+              <div key={shop.shop_id} className="rounded-xl bg-white p-3">
+                <p className="font-semibold text-gray-900">{shop.name}</p>
+                <p className="text-xs text-gray-400">Shop ID: {shop.shop_id}</p>
+              </div>
+            ))}
+          </div>
+
+          {isShopOwnerSession() ? (
+            <Link
+              to="/sweet/shop"
+              className="block rounded-xl bg-emerald-700 px-4 py-3 text-center text-sm font-semibold text-white"
+            >
+              จัดการร้านค้า
+            </Link>
+          ) : (
+            <a
+              href={getShopOwnerLiffUrl()}
+              className="block rounded-xl bg-emerald-700 px-4 py-3 text-center text-sm font-semibold text-white"
+            >
+              จัดการร้านค้า
+            </a>
+          )}
+        </section>
+      )}
 
       {isAdmin && (
         <Link

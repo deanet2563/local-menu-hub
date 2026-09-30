@@ -14,12 +14,31 @@ import { safeStoragePath } from "@/lib/storageKey";
 // ============================================================
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
-export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
-const AUTH_BROKER = "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const DEFAULT_SHOP_LIFF_ID = import.meta.env.VITE_SHOP_LIFF_ID || DEFAULT_LIFF_ID;
+const STAGING_SHOP_LIFF_ID = import.meta.env.VITE_STAGING_SHOP_LIFF_ID || "2010936243-c381Q2kY";
+const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
+const STAGING_SUPABASE_ANON_KEY = "sb_publishable_2c9IeRf-5IBL74pPIUi3_Q_vI9w9gG0";
+const STAGING_AUTH_BROKER = "https://mytree-worker-staging.kompakorn-t.workers.dev/auth/line";
 
-let liffReady: Promise<void> | null = null;
+function isCloudflarePreviewHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.endsWith(".local-menu-hub.pages.dev")
+    && hostname !== "local-menu-hub.pages.dev";
+}
+
+export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
+const AUTH_BROKER = isCloudflarePreviewHost()
+  ? STAGING_AUTH_BROKER
+  : "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
+export const SUPABASE_URL = isCloudflarePreviewHost()
+  ? STAGING_SUPABASE_URL
+  : import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = isCloudflarePreviewHost()
+  ? STAGING_SUPABASE_ANON_KEY
+  : import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
 
 const LIFF_INIT_TIMEOUT_MS = 10_000;
@@ -34,15 +53,80 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-/** True only for the stable Ordering Flow v2 Cloudflare Pages preview alias. */
+const PREVIEW_SUFFIX = ".local-menu-hub.pages.dev";
+const NON_PREVIEW_HOSTS = new Set(["mytree.cc", "www.mytree.cc", "local-menu-hub.pages.dev"]);
+
+/** True only for Cloudflare Pages branch/hash previews or an explicit preview build flag.
+ * Production custom domains and the canonical Pages production host are always excluded. */
 export function isOrderingPreview(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.hostname === "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+  if (import.meta.env.VITE_ALLOW_ANONYMOUS_PREVIEW === "true") return true;
+
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.endsWith(PREVIEW_SUFFIX) && !NON_PREVIEW_HOSTS.has(hostname);
+}
+
+export function getLiffStatePath(): string | null {
+  if (typeof window === "undefined") return null;
+  const state = new URLSearchParams(window.location.search).get("liff.state");
+  if (!state) return null;
+
+  let decoded = state;
+  try {
+    decoded = decodeURIComponent(state);
+  } catch {
+    // URLSearchParams already decoded the common case.
+  }
+
+  try {
+    return new URL(decoded, window.location.origin).pathname;
+  } catch {
+    return decoded.split(/[?#]/, 1)[0] || null;
+  }
 }
 
 function isAiOfficeRoute(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.pathname === "/sweet/ai-office";
+}
+
+function isAccountRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window.location.pathname.replace(/\/+$/, "") || "/") === "/account";
+}
+
+export function isShopOwnerSession(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.sessionStorage.getItem("mytree_surface") === "shop";
+}
+
+function isShopOwnerPath(pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/sweet/shop"
+    || path === "/sweet/menu"
+    || path === "/sweet/signup";
+}
+
+function isShopOwnerRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isShopOwnerPath(window.location.pathname)) return true;
+  const liffStatePath = getLiffStatePath();
+  return liffStatePath ? isShopOwnerPath(liffStatePath) : false;
+}
+
+function activeLiffId(): string {
+  const shopSurface = isShopOwnerRoute() || (isAccountRoute() && isShopOwnerSession());
+  if (isCloudflarePreviewHost() && shopSurface) {
+    if (!STAGING_SHOP_LIFF_ID) throw new Error("staging_shop_liff_not_configured");
+    return STAGING_SHOP_LIFF_ID;
+  }
+  if (shopSurface) return DEFAULT_SHOP_LIFF_ID;
+  return LIFF_ID;
+}
+
+export function getShopOwnerLiffUrl(): string {
+  const id = isCloudflarePreviewHost() ? STAGING_SHOP_LIFF_ID : DEFAULT_SHOP_LIFF_ID;
+  return id ? `https://liff.line.me/${id}` : "/sweet/shop";
 }
 
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
@@ -60,27 +144,45 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  * a permanently-broken cache. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
-  if (!liffReady) {
-    liffReady = withTimeout(
+
+  if (isShopOwnerRoute() && typeof window !== "undefined") {
+    window.sessionStorage.setItem("mytree_surface", "shop");
+  }
+
+  const authenticatedSurface =
+    isAiOfficeRoute() ||
+    isShopOwnerRoute() ||
+    isAccountRoute();
+
+  if (isOrderingPreview() && !authenticatedSurface) return Promise.resolve();
+  const liffId = activeLiffId();
+  if (!liffReady || liffReady.liffId !== liffId) {
+    const promise = withTimeout(
       liff.init({
-        liffId: LIFF_ID,
-        // Customer raw-preview browsing must remain passive. AI Office is an
-        // admin surface, so it may actively establish the existing LINE session.
-        withLoginOnExternalBrowser: isAiOfficeRoute(),
+        liffId,
+        // Public customer preview remains passive. Authenticated shop/admin
+        // surfaces must establish the LINE session explicitly.
+        withLoginOnExternalBrowser: isAiOfficeRoute() || isShopOwnerRoute() || isAccountRoute(),
       }),
       LIFF_INIT_TIMEOUT_MS,
       "เชื่อมต่อ LINE ไม่สำเร็จ (หมดเวลา) กรุณาลองใหม่",
     ).catch((err) => {
-      liffReady = null;
+      if (liffReady?.liffId === liffId) liffReady = null;
       throw err;
     });
+    liffReady = { liffId, promise };
   }
-  return liffReady;
+  return liffReady.promise;
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  const authenticatedSurface =
+    isAiOfficeRoute() ||
+    isShopOwnerRoute() ||
+    isAccountRoute();
+  if (isOrderingPreview() && !authenticatedSurface) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
@@ -89,7 +191,22 @@ export async function getAccessToken(): Promise<string> {
     // Raw preview browsing intentionally works outside LINE. Authenticated
     // actions are allowed only after the same preview is launched through its
     // configured staging LIFF URL.
-    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+    if (isOrderingPreview() && !authenticatedSurface) return "";
+
+    if (isAccountRoute() && isShopOwnerSession()) {
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
+
+    if (isShopOwnerRoute()) {
+      const liffId = activeLiffId();
+      if (!liff.isInClient() && isCloudflarePreviewHost()) {
+        window.location.replace(`https://liff.line.me/${liffId}${window.location.pathname}`);
+        return "";
+      }
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
 
     if (isAiOfficeRoute()) {
       const current = new URL(window.location.href);
@@ -116,7 +233,15 @@ export async function getAccessToken(): Promise<string> {
 
   const idToken = liff.getIDToken();
   if (!idToken) {
-    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+    if (isOrderingPreview() && !authenticatedSurface) return "";
+    if (isAccountRoute() && isShopOwnerSession()) {
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
+    if (isShopOwnerRoute()) {
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
     if (isAiOfficeRoute()) {
       liff.login({ redirectUri: window.location.href });
       return "";
