@@ -15,7 +15,7 @@ import { safeStoragePath } from "@/lib/storageKey";
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
 const DEFAULT_SHOP_LIFF_ID = import.meta.env.VITE_SHOP_LIFF_ID || DEFAULT_LIFF_ID;
-const STAGING_SHOP_LIFF_ID = import.meta.env.VITE_STAGING_SHOP_LIFF_ID || "";
+const STAGING_SHOP_LIFF_ID = import.meta.env.VITE_STAGING_SHOP_LIFF_ID || "2010936243-c381Q2kY";
 const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
 const STAGING_SUPABASE_ANON_KEY = "sb_publishable_2c9IeRf-5IBL74pPIUi3_Q_vI9w9gG0";
 const STAGING_AUTH_BROKER = "https://mytree-worker-staging.kompakorn-t.workers.dev/auth/line";
