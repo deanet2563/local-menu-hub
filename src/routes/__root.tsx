@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { BottomNav } from "@/components/customer/BottomNav";
+import { ShopOwnerBottomNav } from "@/components/shop/ShopOwnerBottomNav";
 import { getLiffStatePath } from "@/lib/supabase";
 
 function ShopLiffStateRedirect() {
@@ -33,6 +34,7 @@ export const Route = createRootRoute({
       <ShopLiffStateRedirect />
       <Outlet />
       <BottomNav />
+      <ShopOwnerBottomNav />
     </>
   ),
 });
