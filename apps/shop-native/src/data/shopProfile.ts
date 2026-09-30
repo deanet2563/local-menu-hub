@@ -9,6 +9,20 @@ export type OwnedShopProfile = {
   banned_reason: string | null;
 };
 
+export type ShopReadiness = {
+  ready: boolean;
+  missing: string[];
+  missing_count: number;
+  available_menu_count: number;
+  owner_count: number;
+  verification?: {
+    status?: string;
+    approved?: boolean;
+    evidence_count?: number;
+    evidence_kinds?: string[];
+  };
+};
+
 export type RegisterShopInput = {
   name: string;
   category: string | null;
@@ -80,4 +94,13 @@ export async function registerShop(input: RegisterShopInput): Promise<string | n
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return (row as { shop_id?: string } | null)?.shop_id ?? null;
+}
+
+
+export async function getShopReadiness(shopId: string): Promise<ShopReadiness> {
+  const { data, error } = await supabase.rpc('fn_shop_readiness', {
+    p_shop_id: shopId,
+  });
+  if (error) throw error;
+  return data as ShopReadiness;
 }
