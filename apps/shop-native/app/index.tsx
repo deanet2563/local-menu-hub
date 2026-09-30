@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { exchangeLineIdToken } from '../src/auth/broker';
 import { loginWithLineNative } from '../src/native/lineLogin';
 import { getAccessToken, logoutShopSession } from '../src/lib/tokenStore';
 import { loadShopOrders } from '../src/data/shopOrders';
-import { getOwnedShopProfile, setShopOpen, type OwnedShopProfile } from '../src/data/shopProfile';
+import { getOwnedShopProfile, getShopReadiness, setShopOpen, type OwnedShopProfile, type ShopReadiness } from '../src/data/shopProfile';
 import { registerShopPushDevice } from '../src/data/pushDeviceRepository';
 import { ensureShopPushReadiness, installShopNotificationResponseHandler } from '../src/services/notifications';
 import { toOrderSummary, type ShopOrderSummary } from '../src/domain/orders';
@@ -15,6 +15,7 @@ const POLL_MS = 15_000;
 export default function ShopHomeScreen() {
   const [orders, setOrders] = useState<ShopOrderSummary[]>([]);
   const [shop, setShop] = useState<OwnedShopProfile | null>(null);
+  const [readiness, setReadiness] = useState<ShopReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -32,6 +33,7 @@ export default function ShopHomeScreen() {
       if (!token) {
         setSignedIn(false);
         setShop(null);
+        setReadiness(null);
         setOrders([]);
         return;
       }
@@ -39,9 +41,12 @@ export default function ShopHomeScreen() {
       const owned = await getOwnedShopProfile();
       setShop(owned);
       if (!owned) {
+        setReadiness(null);
         setOrders([]);
         return;
       }
+      const readyState = await getShopReadiness(owned.shop_id);
+      setReadiness(readyState);
       const rows = await loadShopOrders(owned.shop_id);
       setOrders(rows.map(toOrderSummary));
     } catch (cause) {
@@ -85,6 +90,7 @@ export default function ShopHomeScreen() {
               try {
                 await logoutShopSession();
                 setShop(null);
+                setReadiness(null);
                 setOrders([]);
                 setSignedIn(false);
               } catch (cause) {
@@ -166,6 +172,20 @@ export default function ShopHomeScreen() {
     void load();
   };
 
+
+  const verificationMissing = readiness?.missing.filter((item) => item.startsWith('verification_')) ?? [];
+  const profileMissing = readiness?.missing.filter((item) => !item.startsWith('verification_')) ?? [];
+  const verificationUrl = process.env.EXPO_PUBLIC_SHOP_VERIFICATION_URL || 'https://mytree.cc/sweet/shop';
+
+  const openVerification = useCallback(async () => {
+    const supported = await Linking.canOpenURL(verificationUrl);
+    if (!supported) {
+      setError('ไม่สามารถเปิดหน้าการยืนยันร้านได้');
+      return;
+    }
+    await Linking.openURL(verificationUrl);
+  }, [verificationUrl]);
+
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" /><Text>กำลังเปิด MyTree Shop…</Text></View>;
 
   if (signedIn === false) {
@@ -230,7 +250,34 @@ export default function ShopHomeScreen() {
       {shop.is_banned ? (
         <View style={styles.dangerBanner}><Text style={styles.dangerTitle}>ร้านนี้ถูกระงับ</Text><Text style={styles.dangerText}>{shop.banned_reason || 'กรุณาติดต่อแอดมิน MyTree'}</Text></View>
       ) : !shop.is_approved ? (
-        <View style={styles.pendingBanner}><Text style={styles.pendingTitle}>⏳ รอแอดมินอนุมัติร้าน</Text><Text style={styles.pendingText}>ระบบพบร้านของคุณแล้ว เมื่ออนุมัติสถานะใน Admin Dashboard แอปจะอัปเดตเมื่อดึงลงเพื่อรีเฟรช</Text></View>
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingTitle}>⏳ ร้านยังอยู่ Pending</Text>
+          <Text style={styles.pendingText}>
+            {readiness?.ready
+              ? 'ข้อมูลครบแล้ว รอ Admin ตรวจและอนุมัติร้าน'
+              : 'กรุณาทำข้อมูลและการยืนยันร้านให้ครบก่อน Admin จะอนุมัติได้'}
+          </Text>
+        </View>
+      ) : null}
+
+      {verificationMissing.length > 0 ? (
+        <View style={styles.verificationBanner}>
+          <Text style={styles.verificationTitle}>📸 ต้องยืนยันร้านด้วยรูปถ่าย 3 รูป</Text>
+          <Text style={styles.verificationText}>
+            ต้องมีรูปหน้าร้าน/หน้าบ้าน, Selfie เจ้าของร้านกับสถานที่ และรูปพื้นที่ประกอบกิจการภายใน
+          </Text>
+          <Text style={styles.verificationMeta}>ยังขาด {verificationMissing.length} รายการ</Text>
+          <Pressable onPress={() => void openVerification()} style={({ pressed }) => [styles.verificationButton, pressed && styles.pressed]}>
+            <Text style={styles.verificationButtonText}>เปิดหน้าการยืนยันร้าน</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {profileMissing.length > 0 ? (
+        <View style={styles.profileBanner}>
+          <Text style={styles.profileTitle}>ข้อมูลร้านยังไม่ครบ</Text>
+          <Text style={styles.profileText}>ยังขาด {profileMissing.length} รายการ กรุณาอัปเดตข้อมูลร้านก่อนอนุมัติ</Text>
+        </View>
       ) : null}
 
       {pushMessage ? <View style={styles.pushBanner}><Text style={styles.pushText}>🔔 {pushMessage}</Text></View> : null}
@@ -299,4 +346,13 @@ const styles = StyleSheet.create({
   dangerText: { marginTop: 4, fontSize: 13, lineHeight: 19, color: '#A13A36' },
   pushBanner: { marginHorizontal: 16, marginTop: 8, borderRadius: 14, padding: 12, backgroundColor: '#EEF3EF' },
   pushText: { fontSize: 13, color: '#52705B', lineHeight: 18 },
+  verificationBanner: { marginHorizontal: 16, marginTop: 8, borderRadius: 18, padding: 16, backgroundColor: '#FFF7E1', borderWidth: 1, borderColor: '#F2D790' },
+  verificationTitle: { fontSize: 16, fontWeight: '800', color: '#7A5810' },
+  verificationText: { marginTop: 6, fontSize: 13, lineHeight: 19, color: '#8A6A27' },
+  verificationMeta: { marginTop: 8, fontSize: 12, fontWeight: '700', color: '#A36A00' },
+  verificationButton: { marginTop: 12, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#173C2C' },
+  verificationButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  profileBanner: { marginHorizontal: 16, marginTop: 8, borderRadius: 16, padding: 14, backgroundColor: '#F5F7F5', borderWidth: 1, borderColor: '#D7E1DA' },
+  profileTitle: { fontSize: 14, fontWeight: '800', color: '#173C2C' },
+  profileText: { marginTop: 4, fontSize: 12, lineHeight: 18, color: '#647168' },
 });
