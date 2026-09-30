@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, getCurrentCustomerId } from "@/lib/supabase";
+import { adminCreateShopCategory, adminUpdateShopCategory, loadAllShopCategories, type ShopCategoryMaster } from "@/lib/shopCategories";
 
 // MyTree Admin Console
 // Existing governance stays behind platform_admins + admin SECURITY DEFINER RPCs.
 // This UI intentionally does not bypass RLS or write approval/ban columns directly.
 
-type Tab = "shops" | "riders" | "customers" | "moderation";
+type Tab = "shops" | "categories" | "riders" | "customers" | "moderation";
 type EntityFilter = "pending" | "active" | "blocked" | "all";
 
 export function AdminConsole() {
@@ -18,9 +19,10 @@ export function AdminConsole() {
         <p className="mt-1 text-xs text-gray-500">อนุมัติ ตรวจสอบ ระงับ และดู Blacklist จากศูนย์เดียว</p>
       </div>
 
-      <div className="sticky top-0 z-20 grid grid-cols-4 gap-1 border-y border-gray-100 bg-white px-3 py-2">
+      <div className="sticky top-0 z-20 grid grid-cols-5 gap-1 border-y border-gray-100 bg-white px-3 py-2">
         {([
           ["shops", "🏪", "ร้าน"],
+          ["categories", "🗂️", "หมวดร้าน"],
           ["riders", "🛵", "วิน"],
           ["customers", "👤", "ลูกค้า"],
           ["moderation", "🚩", "Report"],
@@ -38,6 +40,7 @@ export function AdminConsole() {
 
       <div className="p-4">
         {tab === "shops" && <ShopsTab />}
+        {tab === "categories" && <ShopCategoriesTab />}
         {tab === "riders" && <RidersTab />}
         {tab === "customers" && <CustomersTab />}
         {tab === "moderation" && <ModerationTab />}
@@ -196,6 +199,174 @@ function ShopsTab() {
           {banFor === s.shop_id && <ReasonPrompt label="ระบุเหตุผลที่บล็อก/แบนร้าน" onSubmit={(r) => void rpc(s.shop_id, "fn_ban_shop", { p_shop_id: s.shop_id, p_reason: r })} onCancel={() => setBanFor(null)} />}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---------- Shop categories ----------
+function ShopCategoriesTab() {
+  const [rows, setRows] = useState<ShopCategoryMaster[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [label, setLabel] = useState("");
+  const [icon, setIcon] = useState("");
+  const [sortOrder, setSortOrder] = useState(100);
+  const [creating, setCreating] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setRows(await loadAllShopCategories());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "โหลดหมวดร้านไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function createCategory() {
+    if (!label.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      await adminCreateShopCategory({
+        label: label.trim(),
+        icon: icon.trim() || null,
+        sortOrder,
+      });
+      setLabel("");
+      setIcon("");
+      setSortOrder(100);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "เพิ่มหมวดร้านไม่สำเร็จ");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-bold">หมวดร้านค้า</h2>
+        <p className="text-xs text-gray-500">กำหนดหมวดที่ร้านค้าเลือกตอนสมัคร ร้านค้าไม่สามารถพิมพ์หมวดเองได้</p>
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-orange-100 bg-orange-50 p-3">
+        <p className="text-sm font-semibold text-orange-900">เพิ่มหมวดใหม่</p>
+        <div className="grid grid-cols-[70px_1fr] gap-2">
+          <input
+            value={icon}
+            onChange={(e) => setIcon(e.target.value)}
+            maxLength={8}
+            placeholder="ไอคอน"
+            className="rounded-xl border border-orange-100 bg-white p-2.5 text-sm"
+          />
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            maxLength={80}
+            placeholder="ชื่อหมวด เช่น ร้านอาหารตามสั่ง"
+            className="rounded-xl border border-orange-100 bg-white p-2.5 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-orange-800">ลำดับ</label>
+          <input
+            type="number"
+            min={0}
+            max={10000}
+            value={sortOrder}
+            onChange={(e) => setSortOrder(Number(e.target.value))}
+            className="w-24 rounded-xl border border-orange-100 bg-white p-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={creating || !label.trim()}
+            onClick={() => void createCategory()}
+            className="ml-auto rounded-xl bg-orange-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+          >
+            {creating ? "กำลังเพิ่ม..." : "เพิ่มหมวด"}
+          </button>
+        </div>
+      </div>
+
+      {error && <p className="rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</p>}
+      {loading && <p className="text-sm text-gray-400">กำลังโหลด...</p>}
+      {!loading && rows.length === 0 && <Empty text="ยังไม่มีหมวดร้าน" />}
+      {!loading && rows.map((row) => (
+        <ShopCategoryEditor key={row.category_id} row={row} onSaved={load} />
+      ))}
+    </div>
+  );
+}
+
+function ShopCategoryEditor({ row, onSaved }: { row: ShopCategoryMaster; onSaved: () => Promise<void> }) {
+  const [label, setLabel] = useState(row.label);
+  const [icon, setIcon] = useState(row.icon ?? "");
+  const [sortOrder, setSortOrder] = useState(row.sort_order);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLabel(row.label);
+    setIcon(row.icon ?? "");
+    setSortOrder(row.sort_order);
+  }, [row.label, row.icon, row.sort_order]);
+
+  async function save(isActive = row.is_active) {
+    if (!label.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await adminUpdateShopCategory({
+        categoryId: row.category_id,
+        label: label.trim(),
+        icon: icon.trim() || null,
+        sortOrder,
+        isActive,
+      });
+      await onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "บันทึกหมวดร้านไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`space-y-3 rounded-2xl border p-3 ${row.is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-xl">{row.icon || "🏷️"}</span>
+          <p className="truncate text-sm font-semibold">{row.label}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${row.is_active ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
+          {row.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[70px_1fr_76px] gap-2">
+        <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={8} className="min-w-0 rounded-lg border border-gray-200 p-2 text-sm" aria-label="ไอคอนหมวด" />
+        <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} className="min-w-0 rounded-lg border border-gray-200 p-2 text-sm" aria-label="ชื่อหมวด" />
+        <input type="number" min={0} max={10000} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} className="min-w-0 rounded-lg border border-gray-200 p-2 text-sm" aria-label="ลำดับหมวด" />
+      </div>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button type="button" disabled={busy || !label.trim()} onClick={() => void save()} className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-40">บันทึก</button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void save(!row.is_active)}
+          className={`rounded-lg px-3 py-2 text-xs font-medium ${row.is_active ? "bg-gray-100 text-gray-600" : "bg-green-50 text-green-700"}`}
+        >
+          {row.is_active ? "ปิดหมวด" : "เปิดหมวด"}
+        </button>
+      </div>
     </div>
   );
 }
