@@ -180,6 +180,10 @@ export function OrderManagement() {
       setCapabilities(result.capabilities);
     } catch (cause) {
       if (requestId !== listRequestRef.current) return;
+      setItems([]);
+      setTotal(0);
+      setCapabilities(null);
+      setSelected(null);
       setError(cause instanceof Error ? cause.message : "โหลด Orders ไม่สำเร็จ");
     } finally {
       if (requestId === listRequestRef.current) setLoading(false);
