@@ -31,7 +31,7 @@ export const LIFF_ID = import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 const AUTH_BROKER = isCloudflarePreviewHost()
   ? STAGING_AUTH_BROKER
   : "https://mytree-worker.kompakorn-t.workers.dev/auth/line";
-const SUPABASE_URL = isCloudflarePreviewHost()
+export const SUPABASE_URL = isCloudflarePreviewHost()
   ? STAGING_SUPABASE_URL
   : import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = isCloudflarePreviewHost()
