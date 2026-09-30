@@ -21,7 +21,8 @@ const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
 function isCloudflarePreviewHost(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.hostname.endsWith(".local-menu-hub.pages.dev")
-    && window.location.hostname !== "local-menu-hub.pages.dev";
+    && window.location.hostname !== "local-menu-hub.pages.dev"
+    && window.location.hostname !== "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
 function isHeadOfficeShopPreviewHost(): boolean {
