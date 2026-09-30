@@ -64,12 +64,13 @@ jobs:
   build-test-apk:
     runs-on: ubuntu-latest
     env:
-      EXPO_PUBLIC_SUPABASE_URL: https://ecrxrwfrwuoenjoyhfzw.supabase.co
+      EXPO_PUBLIC_SUPABASE_URL: https://qdvgkdxjstsxeamjsjhl.supabase.co
       # Supabase publishable keys are public client configuration by design.
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Qvsg8XpfUurNKewoDab9Ww_D9xvweP0
-      EXPO_PUBLIC_MYTREE_WORKER_URL: https://mytree-worker.kompakorn-t.workers.dev
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_2c9IeRf-5IBL74pPIUi3_Q_vI9w9gG0
+      EXPO_PUBLIC_MYTREE_WORKER_URL: https://mytree-worker-staging.kompakorn-t.workers.dev
       EXPO_PUBLIC_LINE_LOGIN_CHANNEL_ID: '2010936243'
       EXPO_PUBLIC_EAS_PROJECT_ID: '1f668663-9e83-4f8f-91b6-666e97fb26df'
+      EXPO_PUBLIC_SHOP_VERIFICATION_URL: https://liff.line.me/2010936243-lSLChhqP/sweet/shop
       NODE_ENV: production
     defaults:
       run:
