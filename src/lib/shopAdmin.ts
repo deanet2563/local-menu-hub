@@ -6,6 +6,8 @@ export type ShopReadiness = {
   missing_count: number;
   available_menu_count: number;
   owner_count: number;
+  strict_enforced?: boolean;
+  legacy_grace?: boolean;
 };
 
 export type ShopListItem = {
