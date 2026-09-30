@@ -38,7 +38,7 @@ const SUPABASE_ANON_KEY = isCloudflarePreviewHost()
   ? STAGING_SUPABASE_ANON_KEY
   : import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-let liffReady: Promise<void> | null = null;
+let liffReady: { liffId: string; promise: Promise<void> } | null = null;
 let cached: { token: string; exp: number } | null = null;
 
 const LIFF_INIT_TIMEOUT_MS = 10_000;
@@ -66,17 +66,42 @@ export function isOrderingPreview(): boolean {
   return hostname.endsWith(PREVIEW_SUFFIX) && !NON_PREVIEW_HOSTS.has(hostname);
 }
 
+export function getLiffStatePath(): string | null {
+  if (typeof window === "undefined") return null;
+  const state = new URLSearchParams(window.location.search).get("liff.state");
+  if (!state) return null;
+
+  let decoded = state;
+  try {
+    decoded = decodeURIComponent(state);
+  } catch {
+    // URLSearchParams already decoded the common case.
+  }
+
+  try {
+    return new URL(decoded, window.location.origin).pathname;
+  } catch {
+    return decoded.split(/[?#]/, 1)[0] || null;
+  }
+}
+
 function isAiOfficeRoute(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.pathname === "/sweet/ai-office";
 }
 
-function isShopOwnerRoute(): boolean {
-  if (typeof window === "undefined") return false;
-  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+function isShopOwnerPath(pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
   return path === "/sweet/shop"
     || path === "/sweet/menu"
     || path === "/sweet/signup";
+}
+
+function isShopOwnerRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isShopOwnerPath(window.location.pathname)) return true;
+  const liffStatePath = getLiffStatePath();
+  return liffStatePath ? isShopOwnerPath(liffStatePath) : false;
 }
 
 function activeLiffId(): string {
@@ -104,9 +129,9 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
   if (isOrderingPreview() && !isAiOfficeRoute() && !isShopOwnerRoute()) return Promise.resolve();
-  if (!liffReady) {
-    const liffId = activeLiffId();
-    liffReady = withTimeout(
+  const liffId = activeLiffId();
+  if (!liffReady || liffReady.liffId !== liffId) {
+    const promise = withTimeout(
       liff.init({
         liffId,
         // Public customer preview remains passive. Authenticated shop/admin
@@ -116,11 +141,12 @@ export function initLiff(): Promise<void> {
       LIFF_INIT_TIMEOUT_MS,
       "เชื่อมต่อ LINE ไม่สำเร็จ (หมดเวลา) กรุณาลองใหม่",
     ).catch((err) => {
-      liffReady = null;
+      if (liffReady?.liffId === liffId) liffReady = null;
       throw err;
     });
+    liffReady = { liffId, promise };
   }
-  return liffReady;
+  return liffReady.promise;
 }
 
 /** Get a valid MyTree access token, logging in via LINE if needed. */
