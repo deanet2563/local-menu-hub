@@ -3,7 +3,7 @@ const SOURCES = [
     label: "Community content",
     types: "Posts · comments · groups · events · help · marketplace",
     state: "unavailable",
-    detail: "ยังไม่มีตารางหรือ RPC สำหรับรายงานและสถานะ moderation",
+    detail: "ยังไม่มี content entity แบบ DB-backed ใน Production; Community Phase 3 ที่พบเป็น prototype fixtures และยังไม่มี comment entity",
   },
   {
     label: "Member / Shop / Rider reports",
