@@ -219,6 +219,9 @@ export function OrderManagement() {
   }, []);
 
   useEffect(() => {
+    // Invalidate any already-running request as soon as the query changes,
+    // including during the debounce window before the next request starts.
+    listRequestRef.current += 1;
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
   }, [load]);
