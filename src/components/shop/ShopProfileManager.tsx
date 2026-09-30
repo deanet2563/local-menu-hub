@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { shopStorageFolder, safeImageExtension } from "@/lib/storageKey";
 import { ShopVerificationPanel } from "@/components/shop/ShopVerificationPanel";
@@ -73,8 +74,11 @@ export function ShopProfileManager({ shopId }: { shopId: string }) {
 
   const statusDisabled=!shop.is_approved||shop.is_banned||!!shop.deletion_requested_at||togglingOpen;
 
-  return <div className="mx-auto max-w-md space-y-4 p-4 pb-24">
-    <div><h1 className="text-xl font-bold">จัดการร้านค้า</h1><p className="text-sm text-gray-400">ข้อมูลร้าน โปรไฟล์ ที่ตั้ง ช่องทางติดต่อ เวลาทำการ และการชำระเงิน</p></div>
+  return <div className="mx-auto max-w-md space-y-4 p-4 pb-10">
+    <div className="space-y-3">
+      <Link to="/account" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700">← กลับบัญชี</Link>
+      <div><h1 className="text-xl font-bold">จัดการร้านค้า</h1><p className="text-sm text-gray-400">ข้อมูลร้าน โปรไฟล์ ที่ตั้ง ช่องทางติดต่อ เวลาทำการ และการชำระเงิน</p></div>
+    </div>
     {error&&<div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</div>}{success&&<div className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{success}</div>}
     <section className="rounded-2xl border p-4 space-y-2"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">สถานะร้าน</h2><button type="button" onClick={()=>void toggleOpen()} disabled={statusDisabled} className={`rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${shop.is_open?"bg-green-500 text-white":"bg-gray-100 text-gray-700"}`}>{togglingOpen?"กำลังอัปเดต...":status}</button></div><p className="text-xs text-gray-400">Shop ID: {shop.shop_id}</p>{!shop.is_approved&&<p className="text-xs text-amber-600">รอแอดมินอนุมัติก่อนเปิดร้าน</p>}{shop.deletion_requested_at&&<p className="text-xs text-red-500">มีคำขอปิด/เลิกใช้งานร้านค้างอยู่</p>}{shop.banned_reason&&<p className="text-xs text-red-500">เหตุผล: {shop.banned_reason}</p>}</section>
     {readiness&&<section className={`rounded-2xl border p-4 ${readiness.ready?"border-green-200 bg-green-50":"border-amber-200 bg-amber-50"}`}><h2 className="font-semibold">ข้อมูลที่ต้องครบก่อนเปิดร้าน</h2><p className="mt-1 text-sm text-gray-600">{readiness.ready?"ข้อมูลบังคับครบแล้ว รอ Admin อนุมัติ":"ร้านจะอยู่สถานะ Pending จนกว่าจะกรอกข้อมูลครบ"}</p>{!readiness.ready&&<ul className="mt-3 space-y-1 text-sm text-amber-800">{readiness.missing.map(key=><li key={key}>• {READINESS_LABELS[key]??key}</li>)}</ul>}</section>}
