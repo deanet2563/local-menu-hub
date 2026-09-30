@@ -59,7 +59,12 @@ function ShopCard({ shop }: { shop: CatalogShop }) {
     <Link to="/shop/$shopId" params={{ shopId: shop.shop_id }} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-[#E4EBE3] bg-white p-3 shadow-[0_5px_16px_rgba(37,69,46,0.05)]">
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageWithFallback src={shop.logo_url} alt={shop.name} kind="shop" /></div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p><span className="shrink-0 rounded-full bg-[#E5F6E9] px-2 py-1 text-[10px] font-bold text-[#087A31]">เปิดอยู่</span></div>
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate text-sm font-extrabold text-[#1F3D2A]">{shop.name}</p>
+          <span className={shop.is_open ? "shrink-0 rounded-full bg-[#E5F6E9] px-2 py-1 text-[10px] font-bold text-[#087A31]" : "shrink-0 rounded-full bg-[#EEF0ED] px-2 py-1 text-[10px] font-bold text-[#6F7771]"}>
+            {shop.is_open ? "เปิดอยู่" : "ปิด"}
+          </span>
+        </div>
         <p className="mt-1 truncate text-xs text-[#77837B]">{shop.category || "ร้านอาหารใกล้บ้าน"}</p>
         <p className="mt-1 text-[11px] font-semibold text-[#506459]">{shop.distance_km == null ? "ดูรายละเอียดร้าน" : `${shop.distance_km.toFixed(1)} กม.`}</p>
       </div>
@@ -110,7 +115,6 @@ export function HomeOverview() {
   const previewMode = isOrderingPreview();
 
   const visibleShops = useMemo(() => allOrderedShops.filter((shop) => {
-    if (!shop.is_open) return false;
     if (!normalizedQuery) return true;
     const haystack = `${shop.name} ${shop.category ?? ""} ${shopKeywords(shop.shop_id)}`.toLocaleLowerCase("th");
     return haystack.includes(normalizedQuery);
