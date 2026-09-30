@@ -40,8 +40,10 @@ function ShopProfile() {
         const owned = (shopRows ?? []) as OwnedShop[];
         if (!owned.length) return setState("no-shop");
 
+        const firstShop = owned[0];
+        if (!firstShop) return setState("no-shop");
         setShops(owned);
-        setShopId(owned[0].shop_id);
+        setShopId(firstShop.shop_id);
         setState("ok");
         void linkRichMenu("shop");
       } catch {
