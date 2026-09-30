@@ -197,9 +197,14 @@ function check(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
-function uuidOrNull(value: string) {
+function uuidOrNull(value: string, label: string) {
   const trimmed = value.trim();
-  return trimmed || null;
+  if (!trimmed) return null;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(trimmed)) {
+    throw new Error(`${label} ต้องเป็น UUID ที่ถูกต้อง`);
+  }
+  return trimmed;
 }
 
 export async function listOrders(params: {
@@ -224,13 +229,13 @@ export async function listOrders(params: {
     p_date_from: params.dateFrom || null,
     p_date_to: params.dateTo || null,
     p_shop_id: params.shopId.trim() || null,
-    p_customer_id: uuidOrNull(params.customerId),
+    p_customer_id: uuidOrNull(params.customerId, "Customer ID"),
     p_order_status: params.orderStatus || null,
     p_payment_status: params.paymentStatus || null,
     p_payment_method: params.paymentMethod || null,
     p_fulfillment_type: params.fulfillmentType || null,
     p_delivery_status: params.deliveryStatus || null,
-    p_rider_id: uuidOrNull(params.riderId),
+    p_rider_id: uuidOrNull(params.riderId, "Rider ID"),
     p_abnormal_only: params.abnormalOnly,
     p_sort: params.sort,
     p_page: params.page,
