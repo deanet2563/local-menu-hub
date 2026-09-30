@@ -19,6 +19,7 @@ export type ShopListItem = {
   deletion_status: string;
   created_at: string;
   last_active_at: string | null;
+  status_updated_at: string;
   has_location: boolean;
   staff_count: number;
   menu_item_count: number;
