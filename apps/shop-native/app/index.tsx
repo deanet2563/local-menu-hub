@@ -45,10 +45,14 @@ export default function ShopHomeScreen() {
         setOrders([]);
         return;
       }
-      const readyState = await getShopReadiness(owned.shop_id);
-      setReadiness(readyState);
       const rows = await loadShopOrders(owned.shop_id);
       setOrders(rows.map(toOrderSummary));
+      try {
+        const readyState = await getShopReadiness(owned.shop_id);
+        setReadiness(readyState);
+      } catch {
+        setReadiness(null);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'โหลดออเดอร์ไม่สำเร็จ');
     } finally {
