@@ -482,6 +482,7 @@ export function RiderManagement() {
                   <Metric label="Pickup → Delivery" metric={detail.kpi.pickup_to_delivery_seconds} durationMetric />
                   <Metric label="Completion rate" metric={detail.kpi.completion_rate} />
                   <Metric label="Reassignments" metric={detail.kpi.reassignments} />
+                  <Metric label="Serious incidents" metric={detail.kpi.serious_incidents} />
                 </div>
                 <p className="mt-3 text-xs text-gray-500">
                   ไม่มีคะแนน “ดี/แย่” และ metric ที่ source ไม่พอจะแสดง Unavailable แทนการเดา
