@@ -68,9 +68,8 @@ export function hasValidLocalMapPin(location: Pick<LocalMapLocation, "lat" | "ln
 
 /** Public map rule: only approved, active, explicitly visible, valid MyTree pins. */
 export function isPublicMapLocation(location: LocalMapLocation): boolean {
-  return location.kind === "community"
-    ? location.mapVisible && hasValidLocalMapPin(location)
-    : location.approved && !location.banned && location.mapVisible && hasValidLocalMapPin(location);
+  return location.approved && !location.banned && location.mapVisible
+    && location.verificationStatus === "verified" && hasValidLocalMapPin(location);
 }
 
 export function localMapQuality(location: LocalMapLocation): "missing" | "invalid" | "stale" | "verified" | "unverified" {

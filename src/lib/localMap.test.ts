@@ -14,12 +14,16 @@ const sample = (overrides: Partial<LocalMapLocationRow> = {}) => normalizeLocalM
   lng: 100.67610292467903,
   approved: true,
   banned: false,
+  verification_status: "verified",
   map_visible: true,
   ...overrides,
 });
 
 export const localMapContractChecks = {
-  sonBaoBaoValidPinIsPublic: isPublicMapLocation(sample()),
+  verifiedShopPinIsPublic: isPublicMapLocation(sample()),
+  unverifiedShopPinHidden: !isPublicMapLocation(sample({ verification_status: "unverified" })),
+  pendingCorrectionPinHidden: !isPublicMapLocation(sample({ verification_status: "correction_pending" })),
+  rejectedCorrectionPinHidden: !isPublicMapLocation(sample({ verification_status: "rejected" })),
   unapprovedShopHidden: !isPublicMapLocation(sample({ approved: false })),
   bannedShopHidden: !isPublicMapLocation(sample({ banned: true })),
   mapHiddenShopHidden: !isPublicMapLocation(sample({ map_visible: false })),

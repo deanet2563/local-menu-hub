@@ -273,10 +273,12 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setCartShopStatus(null);
     publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng,is_map_visible,location_verification_status")
       .eq("shop_id", shopId)
       .eq("is_approved", true)
       .eq("is_banned", false)
+      .eq("is_map_visible", true)
+      .eq("location_verification_status", "verified")
       .maybeSingle()
       .then(({ data, error }) => {
         if (requestSeq !== cartShopRequestSeqRef.current) return;
@@ -305,9 +307,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setMerchantError(null);
     const { data, error } = await publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng,is_map_visible,location_verification_status")
       .eq("is_approved", true)
       .eq("is_banned", false)
+      .eq("is_map_visible", true)
+      .eq("location_verification_status", "verified")
       .not("lat", "is", null)
       .not("lng", "is", null)
       .gte("lat", padded.south)
