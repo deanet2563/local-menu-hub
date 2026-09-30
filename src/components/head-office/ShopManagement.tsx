@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -44,6 +45,7 @@ export function ShopManagement() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const detailRequestRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
@@ -75,14 +77,20 @@ export function ShopManagement() {
   }, [search, approval, activity, category, sort, page]);
 
   const loadDetail = useCallback(async (id: string) => {
+    const requestId = ++detailRequestRef.current;
+    setDetail(null);
     setDetailLoading(true);
     setError(null);
     try {
-      setDetail(await getShop(id));
+      const nextDetail = await getShop(id);
+      if (requestId !== detailRequestRef.current) return;
+      setDetail(nextDetail);
     } catch (e) {
+      if (requestId !== detailRequestRef.current) return;
+      setDetail(null);
       setError(e instanceof Error ? e.message : "โหลดรายละเอียดร้านไม่สำเร็จ");
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestRef.current) setDetailLoading(false);
     }
   }, []);
 
@@ -96,8 +104,13 @@ export function ShopManagement() {
   }, [load]);
 
   useEffect(() => {
-    if (selected) void loadDetail(selected);
-    else setDetail(null);
+    if (selected) {
+      void loadDetail(selected);
+    } else {
+      detailRequestRef.current += 1;
+      setDetail(null);
+      setDetailLoading(false);
+    }
   }, [selected, loadDetail]);
 
   const pages = Math.max(1, Math.ceil(total / 20));
