@@ -1,4 +1,4 @@
-import { getCurrentCustomerId, supabase } from "@/lib/supabase";
+import { getAccessToken, supabase, SUPABASE_URL } from "@/lib/supabase";
 import { shopStorageFolder, safeImageExtension } from "@/lib/storageKey";
 
 export type ShopVerificationEvidenceKind = "storefront" | "owner_selfie" | "workspace";
@@ -40,47 +40,67 @@ export async function uploadShopVerificationEvidence(args: {
   file: File;
   location?: { lat: number; lng: number } | null;
 }) {
-  const current = await getMyShopVerification(args.shopId);
-  if (current.status === "approved") {
-    throw new Error("ร้านนี้ผ่านการยืนยันแล้ว");
+  if (args.file.size <= 0) throw new Error("ไม่พบข้อมูลรูปภาพ");
+  if (args.file.size > 10 * 1024 * 1024) {
+    throw new Error("รูปมีขนาดใหญ่เกิน 10 MB กรุณาถ่ายใหม่หรือใช้รูปขนาดเล็กลง");
   }
 
-  const customerId = await getCurrentCustomerId();
-  if (!customerId) throw new Error("ไม่พบบัญชี MyTree ของเจ้าของร้าน");
+  const token = await getAccessToken();
+  if (!token) throw new Error("ไม่พบ MyTree access token");
 
-  const ext = args.file.type === "image/heic"
-    ? "heic"
-    : args.file.type === "image/heif"
-      ? "heif"
-      : safeImageExtension(args.file.name, "jpg");
+  const form = new FormData();
+  form.append("shopId", args.shopId);
+  form.append("kind", args.kind);
+  form.append("file", args.file, args.file.name || `${args.kind}.jpg`);
+  if (args.location) {
+    form.append("lat", String(args.location.lat));
+    form.append("lng", String(args.location.lng));
+  }
 
-  const storagePath = [
-    customerId,
-    shopStorageFolder(args.shopId),
-    current.request_id,
-    `${args.kind}-${Date.now()}.${ext}`,
-  ].join("/");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 45_000);
 
-  const { error: uploadError } = await supabase.storage
-    .from("shop-verification-evidence")
-    .upload(storagePath, args.file, {
-      contentType: args.file.type || "image/jpeg",
-      upsert: false,
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/shop-verification-upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: form,
+      signal: controller.signal,
     });
-  check(uploadError);
 
-  const { data, error } = await supabase.rpc("fn_register_shop_verification_evidence", {
-    p_request_id: current.request_id,
-    p_shop_id: args.shopId,
-    p_evidence_kind: args.kind,
-    p_storage_bucket: "shop-verification-evidence",
-    p_storage_path: storagePath,
-    p_captured_at: new Date().toISOString(),
-    p_capture_lat: args.location?.lat ?? null,
-    p_capture_lng: args.location?.lng ?? null,
-  });
-  check(error);
-  return data as string;
+    const payload = await response.json().catch(() => ({})) as {
+      ok?: boolean;
+      error?: string;
+      evidence_id?: string;
+    };
+
+    if (!response.ok || !payload.ok) {
+      const friendly: Record<string, string> = {
+        authentication_required: "กรุณาเข้าสู่ระบบ LINE ใหม่",
+        customer_identity_missing: "ไม่พบบัญชี MyTree ของเจ้าของร้าน",
+        invalid_shop_or_kind: "ข้อมูลร้านหรือประเภทรูปไม่ถูกต้อง",
+        image_required: "กรุณาถ่ายหรือเลือกรูปก่อนอัปโหลด",
+        unsupported_image_type: "ไฟล์รูปประเภทนี้ยังไม่รองรับ กรุณาใช้ JPEG, PNG, WEBP หรือ HEIC",
+        image_size_invalid: "รูปมีขนาดใหญ่เกิน 10 MB",
+        verification_request_failed: "ไม่สามารถเปิดคำขอยืนยันร้านได้",
+        verification_already_approved: "ร้านนี้ผ่านการยืนยันแล้ว",
+        storage_upload_failed: "อัปโหลดรูปไปยังพื้นที่จัดเก็บไม่สำเร็จ",
+        evidence_register_failed: "อัปโหลดรูปแล้วแต่บันทึกหลักฐานไม่สำเร็จ",
+      };
+      throw new Error(friendly[payload.error ?? ""] ?? payload.error ?? "อัปโหลดรูปยืนยันไม่สำเร็จ");
+    }
+
+    return payload.evidence_id ?? "";
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("อัปโหลดใช้เวลานานเกิน 45 วินาที กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export type AdminShopVerification = {
