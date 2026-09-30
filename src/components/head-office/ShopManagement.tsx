@@ -46,6 +46,8 @@ export function ShopManagement() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const detailRequestRef = useRef(0);
+  const selectedRef = useRef<string | null>(selected);
+  selectedRef.current = selected;
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
@@ -77,20 +79,23 @@ export function ShopManagement() {
   }, [search, approval, activity, category, sort, page]);
 
   const loadDetail = useCallback(async (id: string) => {
+    if (selectedRef.current !== id) return;
     const requestId = ++detailRequestRef.current;
     setDetail(null);
     setDetailLoading(true);
     setError(null);
     try {
       const nextDetail = await getShop(id);
-      if (requestId !== detailRequestRef.current) return;
+      if (requestId !== detailRequestRef.current || selectedRef.current !== id) return;
       setDetail(nextDetail);
     } catch (e) {
-      if (requestId !== detailRequestRef.current) return;
+      if (requestId !== detailRequestRef.current || selectedRef.current !== id) return;
       setDetail(null);
       setError(e instanceof Error ? e.message : "โหลดรายละเอียดร้านไม่สำเร็จ");
     } finally {
-      if (requestId === detailRequestRef.current) setDetailLoading(false);
+      if (requestId === detailRequestRef.current && selectedRef.current === id) {
+        setDetailLoading(false);
+      }
     }
   }, []);
 
