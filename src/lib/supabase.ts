@@ -39,7 +39,7 @@ export const WORKER_BASE = isCloudflarePreviewHost()
   ? "https://mytree-worker-staging.kompakorn-t.workers.dev"
   : "https://mytree-worker.kompakorn-t.workers.dev";
 const AUTH_BROKER = `${WORKER_BASE}/auth/line`;
-const SUPABASE_URL = isCloudflarePreviewHost()
+export const SUPABASE_URL = isCloudflarePreviewHost()
   ? STAGING_SUPABASE_URL
   : import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
