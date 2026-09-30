@@ -9,6 +9,9 @@ export const Route = createFileRoute("/sweet/shop")({ component: ShopProfile });
 type OwnedShop = { shop_id: string; name: string };
 
 function ShopProfile() {
+  const isQaShopPreview =
+    typeof window !== "undefined" &&
+    window.location.hostname === "codex-head-office-shop-manag.local-menu-hub.pages.dev";
   const [shops, setShops] = useState<OwnedShop[]>([]);
   const [shopId, setShopId] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "no-auth" | "no-shop" | "ok">("loading");
@@ -64,7 +67,7 @@ function ShopProfile() {
 
   return (
     <>
-      {shops.length > 1 && (
+      {isQaShopPreview && shops.length > 1 && (
         <div className="mx-auto max-w-md px-4 pt-4">
           <label className="block rounded-2xl border bg-white p-3">
             <span className="text-xs font-medium text-gray-500">เลือกร้านที่ต้องการจัดการ</span>
