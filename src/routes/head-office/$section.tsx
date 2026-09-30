@@ -6,18 +6,19 @@ import { MemberManagement } from "@/components/head-office/MemberManagement";
 import { ShopManagement } from "@/components/head-office/ShopManagement";
 import { RiderManagement } from "@/components/head-office/RiderManagement";
 import { OrderManagement } from "@/components/head-office/OrderManagement";
+import { MapManagement } from "@/components/head-office/MapManagement";
 import { isHeadOfficeSection } from "@/components/head-office/headOfficeNav";
 
 export const Route = createFileRoute("/head-office/$section")({ component: HeadOfficeSectionRoute });
 
 function HeadOfficeSectionRoute() {
   const { section } = Route.useParams();
-  const requiredPermission = section === "communities" ? "communities.read" : section === "members" ? "members.read" : section === "shops" ? "shops.read" : section === "riders" ? "riders.read" : section === "orders" ? "orders.read" : undefined;
+  const requiredPermission = section === "communities" ? "communities.read" : section === "members" ? "members.read" : section === "shops" ? "shops.read" : section === "riders" ? "riders.read" : section === "orders" ? "orders.read" : section === "map" ? "map.read" : undefined;
   return (
     <PlatformAdminGate requiredPermission={requiredPermission}>
       {isHeadOfficeSection(section) && section !== "overview" ? (
         <HeadOfficeShell section={section}>
-          {section === "communities" ? <CommunityManagement /> : section === "members" ? <MemberManagement /> : section === "shops" ? <ShopManagement /> : section === "riders" ? <RiderManagement /> : section === "orders" ? <OrderManagement /> : undefined}
+          {section === "communities" ? <CommunityManagement /> : section === "members" ? <MemberManagement /> : section === "shops" ? <ShopManagement /> : section === "riders" ? <RiderManagement /> : section === "orders" ? <OrderManagement /> : section === "map" ? <MapManagement /> : undefined}
         </HeadOfficeShell>
       ) : <HeadOfficeNotFound />}
     </PlatformAdminGate>
