@@ -211,7 +211,7 @@ export function ShopManagement() {
         </p>
         <h2 className="mt-1 text-2xl font-bold">ร้านค้า MyTree</h2>
         <p className="mt-1 text-sm text-gray-500">
-          ร้านจะอยู่ Pending จนกว่าข้อมูลบังคับครบ และ Admin ไม่สามารถอนุมัติร้านที่ยังไม่ผ่าน Readiness Gate
+          ร้านใหม่หรือร้านที่เข้าสู่ strict readiness จะอยู่ Pending จนกว่าข้อมูลบังคับครบ และ Admin ไม่สามารถอนุมัติร้านที่ยังไม่ผ่าน Readiness Gate; ร้านเดิมที่ได้รับอนุมัติก่อน rollout อาจอยู่ในสถานะ Legacy Approved ตาม production grace
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
