@@ -242,7 +242,15 @@ export function OrderManagement() {
   const filterClass = "rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-gray-400";
 
   function resetPage() {
+    // Event handlers call this synchronously, so an in-flight request becomes
+    // stale before React schedules the replacement debounced effect.
+    listRequestRef.current += 1;
     setPage(1);
+  }
+
+  function movePage(delta: number) {
+    listRequestRef.current += 1;
+    setPage((value) => value + delta);
   }
 
   return (
@@ -434,11 +442,11 @@ export function OrderManagement() {
           <div className="flex flex-col gap-2 border-t border-gray-100 px-4 py-3 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
             <span>{total.toLocaleString("th-TH")} sub-orders</span>
             <div className="flex items-center gap-2">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
+              <button type="button" disabled={page <= 1} onClick={() => movePage(-1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
                 ก่อนหน้า
               </button>
               <span>{page}/{pages}</span>
-              <button type="button" disabled={page >= pages} onClick={() => setPage((value) => value + 1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
+              <button type="button" disabled={page >= pages} onClick={() => movePage(1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
                 ถัดไป
               </button>
             </div>
@@ -487,7 +495,13 @@ function OrderDetailPanel({ detail }: { detail: OrderDetail }) {
           <Badge value={orderState.status} label={ORDER_LABELS[orderState.status] ?? orderState.status} />
         </div>
         <p className="mt-3 text-xs text-gray-300">Hub {identity.order_id}</p>
-        <p className="mt-1 text-xs text-gray-400">{fmt(identity.created_at)} · {identity.source}</p>
+        <p className="mt-1 text-xs text-gray-400">Created {fmt(identity.created_at)} · {identity.source}</p>
+        {identity.requested_for && (
+          <div className="mt-3 rounded-xl bg-white/10 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Requested fulfillment</p>
+            <p className="mt-1 text-sm font-semibold text-white">{fmt(identity.requested_for)}</p>
+          </div>
+        )}
       </section>
 
       {detail.warnings.length > 0 && (
