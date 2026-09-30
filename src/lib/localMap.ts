@@ -12,6 +12,7 @@ export type LocalMapLocation = {
   lng: number | null;
   approved: boolean;
   banned: boolean;
+  isOpen: boolean | null;
   mapVisible: boolean;
   verificationStatus: "unverified" | "verified" | "correction_pending" | "rejected";
   locationUpdatedAt: string | null;
@@ -31,6 +32,7 @@ export type LocalMapLocationRow = {
   lng: number | null;
   approved?: boolean;
   banned?: boolean;
+  is_open?: boolean | null;
   map_visible?: boolean;
   verification_status?: LocalMapLocation["verificationStatus"] | null;
   location_updated_at?: string | null;
@@ -50,6 +52,7 @@ export function normalizeLocalMapLocation(row: LocalMapLocationRow): LocalMapLoc
     lng: typeof row.lng === "number" ? row.lng : null,
     approved: row.approved ?? true,
     banned: row.banned ?? false,
+    isOpen: row.is_open ?? null,
     mapVisible: row.map_visible ?? false,
     verificationStatus: row.verification_status ?? "unverified",
     locationUpdatedAt: row.location_updated_at ?? null,
@@ -70,9 +73,11 @@ export function isPublicMapLocation(location: LocalMapLocation): boolean {
     : location.approved && !location.banned && location.mapVisible && hasValidLocalMapPin(location);
 }
 
-export function localMapQuality(location: LocalMapLocation): "missing" | "invalid" | "verified" | "unverified" {
+export function localMapQuality(location: LocalMapLocation): "missing" | "invalid" | "stale" | "verified" | "unverified" {
   if (location.lat === null || location.lng === null) return "missing";
   if (!hasValidLocalMapPin(location)) return "invalid";
+  const freshness = location.locationVerifiedAt ?? location.locationUpdatedAt;
+  if (freshness && Date.now() - new Date(freshness).getTime() > 365 * 24 * 60 * 60 * 1000) return "stale";
   return location.verificationStatus === "verified" ? "verified" : "unverified";
 }
 

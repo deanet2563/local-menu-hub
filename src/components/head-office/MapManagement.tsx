@@ -16,7 +16,7 @@ import {
 } from "@/lib/mapAdmin";
 import { getAdminAccessContext, hasAdminPermission, type AdminAccessContext } from "@/lib/adminAccess";
 
-type Filter = "all" | "visible" | "hidden" | "missing" | "unverified" | "duplicates";
+type Filter = "all" | "visible" | "hidden" | "missing" | "stale" | "unverified" | "duplicates";
 
 const dateLabel = (value: string | null) => value
   ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -42,6 +42,7 @@ export function MapManagement() {
       case "visible": return location.mapVisible && location.approved && !location.banned && hasValidLocalMapPin(location);
       case "hidden": return !location.mapVisible || !location.approved || location.banned;
       case "missing": return localMapQuality(location) === "missing" || localMapQuality(location) === "invalid";
+      case "stale": return localMapQuality(location) === "stale";
       case "unverified": return localMapQuality(location) === "unverified";
       case "duplicates": return duplicateIds.has(location.id);
       default: return true;
@@ -109,7 +110,7 @@ export function MapManagement() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาร้าน ชุมชน หรือที่อยู่" className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm" />
           </label>
           <select aria-label="ตัวกรองตำแหน่ง" value={filter} onChange={(event) => setFilter(event.target.value as Filter)} className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm">
-            <option value="all">ทั้งหมด</option><option value="visible">แสดงบนแผนที่</option><option value="hidden">ซ่อน / ยังไม่อนุมัติ</option><option value="missing">พิกัดขาด / ไม่ถูกต้อง</option><option value="unverified">ยังไม่ยืนยัน</option><option value="duplicates">พิกัดซ้ำ</option>
+            <option value="all">ทั้งหมด</option><option value="visible">แสดงบนแผนที่</option><option value="hidden">ซ่อน / ยังไม่อนุมัติ</option><option value="missing">พิกัดขาด / ไม่ถูกต้อง</option><option value="stale">ไม่ได้ตรวจเกิน 1 ปี</option><option value="unverified">ยังไม่ยืนยัน</option><option value="duplicates">พิกัดซ้ำ</option>
           </select>
           <button type="button" onClick={() => setShowList((value) => !value)} className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm font-semibold lg:hidden">{showList ? "ซ่อนรายการ" : "แสดงรายการ"}</button>
         </div>
@@ -153,7 +154,7 @@ function LocationRow({ location, selected, duplicate, onSelect }: { location: Lo
   const quality = localMapQuality(location);
   return <li><button type="button" onClick={onSelect} aria-pressed={selected} className={`w-full rounded-xl border p-3 text-left transition ${selected ? "border-gray-900 bg-gray-50 ring-1 ring-gray-900" : "border-gray-200 hover:border-gray-400"}`}>
     <span className="flex items-start justify-between gap-2"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-gray-900">{location.name}</span><span className="mt-0.5 block truncate text-xs text-gray-500">{location.address ?? location.communityName ?? location.category ?? "ไม่มีที่อยู่"}</span></span><span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-600">{status}</span></span>
-    <span className="mt-2 flex flex-wrap gap-1.5 text-[11px]"><Badge tone={quality === "verified" ? "green" : quality === "missing" || quality === "invalid" ? "red" : "amber"}>{quality === "verified" ? "พิกัดยืนยันแล้ว" : quality === "missing" ? "ไม่มีพิกัด" : quality === "invalid" ? "พิกัดไม่ถูกต้อง" : "ยังไม่ยืนยัน"}</Badge>{duplicate && <Badge tone="red">พิกัดซ้ำ</Badge>}</span>
+    <span className="mt-2 flex flex-wrap gap-1.5 text-[11px]"><Badge tone={quality === "verified" ? "green" : quality === "missing" || quality === "invalid" ? "red" : "amber"}>{quality === "verified" ? "พิกัดยืนยันแล้ว" : quality === "missing" ? "ไม่มีพิกัด" : quality === "invalid" ? "พิกัดไม่ถูกต้อง" : quality === "stale" ? "ไม่ได้ตรวจเกิน 1 ปี" : "ยังไม่ยืนยัน"}</Badge>{location.kind === "shop" && location.isOpen === false && <Badge tone="amber">ร้านปิด</Badge>}{duplicate && <Badge tone="red">พิกัดซ้ำ</Badge>}</span>
   </button></li>;
 }
 
@@ -183,7 +184,7 @@ function LocationDetail({ location, duplicate, canUpdate, onVisibility, onPropos
 
   return <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">รายละเอียดตำแหน่งที่เลือก</p><h3 className="mt-1 text-lg font-bold">{location.name}</h3></div><span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold">{location.verificationStatus === "verified" ? "ยืนยันพิกัดแล้ว" : location.verificationStatus === "correction_pending" ? "มีข้อเสนอรอตรวจ" : location.verificationStatus === "rejected" ? "ข้อเสนอล่าสุดถูกปฏิเสธ" : "ยังไม่ยืนยัน"}</span></div>
-    <dl className="mt-4 grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-4"><Detail label="ที่อยู่" value={location.address ?? "ไม่มีข้อมูล"} /><Detail label="Latitude / Longitude" value={hasValidLocalMapPin(location) ? `${location.lat!.toFixed(6)}, ${location.lng!.toFixed(6)}` : "ไม่มีพิกัดที่ถูกต้อง"} /><Detail label="แสดงบนแผนที่" value={location.mapVisible ? "เปิด" : "ซ่อน"} /><Detail label="สถานะธุรกิจ" value={location.banned ? "ปิดใช้งาน" : location.approved ? "อนุมัติแล้ว" : "รออนุมัติ"} /><Detail label="พิกัดอัปเดตล่าสุด" value={dateLabel(location.locationUpdatedAt)} /><Detail label="ยืนยันพิกัดล่าสุด" value={dateLabel(location.locationVerifiedAt)} /><Detail label="แหล่งข้อมูล" value={location.locationSource ?? "ยังไม่บันทึก"} /><Detail label="ชุมชน" value={location.communityName ?? "ไม่มีความสัมพันธ์ในข้อมูล"} />
+    <dl className="mt-4 grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-4"><Detail label="ที่อยู่" value={location.address ?? "ไม่มีข้อมูล"} /><Detail label="Latitude / Longitude" value={hasValidLocalMapPin(location) ? `${location.lat!.toFixed(6)}, ${location.lng!.toFixed(6)}` : "ไม่มีพิกัดที่ถูกต้อง"} /><Detail label="แสดงบนแผนที่" value={location.mapVisible ? "เปิด" : "ซ่อน"} /><Detail label="สถานะธุรกิจ" value={location.kind === "shop" && location.isOpen === false ? "ร้านปิด" : location.banned ? "ปิดใช้งาน" : location.approved ? "อนุมัติแล้ว" : "รออนุมัติ"} /><Detail label="พิกัดอัปเดตล่าสุด" value={dateLabel(location.locationUpdatedAt)} /><Detail label="ยืนยันพิกัดล่าสุด" value={dateLabel(location.locationVerifiedAt)} /><Detail label="แหล่งข้อมูล" value={location.locationSource ?? "ยังไม่บันทึก"} /><Detail label="ชุมชน" value={location.communityName ?? "ไม่มีความสัมพันธ์ในข้อมูล"} />
     </dl>
     {duplicate && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">พบตำแหน่งเดียวกันกับรายการอื่น ตรวจสอบก่อนเผยแพร่</p>}
     <div className="mt-4 flex flex-wrap gap-2">{canUpdate && location.kind === "shop" && <button type="button" onClick={onVisibility} className="rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold">{location.mapVisible ? "ซ่อนจากแผนที่สาธารณะ" : "แสดงบนแผนที่สาธารณะ"}</button>}</div>
