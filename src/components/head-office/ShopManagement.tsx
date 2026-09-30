@@ -38,7 +38,7 @@ export function ShopManagement() {
   const [approval, setApproval] = useState("");
   const [activity, setActivity] = useState("");
   const [category, setCategory] = useState("");
-  const [sort, setSort] = useState("created_desc");
+  const [sort, setSort] = useState("status_desc");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -215,6 +215,7 @@ export function ShopManagement() {
             className="rounded-xl border px-3 py-2.5 text-sm"
           >
             <option value="">ทุกสถานะ</option>
+            <option value="ready">Ready</option>
             <option value="approved">Approved</option>
             <option value="pending">Pending</option>
             <option value="banned">Banned</option>
@@ -245,6 +246,7 @@ export function ShopManagement() {
             onChange={(e) => setSort(e.target.value)}
             className="rounded-xl border px-3 py-2.5 text-sm"
           >
+            <option value="status_desc">Latest / อัปเดตล่าสุด</option>
             <option value="created_desc">สร้างล่าสุด</option>
             <option value="created_asc">สร้างเก่าสุด</option>
             <option value="name_asc">ชื่อ A–Z</option>
@@ -314,6 +316,9 @@ export function ShopManagement() {
                       </td>
                       <td className="px-4 py-4">
                         <Badge item={item} />
+                        <p className="mt-1 whitespace-nowrap text-[10px] text-gray-400">
+                          {fmt(item.status_updated_at)}
+                        </p>
                       </td>
                       <td className="px-4 py-4">
                         <ReadinessBadge item={item} />
