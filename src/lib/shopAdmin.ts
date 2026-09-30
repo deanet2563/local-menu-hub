@@ -16,6 +16,8 @@ export type ShopListItem = {
   is_open: boolean;
   is_approved: boolean;
   is_banned: boolean;
+  approval_rejected_at: string | null;
+  approval_rejected_reason: string | null;
   deletion_status: string;
   created_at: string;
   last_active_at: string | null;
@@ -36,6 +38,8 @@ export type ShopDetail = {
     is_approved: boolean;
     is_banned: boolean;
     banned_reason: string | null;
+    approval_rejected_at: string | null;
+    approval_rejected_reason: string | null;
     deletion_requested_at: string | null;
     deletion_reason: string | null;
     deletion_status: string;
@@ -103,6 +107,7 @@ export async function getShop(id: string) {
 
 export type ShopLifecycleAction =
   | "approve"
+  | "reject"
   | "ban"
   | "unban"
   | "deletion_approve"
