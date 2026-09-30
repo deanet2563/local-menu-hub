@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   getOrder,
   listOrders,
@@ -148,8 +148,12 @@ export function OrderManagement() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const listRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -170,13 +174,15 @@ export function OrderManagement() {
         page,
         pageSize: PAGE_SIZE,
       });
+      if (requestId !== listRequestRef.current) return;
       setItems(result.items);
       setTotal(result.total);
       setCapabilities(result.capabilities);
     } catch (cause) {
+      if (requestId !== listRequestRef.current) return;
       setError(cause instanceof Error ? cause.message : "โหลด Orders ไม่สำเร็จ");
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }, [
     search,
@@ -196,15 +202,19 @@ export function OrderManagement() {
   ]);
 
   const loadDetail = useCallback(async (subId: string) => {
+    const requestId = ++detailRequestRef.current;
     setDetailLoading(true);
-    setError(null);
+    setDetailError(null);
     try {
-      setDetail(await getOrder(subId));
+      const nextDetail = await getOrder(subId);
+      if (requestId !== detailRequestRef.current) return;
+      setDetail(nextDetail);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "โหลด Order detail ไม่สำเร็จ");
+      if (requestId !== detailRequestRef.current) return;
+      setDetailError(cause instanceof Error ? cause.message : "โหลด Order detail ไม่สำเร็จ");
       setDetail(null);
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestRef.current) setDetailLoading(false);
     }
   }, []);
 
@@ -214,8 +224,15 @@ export function OrderManagement() {
   }, [load]);
 
   useEffect(() => {
-    if (selected) void loadDetail(selected);
-    else setDetail(null);
+    if (selected) {
+      void loadDetail(selected);
+      return;
+    }
+
+    detailRequestRef.current += 1;
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
   }, [selected, loadDetail]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -428,10 +445,24 @@ export function OrderManagement() {
         <aside className="2xl:sticky 2xl:top-20 2xl:self-start">
           {!selected ? (
             <section className="rounded-3xl border border-gray-200 bg-white shadow-sm"><State text="เลือก sub-order เพื่อดูรายละเอียด" /></section>
-          ) : detailLoading || !detail ? (
+          ) : detailLoading ? (
             <section className="rounded-3xl border border-gray-200 bg-white shadow-sm"><State text="กำลังโหลดรายละเอียด..." /></section>
-          ) : (
+          ) : detailError ? (
+            <section className="rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
+              <p className="text-sm font-semibold text-red-700">โหลด Order detail ไม่สำเร็จ</p>
+              <p className="mt-2 break-words text-xs text-red-600">{detailError}</p>
+              <button
+                type="button"
+                onClick={() => void loadDetail(selected)}
+                className="mt-4 rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+              >
+                ลองใหม่
+              </button>
+            </section>
+          ) : detail ? (
             <OrderDetailPanel detail={detail} />
+          ) : (
+            <section className="rounded-3xl border border-gray-200 bg-white shadow-sm"><State text="ไม่พบ Order detail" /></section>
           )}
         </aside>
       </div>
