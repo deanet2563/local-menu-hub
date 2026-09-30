@@ -14,6 +14,8 @@ import { safeStoragePath } from "@/lib/storageKey";
 // ============================================================
 
 const DEFAULT_LIFF_ID = "2010936243-3kPykppE";
+const DEFAULT_SHOP_LIFF_ID = import.meta.env.VITE_SHOP_LIFF_ID || DEFAULT_LIFF_ID;
+const STAGING_SHOP_LIFF_ID = import.meta.env.VITE_STAGING_SHOP_LIFF_ID || "";
 const STAGING_SUPABASE_URL = "https://qdvgkdxjstsxeamjsjhl.supabase.co";
 const STAGING_SUPABASE_ANON_KEY = "sb_publishable_2c9IeRf-5IBL74pPIUi3_Q_vI9w9gG0";
 const STAGING_AUTH_BROKER = "https://mytree-worker-staging.kompakorn-t.workers.dev/auth/line";
@@ -69,6 +71,23 @@ function isAiOfficeRoute(): boolean {
   return window.location.pathname === "/sweet/ai-office";
 }
 
+function isShopOwnerRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  return path === "/sweet/shop"
+    || path === "/sweet/menu"
+    || path === "/sweet/signup";
+}
+
+function activeLiffId(): string {
+  if (isCloudflarePreviewHost() && isShopOwnerRoute()) {
+    if (!STAGING_SHOP_LIFF_ID) throw new Error("staging_shop_liff_not_configured");
+    return STAGING_SHOP_LIFF_ID;
+  }
+  if (isShopOwnerRoute()) return DEFAULT_SHOP_LIFF_ID;
+  return LIFF_ID;
+}
+
 /** Anonymous client for public catalog/configuration reads. Never invokes LIFF. */
 export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -84,14 +103,15 @@ export const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  * a permanently-broken cache. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
-  if (isOrderingPreview() && !isAiOfficeRoute()) return Promise.resolve();
+  if (isOrderingPreview() && !isAiOfficeRoute() && !isShopOwnerRoute()) return Promise.resolve();
   if (!liffReady) {
+    const liffId = activeLiffId();
     liffReady = withTimeout(
       liff.init({
-        liffId: LIFF_ID,
-        // Customer raw-preview browsing must remain passive. AI Office is an
-        // admin surface, so it may actively establish the existing LINE session.
-        withLoginOnExternalBrowser: isAiOfficeRoute(),
+        liffId,
+        // Public customer preview remains passive. Authenticated shop/admin
+        // surfaces must establish the LINE session explicitly.
+        withLoginOnExternalBrowser: isAiOfficeRoute() || isShopOwnerRoute(),
       }),
       LIFF_INIT_TIMEOUT_MS,
       "เชื่อมต่อ LINE ไม่สำเร็จ (หมดเวลา) กรุณาลองใหม่",
@@ -106,7 +126,7 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
-  if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+  if (isOrderingPreview() && !isAiOfficeRoute() && !isShopOwnerRoute()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
@@ -115,7 +135,17 @@ export async function getAccessToken(): Promise<string> {
     // Raw preview browsing intentionally works outside LINE. Authenticated
     // actions are allowed only after the same preview is launched through its
     // configured staging LIFF URL.
-    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+    if (isOrderingPreview() && !isAiOfficeRoute() && !isShopOwnerRoute()) return "";
+
+    if (isShopOwnerRoute()) {
+      const liffId = activeLiffId();
+      if (!liff.isInClient() && isCloudflarePreviewHost()) {
+        window.location.replace(`https://liff.line.me/${liffId}${window.location.pathname}`);
+        return "";
+      }
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
 
     if (isAiOfficeRoute()) {
       const current = new URL(window.location.href);
@@ -142,7 +172,11 @@ export async function getAccessToken(): Promise<string> {
 
   const idToken = liff.getIDToken();
   if (!idToken) {
-    if (isOrderingPreview() && !isAiOfficeRoute()) return "";
+    if (isOrderingPreview() && !isAiOfficeRoute() && !isShopOwnerRoute()) return "";
+    if (isShopOwnerRoute()) {
+      liff.login({ redirectUri: window.location.href });
+      return "";
+    }
     if (isAiOfficeRoute()) {
       liff.login({ redirectUri: window.location.href });
       return "";
