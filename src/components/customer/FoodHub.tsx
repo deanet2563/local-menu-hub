@@ -70,10 +70,10 @@ export function FoodHub() {
 
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
-  const shopIdsInSegment = new Set(
-    items.filter((i) => bucketBelongsToSegment(bucketKeyForCategory(i.category), segment)).map((i) => i.shop_id)
-  );
-  const nearbyShops = allOrderedShops.filter((s) => shopIdsInSegment.has(s.shop_id));
+  const nearbyShops = allOrderedShops.filter((shop) => {
+    const shopBucket = bucketKeyForCategory(shop.category);
+    return bucketBelongsToSegment(shopBucket, segment);
+  });
   const nearbyShopsHeading = segment === "food" ? "ร้านอาหารใกล้คุณ" : "ร้านขนมใกล้คุณ";
   const midpoint = Math.ceil(nearbyShops.length / 2);
   const shopsBeforeSponsor = nearbyShops.slice(0, midpoint);
