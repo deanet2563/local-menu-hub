@@ -11,9 +11,13 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AiOfficeRouteImport } from './routes/ai-office'
 import { Route as CartRouteImport } from './routes/cart'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
+import { Route as HeadOfficeIndexRouteImport } from './routes/head-office/index'
+import { Route as HeadOfficeSectionRouteImport } from './routes/head-office/$section'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as RiderIndexRouteImport } from './routes/rider/index'
 import { Route as RiderProfileRouteImport } from './routes/rider/profile'
@@ -22,6 +26,7 @@ import { Route as ShopIndexRouteImport } from './routes/shop/index'
 import { Route as ShopShopIdRouteImport } from './routes/shop/$shopId'
 import { Route as SweetIndexRouteImport } from './routes/sweet/index'
 import { Route as SweetAdminRouteImport } from './routes/sweet/admin'
+import { Route as SweetAiOfficeRouteImport } from './routes/sweet/ai-office'
 import { Route as SweetMenuRouteImport } from './routes/sweet/menu'
 import { Route as SweetOrdersRouteImport } from './routes/sweet/orders'
 import { Route as SweetPosRouteImport } from './routes/sweet/pos'
@@ -42,9 +47,19 @@ const AccountRoute = AccountRouteImport.update({
   path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiOfficeRoute = AiOfficeRouteImport.update({
+  id: '/ai-office',
+  path: '/ai-office',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdersRoute = OrdersRouteImport.update({
@@ -55,6 +70,16 @@ const OrdersRoute = OrdersRouteImport.update({
 const DebugCheckoutMapRoute = DebugCheckoutMapRouteImport.update({
   id: '/debug/checkout-map',
   path: '/debug/checkout-map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HeadOfficeIndexRoute = HeadOfficeIndexRouteImport.update({
+  id: '/head-office/',
+  path: '/head-office/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HeadOfficeSectionRoute = HeadOfficeSectionRouteImport.update({
+  id: '/head-office/$section',
+  path: '/head-office/$section',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HubIndexRoute = HubIndexRouteImport.update({
@@ -95,6 +120,11 @@ const SweetIndexRoute = SweetIndexRouteImport.update({
 const SweetAdminRoute = SweetAdminRouteImport.update({
   id: '/sweet/admin',
   path: '/sweet/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SweetAiOfficeRoute = SweetAiOfficeRouteImport.update({
+  id: '/sweet/ai-office',
+  path: '/sweet/ai-office',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SweetMenuRoute = SweetMenuRouteImport.update({
@@ -146,19 +176,24 @@ const SweetPrintSubIdRoute = SweetPrintSubIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
+  '/sweet/ai-office': typeof SweetAiOfficeRoute
   '/sweet/menu': typeof SweetMenuRoute
   '/sweet/orders': typeof SweetOrdersRoute
   '/sweet/pos': typeof SweetPosRoute
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/head-office/': typeof HeadOfficeIndexRoute
   '/hub/': typeof HubIndexRoute
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
@@ -170,19 +205,24 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
+  '/sweet/ai-office': typeof SweetAiOfficeRoute
   '/sweet/menu': typeof SweetMenuRoute
   '/sweet/orders': typeof SweetOrdersRoute
   '/sweet/pos': typeof SweetPosRoute
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/head-office': typeof HeadOfficeIndexRoute
   '/hub': typeof HubIndexRoute
   '/rider': typeof RiderIndexRoute
   '/shop': typeof ShopIndexRoute
@@ -195,19 +235,24 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
+  '/head-office/$section': typeof HeadOfficeSectionRoute
   '/rider/profile': typeof RiderProfileRoute
   '/rider/signup': typeof RiderSignupRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/sweet/admin': typeof SweetAdminRoute
+  '/sweet/ai-office': typeof SweetAiOfficeRoute
   '/sweet/menu': typeof SweetMenuRoute
   '/sweet/orders': typeof SweetOrdersRoute
   '/sweet/pos': typeof SweetPosRoute
   '/sweet/riders': typeof SweetRidersRoute
   '/sweet/shop': typeof SweetShopRoute
   '/sweet/signup': typeof SweetSignupRoute
+  '/head-office/': typeof HeadOfficeIndexRoute
   '/hub/': typeof HubIndexRoute
   '/rider/': typeof RiderIndexRoute
   '/shop/': typeof ShopIndexRoute
@@ -221,19 +266,24 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/account'
+    | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
+    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
+    | '/sweet/ai-office'
     | '/sweet/menu'
     | '/sweet/orders'
     | '/sweet/pos'
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/head-office/'
     | '/hub/'
     | '/rider/'
     | '/shop/'
@@ -245,19 +295,24 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/account'
+    | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
+    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
+    | '/sweet/ai-office'
     | '/sweet/menu'
     | '/sweet/orders'
     | '/sweet/pos'
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/head-office'
     | '/hub'
     | '/rider'
     | '/shop'
@@ -269,19 +324,24 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/account'
+    | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
+    | '/head-office/$section'
     | '/rider/profile'
     | '/rider/signup'
     | '/shop/$shopId'
     | '/sweet/admin'
+    | '/sweet/ai-office'
     | '/sweet/menu'
     | '/sweet/orders'
     | '/sweet/pos'
     | '/sweet/riders'
     | '/sweet/shop'
     | '/sweet/signup'
+    | '/head-office/'
     | '/hub/'
     | '/rider/'
     | '/shop/'
@@ -294,19 +354,24 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
+  AiOfficeRoute: typeof AiOfficeRoute
   CartRoute: typeof CartRoute
+  MapRoute: typeof MapRoute
   OrdersRoute: typeof OrdersRoute
   DebugCheckoutMapRoute: typeof DebugCheckoutMapRoute
+  HeadOfficeSectionRoute: typeof HeadOfficeSectionRoute
   RiderProfileRoute: typeof RiderProfileRoute
   RiderSignupRoute: typeof RiderSignupRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
   SweetAdminRoute: typeof SweetAdminRoute
+  SweetAiOfficeRoute: typeof SweetAiOfficeRoute
   SweetMenuRoute: typeof SweetMenuRoute
   SweetOrdersRoute: typeof SweetOrdersRoute
   SweetPosRoute: typeof SweetPosRoute
   SweetRidersRoute: typeof SweetRidersRoute
   SweetShopRoute: typeof SweetShopRoute
   SweetSignupRoute: typeof SweetSignupRoute
+  HeadOfficeIndexRoute: typeof HeadOfficeIndexRoute
   HubIndexRoute: typeof HubIndexRoute
   RiderIndexRoute: typeof RiderIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
@@ -332,11 +397,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-office': {
+      id: '/ai-office'
+      path: '/ai-office'
+      fullPath: '/ai-office'
+      preLoaderRoute: typeof AiOfficeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cart': {
       id: '/cart'
       path: '/cart'
       fullPath: '/cart'
       preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orders': {
@@ -351,6 +430,20 @@ declare module '@tanstack/react-router' {
       path: '/debug/checkout-map'
       fullPath: '/debug/checkout-map'
       preLoaderRoute: typeof DebugCheckoutMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/head-office/': {
+      id: '/head-office/'
+      path: '/head-office'
+      fullPath: '/head-office/'
+      preLoaderRoute: typeof HeadOfficeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/head-office/$section': {
+      id: '/head-office/$section'
+      path: '/head-office/$section'
+      fullPath: '/head-office/$section'
+      preLoaderRoute: typeof HeadOfficeSectionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hub/': {
@@ -407,6 +500,13 @@ declare module '@tanstack/react-router' {
       path: '/sweet/admin'
       fullPath: '/sweet/admin'
       preLoaderRoute: typeof SweetAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sweet/ai-office': {
+      id: '/sweet/ai-office'
+      path: '/sweet/ai-office'
+      fullPath: '/sweet/ai-office'
+      preLoaderRoute: typeof SweetAiOfficeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sweet/menu': {
@@ -478,19 +578,24 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
+  AiOfficeRoute: AiOfficeRoute,
   CartRoute: CartRoute,
+  MapRoute: MapRoute,
   OrdersRoute: OrdersRoute,
   DebugCheckoutMapRoute: DebugCheckoutMapRoute,
+  HeadOfficeSectionRoute: HeadOfficeSectionRoute,
   RiderProfileRoute: RiderProfileRoute,
   RiderSignupRoute: RiderSignupRoute,
   ShopShopIdRoute: ShopShopIdRoute,
   SweetAdminRoute: SweetAdminRoute,
+  SweetAiOfficeRoute: SweetAiOfficeRoute,
   SweetMenuRoute: SweetMenuRoute,
   SweetOrdersRoute: SweetOrdersRoute,
   SweetPosRoute: SweetPosRoute,
   SweetRidersRoute: SweetRidersRoute,
   SweetShopRoute: SweetShopRoute,
   SweetSignupRoute: SweetSignupRoute,
+  HeadOfficeIndexRoute: HeadOfficeIndexRoute,
   HubIndexRoute: HubIndexRoute,
   RiderIndexRoute: RiderIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
