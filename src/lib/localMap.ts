@@ -66,8 +66,9 @@ export function hasValidLocalMapPin(location: Pick<LocalMapLocation, "lat" | "ln
   return isValidMerchantCoordinate(location.lat, location.lng);
 }
 
-/** Public map rule: only approved, active, explicitly visible, valid MyTree pins. */
+/** Public map rule: shops require shop verification; Community pins are unavailable until their own canonical verification workflow exists. */
 export function isPublicMapLocation(location: LocalMapLocation): boolean {
+  if (location.kind === "community") return false;
   return location.approved && !location.banned && location.mapVisible
     && location.verificationStatus === "verified" && hasValidLocalMapPin(location);
 }
