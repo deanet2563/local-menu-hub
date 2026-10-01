@@ -24,6 +24,7 @@ export const localMapContractChecks = {
   unverifiedShopPinHidden: !isPublicMapLocation(sample({ verification_status: "unverified" })),
   pendingCorrectionPinHidden: !isPublicMapLocation(sample({ verification_status: "correction_pending" })),
   rejectedCorrectionPinHidden: !isPublicMapLocation(sample({ verification_status: "rejected" })),
+  communityUnavailableWithoutItsOwnVerification: !isPublicMapLocation(sample({ kind: "community", verification_status: "verified" })),
   unapprovedShopHidden: !isPublicMapLocation(sample({ approved: false })),
   bannedShopHidden: !isPublicMapLocation(sample({ banned: true })),
   mapHiddenShopHidden: !isPublicMapLocation(sample({ map_visible: false })),
