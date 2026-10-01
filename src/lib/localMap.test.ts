@@ -30,7 +30,7 @@ export const localMapContractChecks = {
   mapHiddenShopHidden: !isPublicMapLocation(sample({ map_visible: false })),
   missingPinReported: localMapQuality(sample({ lat: null })) === "missing",
   invalidPinReported: localMapQuality(sample({ lat: 91 })) === "invalid",
-  noInventedVerification: localMapQuality(sample()) === "unverified",
+  noInventedVerification: localMapQuality(sample({ verification_status: null })) === "unverified",
   verifiedPinExplicit: localMapQuality(sample({ verification_status: "verified" })) === "verified",
   stalePinFlagged: localMapQuality(sample({ location_updated_at: "2023-01-01T00:00:00.000Z" })) === "stale",
   exactDuplicateDetection: duplicateLocationIds([
