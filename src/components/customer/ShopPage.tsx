@@ -14,7 +14,7 @@ type Shop = {
   shop_id: string; name: string; category: string | null; logo_url: string | null;
   is_open: boolean | null; delivery_note: string | null;
   is_approved: boolean; is_banned: boolean;
-  address: string | null; lat: number | null; lng: number | null; map_visible: boolean;
+  address: string | null; lat: number | null; lng: number | null; is_map_visible: boolean;
   location_verification_status: "unverified" | "verified";
 };
 type Item = { item_id: string; shop_id: string; name: string; price: number; image_url: string | null; category: string | null };
@@ -36,7 +36,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
   useEffect(() => {
     (async () => {
       const [{ data: s }, { data: m }] = await Promise.all([
-        publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note,is_approved,is_banned,address,lat,lng,map_visible,location_verification_status").eq("shop_id", shopId).maybeSingle(),
+        publicSupabase.from("shops").select("shop_id,name,category,logo_url,is_open,delivery_note,is_approved,is_banned,address,lat,lng,is_map_visible,location_verification_status").eq("shop_id", shopId).maybeSingle(),
         publicSupabase.from("menu_items").select("item_id,shop_id,name,price,image_url,category").eq("shop_id", shopId).eq("is_available", true),
       ]);
       setShop(s as Shop);
@@ -115,7 +115,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
         </div>
       </div>
 
-      {shop.map_visible && shop.location_verification_status === "verified" && shop.lat != null && shop.lng != null && <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white p-3"><div><p className="text-xs font-semibold text-gray-700">📍 ที่ตั้งร้าน</p><p className="mt-1 text-xs text-gray-500">{shop.address || "ดูตำแหน่งร้านบนแผนที่"}</p></div><Link to="/map" search={{ shop: shop.shop_id }} className="rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white">ดูแผนที่</Link></div>}
+      {shop.is_map_visible && shop.location_verification_status === "verified" && shop.lat != null && shop.lng != null && <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white p-3"><div><p className="text-xs font-semibold text-gray-700">📍 ที่ตั้งร้าน</p><p className="mt-1 text-xs text-gray-500">{shop.address || "ดูตำแหน่งร้านบนแผนที่"}</p></div><Link to="/map" search={{ shop: shop.shop_id }} className="rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white">ดูแผนที่</Link></div>}
 
       <div className="sticky top-0 z-20 bg-white border-b border-orange-100 px-4 py-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
