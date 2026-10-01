@@ -1,6 +1,6 @@
 # Moderation Domain Foundation
 
-Status: proposed contract for review. This document is not a production schema or policy migration.
+Status: domain/read contract is under staged validation. No moderation schema or review policy change is deployed to Production.
 
 ## Production baseline
 
@@ -11,7 +11,7 @@ Verified against frontend commit `d84014974859192975c9aad41553ad23f588fff9` and 
 | Community posts and comments | No production table or RPC. The Community Phase 3 routes are in the separate `codex/community-phase3-foundation` branch and use typed prototype fixtures. The prototype has posts but no comment entity. | Fixture IDs and states are not valid moderation targets. |
 | Groups, events, help requests, marketplace listings | No production tables or RPCs. Prototype types/cards exist only in the Community fixture branch. Their domain states include `locked`, `cancelled`, `resolved`, `reserved`, and `sold`; those describe the underlying feature lifecycle, not moderation visibility. | Do not accept reports against prototype records. |
 | Community boundary and moderator grant | Production has `communities`, `community_memberships`, and `community_moderator_assignments`; they are empty in the baseline. Community data is accessed through permission-scoped RPCs. `fn_has_community_moderator_role(community_id)` checks an active assignment for the JWT `customer_id`. | A scoped moderator grant exists, but no content/report permission contract exists. |
-| Shop reviews/replies | `shop_order_reviews.review_id` and `shop_review_replies.reply_id` are UUIDs. Both tables have public SELECT policies; neither has moderation visibility/history fields. Both were empty in the baseline. | Real target records exist, but hiding one safely across all reads is not yet supported. |
+| Shop reviews/replies | `shop_order_reviews.review_id` and `shop_review_replies.reply_id` are UUIDs. Both tables have public SELECT policies; review content is immutable, replies reject all updates. Both were empty in the baseline. | Visibility migration is in PR #62 for staging validation. Reviews remain report-only until that migration and read regression pass. |
 | Member | `customers.id` is UUID. `fn_admin_set_member_status(customer_id,status,reason)` owns active/suspended/banned lifecycle and requires `members.action`; it writes `admin_audit_log`. | Reuse the lifecycle RPC; never update `customers` from a moderation-specific path. |
 | Shop | `shops.shop_id` is text. `fn_admin_shop_lifecycle(shop_id,action,reason)` owns approve/reject/ban/unban and requires `shops.action`; it writes through the existing audit contract. | Reuse the lifecycle RPC; never update `shops.is_banned` from moderation. |
 | Rider | `riders.id` is UUID. `fn_admin_rider_lifecycle(rider_id,action,reason)` owns approve/verify/ban/unban and requires `riders.action`; guard triggers and audit remain authoritative. | Reuse the lifecycle RPC; never update `riders.is_banned` from moderation. |
@@ -80,6 +80,8 @@ For each reportable content row and review, store one `moderation_visibility tex
 
 The owning content row is the single source of current visibility; do not maintain a second visibility mirror in the case table. A permission-scoped decision RPC validates the target, changes its owning row, appends a case event, and writes the audit record in one transaction. Customer reads in list, detail, search, feed, and related-content paths all use the same `moderation_visibility = 'visible'` rule plus the existing community privacy rules. Direct table reads must be protected by RLS using the row's own field, or replaced by narrow read RPCs/views with equivalent checks. Case-detail access to hidden/removed targets is through an authorized, community-scoped path. The current public review SELECT policies must be addressed before review moderation actions are enabled.
 
+For the staged shop-review contract, `shop_order_reviews.moderation_visibility` is the only visibility source. Public review SELECT allows `visible`; public reply SELECT requires a matching parent review with `visible`; customer review insertion and Shop reply insertion also require a visible state. Client UPDATE remains unavailable through RLS. There is no state-writing RPC yet, so the target remains report-only and no moderation action is exposed. `restored` remains an event that returns current state to `visible`, not a fourth state.
+
 Do not add this field to Member, Shop, or Rider as a parallel ban flag. Their canonical lifecycle state and existing customer-surface filters remain authoritative. Do not reuse each feature's business `status` column for moderation visibility.
 
 Member, Shop, and Rider account/entity lifecycle remains owned by the existing module RPCs. A moderation case may record a recommendation/escalation; it may invoke an owner lifecycle action only when the actor also has that module's permission and the call goes through its canonical RPC. A `moderation_admin` role alone is not authority to ban a Member, Shop, or Rider.
@@ -98,6 +100,23 @@ Community Moderators can see and act only on cases whose source row resolves to 
 | Orders/support references | Only the scoped order owner/support path can read required evidence; no customer addresses, slips, or proofs leak into general case lists. | Signed evidence access is permission checked and audited; no lifecycle mutation is performed through a case detail query. |
 
 Also test duplicate report submission, double action/stale state, case assignment changes, unauthorized direct RPC/table calls, append-only event/audit history, and restore behavior. No test should use production customer content; use isolated staging fixtures.
+
+## Cross-surface regression record — 2026-10-01
+
+This matrix records the production read/governance boundary used for the read-only queue and detail UI. A SQL fixture proves RLS behavior but does not substitute for an absent customer review UI. Enforcement actions remain gated.
+
+| Surface | Current production read/governance path | Result and gate |
+|---|---|---|
+| Head Office | `/head-office/moderation` now reads only through the permission-scoped case list/detail RPCs. No target write or enforcement call is made. | Read-only queue/detail. It fails closed with an unavailable state until Production installs the read schema/RPC; actions remain disabled. |
+| Customer review reads | Direct `shop_order_reviews` public SELECT policy; there is no review list/detail component in this frontend repository. | Contract PR filters hidden/removed at RLS. No end-to-end review UI QA is claimed. |
+| Shop review replies | Direct `shop_review_replies` public SELECT policy; no reply UI/read component is present here. | Contract PR filters replies through the same parent review visibility and blocks new replies to hidden/removed reviews. |
+| Member governance | Head Office uses `fn_admin_set_member_status` (`members.action`); Worker LINE auth uses `fn_resolve_line_customer`. | Lifecycle write is canonical, but resolver still returns banned/suspended existing customer IDs and auth mints a JWT. Member enforcement is blocked until the auth/read contract is fixed. Moderation must not add a ban action. |
+| Shop governance | Head Office uses `fn_admin_shop_lifecycle` (`shops.action`). Customer home, profile, and shop-nearby reads filter approval/ban state. | Reuse Shop lifecycle only; no moderation-specific shop mutation. |
+| Rider governance | Head Office uses `fn_admin_rider_lifecycle` (`riders.action`); customer/rider discovery excludes banned/offline/unapproved riders. | Reuse Rider lifecycle only; no moderation-specific rider mutation. |
+| Community and Marketplace | Production has community boundary/membership/moderator tables but no production posts, comments, groups, events, help, or marketplace listing source. | Unavailable. Community Moderator access remains fail-closed; prototype fixtures are not report targets. |
+| Evidence and Orders/Support | No moderation evidence producer, private evidence bucket, or signed read endpoint exists. Order proof sources are sensitive and separate. | Metadata only; binary access unavailable; no public evidence URL. Do not attach general order evidence to cases. |
+
+The staged review RLS fixture proves visible-only customer reads for reviews/replies, shared suppression for hidden and removed parents, restoration through the same state, denied client state mutation, and denied customer/Shop inserts against hidden targets. Queue/detail UI is now read-only and relies on the case RPC permission gates. Review reports remain report-only for enforcement. Production remains unchanged.
 
 ## Rollout order
 
