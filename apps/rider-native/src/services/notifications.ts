@@ -3,6 +3,8 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { extractRiderOfferSubId } from '@/domain/riderNotificationPayload';
+
 export type PushReadiness = {
   ready: boolean;
   permission: Notifications.PermissionStatus;
@@ -19,6 +21,28 @@ export async function configureNotificationChannel() {
     vibrationPattern: [0, 250, 250, 250],
     sound: 'default',
   });
+}
+
+export function addRiderOfferNotificationListeners(input: {
+  onReceived?: (subId: string | null) => void;
+  onResponse?: (subId: string | null) => void;
+}) {
+  const received = Notifications.addNotificationReceivedListener((notification) => {
+    input.onReceived?.(extractRiderOfferSubId(notification.request.content.data));
+  });
+  const response = Notifications.addNotificationResponseReceivedListener((event) => {
+    input.onResponse?.(extractRiderOfferSubId(event.notification.request.content.data));
+  });
+
+  return () => {
+    received.remove();
+    response.remove();
+  };
+}
+
+export async function getLastRiderOfferNotificationSubId(): Promise<string | null> {
+  const response = await Notifications.getLastNotificationResponseAsync();
+  return extractRiderOfferSubId(response?.notification.request.content.data);
 }
 
 export async function ensurePushReadiness(): Promise<PushReadiness> {

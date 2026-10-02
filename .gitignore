@@ -8,3 +8,5 @@ dist
 dist/
 node_modules/
 *.tsbuildinfo
+apps/rider-native/.expo/
+apps/rider-native/.expo-export-check/
