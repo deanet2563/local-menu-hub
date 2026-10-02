@@ -79,7 +79,9 @@ export function PlatformAdminGate({
           ? "ยังไม่ได้ตั้งค่า Platform Admin LIFF สำหรับ Head Office"
           : message === "platform_admin_line_session_unavailable"
             ? "ไม่พบ LINE session สำหรับ Head Office กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่ผ่าน LINE"
-            : message,
+            : message === "platform_admin_login_state_unavailable"
+              ? "เบราว์เซอร์ไม่สามารถเก็บสถานะการเข้าสู่ระบบชั่วคราวได้ กรุณาอนุญาต session storage แล้วลองใหม่"
+              : message,
       );
       setState("error");
     }
