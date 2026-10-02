@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getAdminAccessContext, hasAdminPermission, type AdminAccessContext } from "@/lib/adminAccess";
 import {
   getModerationCase,
@@ -152,6 +152,7 @@ export function ModerationCenter() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [detailError, setDetailError] = useState(false);
+  const listRequestRef = useRef(0);
 
   const canRead = !!access && hasAdminPermission(access, "moderation.read");
   const canFilterCommunity = !!access && hasAdminPermission(access, "communities.read");
@@ -165,6 +166,7 @@ export function ModerationCenter() {
   }, []);
 
   const loadList = useCallback(async () => {
+    const requestId = ++listRequestRef.current;
     if (!canRead) return;
     if ((createdFrom && createdTo && createdFrom > createdTo) || invalidCommunityId) {
       setItems([]); setTotal(0); setTotalPages(0); setSelectedId(null); setUnavailable(false); setLoading(false);
@@ -173,16 +175,24 @@ export function ModerationCenter() {
     setLoading(true); setUnavailable(false);
     try {
       const result = await listModerationCases({ search, targetType, communityId: canFilterCommunity ? communityId : "", status, category, createdFrom, createdTo, sort, page, pageSize: PAGE_SIZE });
+      if (requestId !== listRequestRef.current) return;
       setItems(result.items); setTotal(result.total); setTotalPages(result.totalPages);
       setSelectedId((current) => current && result.items.some((item) => item.case_id === current) ? current : null);
     } catch {
+      if (requestId !== listRequestRef.current) return;
       setItems([]); setTotal(0); setTotalPages(0); setSelectedId(null); setUnavailable(true);
-    } finally { setLoading(false); }
+    } finally { if (requestId === listRequestRef.current) setLoading(false); }
   }, [canFilterCommunity, canRead, category, communityId, createdFrom, createdTo, invalidCommunityId, page, search, sort, status, targetType]);
 
   useEffect(() => {
+    // Invalidate in-flight responses as soon as query dependencies change,
+    // including while the replacement request is waiting for the debounce.
+    listRequestRef.current += 1;
     const timer = window.setTimeout(() => void loadList(), 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      listRequestRef.current += 1;
+    };
   }, [loadList]);
 
   useEffect(() => {
@@ -193,7 +203,15 @@ export function ModerationCenter() {
     return () => { active = false; };
   }, [canRead, selectedId]);
 
-  function resetPage<T>(setter: (value: T) => void, value: T) { setter(value); setPage(1); setSelectedId(null); }
+  function resetPage<T>(setter: (value: T) => void, value: T) {
+    listRequestRef.current += 1;
+    setter(value); setPage(1); setSelectedId(null);
+  }
+  function movePage(delta: number) {
+    listRequestRef.current += 1;
+    setSelectedId(null);
+    setPage((value) => value + delta);
+  }
 
   if (accessError) return <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900" role="status">ตรวจสอบสิทธิ์ Platform Admin ไม่สำเร็จ จึงปิดการอ่านเคสไว้</div>;
   if (!access) return <div className="rounded-3xl border border-gray-200 bg-white p-6 text-sm text-gray-500">กำลังตรวจสอบสิทธิ์…</div>;
@@ -235,7 +253,7 @@ export function ModerationCenter() {
               <p className="mt-2 text-xs text-gray-500">รายงานล่าสุด {fmt(item.latest_report_at)} · เปิดเคส {fmt(item.created_at)}</p>
             </button>
           </li>)}</ul>}
-          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-600"><span>หน้า {page}{totalPages ? ` / ${totalPages}` : ""}</span><div className="flex gap-2"><button disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ก่อนหน้า</button><button disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ถัดไป</button></div></div>
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-600"><span>หน้า {page}{totalPages ? ` / ${totalPages}` : ""}</span><div className="flex gap-2"><button disabled={page <= 1 || loading} onClick={() => movePage(-1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ก่อนหน้า</button><button disabled={page >= totalPages || loading} onClick={() => movePage(1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ถัดไป</button></div></div>
         </section>
         <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"><div className="border-b border-gray-100 px-5 py-4"><h3 className="font-semibold">รายละเอียดเคส</h3></div><CaseDetail detail={detail} loading={detailLoading} error={detailError} /></section>
       </div>}
