@@ -13,58 +13,20 @@ import {
   merchantFallbackIcon,
   normalizeMerchantMapRows,
   paddedMerchantViewport,
-  type MerchantMapBoundsPadding,
   type MerchantMapRow,
   type MerchantMapShop,
   type MerchantMapViewport,
 } from "@/lib/merchantMapMarkers";
+import {
+  getGoogleMapsMapId,
+  loadGoogleMaps,
+  loadGoogleMarkerLibrary,
+  type GoogleMap,
+  type GoogleMarker,
+  type GoogleMarkerLibrary,
+  type LatLngLiteral,
+} from "@/lib/googleMapsLoader";
 import { publicSupabase } from "@/lib/supabase";
-
-type LatLngLiteral = { lat: number; lng: number };
-
-type GoogleMap = {
-  setCenter(position: LatLngLiteral): void;
-  setZoom(zoom: number): void;
-  fitBounds(bounds: MerchantMapViewport, padding: number | MerchantMapBoundsPadding): void;
-  getBounds(): { getNorthEast(): { lat(): number; lng(): number }; getSouthWest(): { lat(): number; lng(): number } } | undefined;
-  addListener(eventName: "click", handler: (event: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void };
-  addListener(eventName: "idle", handler: () => void): { remove(): void };
-};
-
-type GoogleMarker = {
-  setMap(map: GoogleMap | null): void;
-  setPosition(position: LatLngLiteral): void;
-  addListener(eventName: "click", handler: () => void): { remove(): void };
-  addListener(eventName: "dragend", handler: (event: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void };
-};
-
-type GoogleMapsApi = {
-  maps: {
-    Map: new (element: HTMLElement, options: { center: LatLngLiteral; zoom: number; mapTypeControl: boolean; streetViewControl: boolean; fullscreenControl: boolean; mapId?: string }) => GoogleMap;
-    Marker: new (options: { map: GoogleMap; position: LatLngLiteral; draggable?: boolean; title?: string; zIndex?: number; label?: string | { text: string; color?: string; fontSize?: string; fontWeight?: string }; icon?: GoogleMarkerIcon }) => GoogleMarker;
-    Size?: new (width: number, height: number) => unknown;
-    Point?: new (x: number, y: number) => unknown;
-    importLibrary?: (name: string) => Promise<unknown>;
-    marker?: {
-      AdvancedMarkerElement: new (options: { map: GoogleMap; position: LatLngLiteral; title: string; content: HTMLElement; zIndex: number }) => GoogleAdvancedMarker;
-    };
-  };
-};
-
-type GoogleMarkerIcon = {
-  url: string;
-  scaledSize: unknown;
-  anchor: unknown;
-};
-
-type GoogleAdvancedMarker = {
-  map: GoogleMap | null;
-  addListener(eventName: "click", handler: () => void): { remove(): void };
-};
-
-type GoogleMarkerLibrary = {
-  AdvancedMarkerElement: new (options: { map: GoogleMap; position: LatLngLiteral; title: string; content: HTMLElement; zIndex: number }) => GoogleAdvancedMarker;
-};
 
 type MarkerHandle = {
   listeners: Array<{ remove(): void }>;
@@ -75,12 +37,6 @@ type MerchantMarkerKind = "cart-shop" | "viewport";
 type CartShopQueryState = "waiting_for_shop_id" | "loading" | "loaded" | "not_found_or_no_coordinates" | "error";
 type MarkerLibraryState = "not_requested" | "loading" | "loaded" | "unavailable";
 
-declare global {
-  interface Window {
-    google?: GoogleMapsApi;
-  }
-}
-
 type Props = {
   shopId: string | null;
   candidate: ConfirmedDeliveryPoint | null;
@@ -90,58 +46,6 @@ type Props = {
 };
 
 const DEFAULT_CENTER = { lat: 13.777, lng: 100.674 };
-let mapsLoadPromise: Promise<GoogleMapsApi> | null = null;
-let markerLibraryLoadPromise: Promise<GoogleMarkerLibrary | null> | null = null;
-
-function getMapsApiKey(): string {
-  return import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? "";
-}
-
-function getMapsMapId(): string | null {
-  const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
-  return mapId ? String(mapId) : null;
-}
-
-function loadGoogleMaps(): Promise<GoogleMapsApi> {
-  if (window.google) return Promise.resolve(window.google);
-  if (mapsLoadPromise) return mapsLoadPromise;
-
-  const key = getMapsApiKey();
-  if (!key) return Promise.reject(new Error("maps_key_missing"));
-
-  mapsLoadPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>("script[data-mytree-google-maps]");
-    if (existing) {
-      existing.addEventListener("load", () => window.google ? resolve(window.google) : reject(new Error("maps_load_failed")), { once: true });
-      existing.addEventListener("error", () => reject(new Error("maps_load_failed")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=marker`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.mytreeGoogleMaps = "true";
-    script.addEventListener("load", () => window.google ? resolve(window.google) : reject(new Error("maps_load_failed")), { once: true });
-    script.addEventListener("error", () => reject(new Error("maps_load_failed")), { once: true });
-    document.head.appendChild(script);
-  });
-
-  return mapsLoadPromise;
-}
-
-async function loadGoogleMarkerLibrary(google: GoogleMapsApi): Promise<GoogleMarkerLibrary | null> {
-  const existing = google.maps.marker?.AdvancedMarkerElement;
-  if (existing) return { AdvancedMarkerElement: existing };
-  if (!google.maps.importLibrary) return null;
-  markerLibraryLoadPromise ??= google.maps.importLibrary("marker")
-    .then((library) => {
-      const markerLibrary = library as Partial<GoogleMarkerLibrary>;
-      return markerLibrary.AdvancedMarkerElement ? { AdvancedMarkerElement: markerLibrary.AdvancedMarkerElement } : null;
-    })
-    .catch(() => null);
-  return markerLibraryLoadPromise;
-}
 
 function pointFromResult(result: DeliveryPlaceSearchResult): ConfirmedDeliveryPoint {
   return {
@@ -295,8 +199,8 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
       .then((google) => {
         if (disposed || !mapElementRef.current || mapRef.current) return;
         const initialCandidate = candidateRef.current;
-        const mapId = getMapsMapId();
-        setMapConfigStatus(mapId ? null : "ยังไม่ได้ตั้งค่า Google Maps Map ID สำหรับหมุดร้านค้า MyTree");
+        const mapId = getGoogleMapsMapId();
+        setMapConfigStatus(mapId ? null : "แผนที่ใช้หมุดสำรอง เพราะยังไม่ได้ตั้งค่า Map ID");
         const map = new google.maps.Map(mapElementRef.current, {
           center: initialCandidate
             ? { lat: initialCandidate.lat, lng: initialCandidate.lng }
@@ -328,9 +232,6 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
           advancedMarkerRef.current = markerLibrary?.AdvancedMarkerElement ?? null;
           setMarkerLibraryState(markerLibrary?.AdvancedMarkerElement ? "loaded" : "unavailable");
           setAdvancedMarkerAvailable(Boolean(markerLibrary?.AdvancedMarkerElement));
-          if (!markerLibrary?.AdvancedMarkerElement) {
-            setMerchantError("AdvancedMarkerElement ยังไม่พร้อม จะแสดงหมุดร้านค้าในตะกร้าด้วยหมุดสำรอง");
-          }
         });
       })
       .catch(() => {
@@ -372,10 +273,12 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setCartShopStatus(null);
     publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng,is_map_visible,location_verification_status")
       .eq("shop_id", shopId)
       .eq("is_approved", true)
       .eq("is_banned", false)
+      .eq("is_map_visible", true)
+      .eq("location_verification_status", "verified")
       .maybeSingle()
       .then(({ data, error }) => {
         if (requestSeq !== cartShopRequestSeqRef.current) return;
@@ -404,9 +307,11 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
     setMerchantError(null);
     const { data, error } = await publicSupabase
       .from("shops")
-      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng")
+      .select("shop_id,name,category,description,address,logo_url,is_open,lat,lng,is_map_visible,location_verification_status")
       .eq("is_approved", true)
       .eq("is_banned", false)
+      .eq("is_map_visible", true)
+      .eq("location_verification_status", "verified")
       .not("lat", "is", null)
       .not("lng", "is", null)
       .gte("lat", padded.south)
@@ -426,25 +331,34 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
   useEffect(() => {
     const map = mapRef.current;
-    const AdvancedMarkerElement = advancedMarkerRef.current;
     if (!map || !mapReady) return;
-    if (!AdvancedMarkerElement) {
-      if (merchantShops.length > 0) setMerchantError("AdvancedMarkerElement ยังไม่พร้อม จึงแสดงหมุดร้านค้า MyTree ไม่ได้");
-      return;
-    }
+    const AdvancedMarkerElement = advancedMarkerRef.current;
+    const google = window.google;
+    if (!AdvancedMarkerElement && !google) return;
 
     clearMerchantMarkers();
     const excludedShopId = cartShop?.shopId ?? shopId;
     merchantMarkersRef.current = merchantShops.filter((shop) => shop.shopId !== excludedShopId).map((shop) => {
-      const marker = new AdvancedMarkerElement({
+      if (AdvancedMarkerElement) {
+        const marker = new AdvancedMarkerElement({
+          map,
+          position: { lat: shop.lat, lng: shop.lng },
+          title: shop.name,
+          content: markerContent(shop, "viewport"),
+          zIndex: 10_000,
+        });
+        const listeners = [marker.addListener("click", () => setSelectedMerchant(shop))];
+        return { listeners, clear: () => { marker.map = null; } };
+      }
+      const marker = new google!.maps.Marker({
         map,
         position: { lat: shop.lat, lng: shop.lng },
         title: shop.name,
-        content: markerContent(shop, "viewport"),
         zIndex: 10_000,
+        icon: legacyMerchantMarkerIcon(),
       });
       const listeners = [marker.addListener("click", () => setSelectedMerchant(shop))];
-      return { listeners, clear: () => { marker.map = null; } };
+      return { listeners, clear: () => marker.setMap(null) };
     });
 
     return clearMerchantMarkers;
@@ -461,7 +375,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
 
     clearCartShopMarker();
     const AdvancedMarkerElement = advancedMarkerRef.current;
-    if (AdvancedMarkerElement) {
+    if (AdvancedMarkerElement && getGoogleMapsMapId()) {
       const marker = new AdvancedMarkerElement({
         map,
         position: { lat: cartShop.lat, lng: cartShop.lng },
@@ -670,7 +584,7 @@ export function DeliveryLocationPicker({ shopId, candidate, onCandidateChange, o
               <p>shopId: {shopId || "missing"}</p>
               <p>cartShopQuery: {cartShopQueryState}</p>
               <p>cartShop: {cartShop ? `${cartShop.name} @ ${cartShop.lat.toFixed(6)},${cartShop.lng.toFixed(6)}` : "none"}</p>
-              <p>mapId: {getMapsMapId() ? "yes" : "no"}</p>
+              <p>mapId: {getGoogleMapsMapId() ? "yes" : "no"}</p>
               <p>markerLibrary: {markerLibraryState}</p>
               <p>advancedMarker: {advancedMarkerAvailable ? "yes" : "no"}</p>
               <p>legacyFallback: {legacyFallbackUsed ? "yes" : "no"}</p>

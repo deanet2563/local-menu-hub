@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AiOfficeRouteImport } from './routes/ai-office'
 import { Route as CartRouteImport } from './routes/cart'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as DebugCheckoutMapRouteImport } from './routes/debug/checkout-map'
 import { Route as HeadOfficeIndexRouteImport } from './routes/head-office/index'
@@ -54,6 +55,11 @@ const AiOfficeRoute = AiOfficeRouteImport.update({
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdersRoute = OrdersRouteImport.update({
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/head-office/$section': typeof HeadOfficeSectionRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/head-office/$section': typeof HeadOfficeSectionRoute
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/ai-office': typeof AiOfficeRoute
   '/cart': typeof CartRoute
+  '/map': typeof MapRoute
   '/orders': typeof OrdersRoute
   '/debug/checkout-map': typeof DebugCheckoutMapRoute
   '/head-office/$section': typeof HeadOfficeSectionRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/head-office/$section'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/head-office/$section'
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/ai-office'
     | '/cart'
+    | '/map'
     | '/orders'
     | '/debug/checkout-map'
     | '/head-office/$section'
@@ -344,6 +356,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AiOfficeRoute: typeof AiOfficeRoute
   CartRoute: typeof CartRoute
+  MapRoute: typeof MapRoute
   OrdersRoute: typeof OrdersRoute
   DebugCheckoutMapRoute: typeof DebugCheckoutMapRoute
   HeadOfficeSectionRoute: typeof HeadOfficeSectionRoute
@@ -396,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/cart'
       fullPath: '/cart'
       preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orders': {
@@ -560,6 +580,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AiOfficeRoute: AiOfficeRoute,
   CartRoute: CartRoute,
+  MapRoute: MapRoute,
   OrdersRoute: OrdersRoute,
   DebugCheckoutMapRoute: DebugCheckoutMapRoute,
   HeadOfficeSectionRoute: HeadOfficeSectionRoute,

@@ -127,6 +127,10 @@ export function HubHome() {
           onChange={(e) => setQ(e.target.value)}
         />
 
+        <Link to="/map" search={{ shop: undefined }} className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
+          <span>📍 เปิดแผนที่ร้านและสถานที่ใกล้บ้าน</span><span aria-hidden="true">→</span>
+        </Link>
+
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-gray-700">ร้านใกล้คุณ</p>
