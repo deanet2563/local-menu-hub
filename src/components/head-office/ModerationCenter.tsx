@@ -196,7 +196,12 @@ export function ModerationCenter() {
   }, [loadList]);
 
   useEffect(() => {
-    if (!selectedId || !canRead) { setDetail(null); return; }
+    if (!selectedId || !canRead) {
+      setDetail(null);
+      setDetailLoading(false);
+      setDetailError(false);
+      return;
+    }
     let active = true;
     setDetail(null); setDetailLoading(true); setDetailError(false);
     void getModerationCase(selectedId).then((value) => { if (active) setDetail(value); }).catch(() => { if (active) setDetailError(true); }).finally(() => { if (active) setDetailLoading(false); });
