@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff } from "@/lib/supabase";
+import { initLiff, loginWithCustomerLiff } from "@/lib/supabase";
 
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 
@@ -29,7 +29,7 @@ export type RiderCandidate = {
 async function getLineIdToken(): Promise<string> {
   await initLiff();
   if (!liff.isLoggedIn()) {
-    liff.login();
+    loginWithCustomerLiff();
     throw new Error("กำลังเข้าสู่ระบบ LINE...");
   }
   const idToken = liff.getIDToken();

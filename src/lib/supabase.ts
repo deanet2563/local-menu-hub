@@ -26,6 +26,22 @@ function isCloudflarePreviewHost(): boolean {
     && window.location.hostname !== "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
 }
 
+/**
+ * Keep Customer LIFF callbacks on the canonical production origin and on the
+ * requested route. Preview sessions remain on their own preview origin.
+ */
+export function customerLiffRedirectUri(): string {
+  if (typeof window === "undefined") return "https://mytree.cc/";
+  const current = new URL(window.location.href);
+  if (isCloudflarePreviewHost()) return current.toString();
+  return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
+}
+
+/** Start the Customer LIFF login without losing the requested route. */
+export function loginWithCustomerLiff(): void {
+  liff.login({ redirectUri: customerLiffRedirectUri() });
+}
+
 function isHeadOfficeShopPreviewHost(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.hostname === "codex-head-office-shop-manag.local-menu-hub.pages.dev";
@@ -166,7 +182,7 @@ export async function getAccessToken(): Promise<string> {
       throw new Error("platform_admin_line_session_stale");
     }
 
-    liff.login();
+    loginWithCustomerLiff();
     return "";
   }
 

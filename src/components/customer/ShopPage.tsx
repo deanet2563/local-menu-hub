@@ -165,7 +165,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ))}
 
       {cartCount(c) > 0 && (
-        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
+        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-20 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>

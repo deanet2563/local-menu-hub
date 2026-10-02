@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff, isOrderingPreview } from "@/lib/supabase";
+import { initLiff, isOrderingPreview, loginWithCustomerLiff } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
 
@@ -93,7 +93,7 @@ export async function submitOrder(
         error: "โหมดทดสอบหน้าเว็บยังไม่ได้เปิดผ่าน LIFF staging จึงยังไม่ส่งคำสั่งซื้อจริง",
       };
     }
-    liff.login();
+    loginWithCustomerLiff();
     return { ok: false, error: "กำลังเข้าสู่ระบบ LINE..." };
   }
 
