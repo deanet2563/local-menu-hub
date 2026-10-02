@@ -22,3 +22,18 @@ export function parseCustomerLiffStateDestination(search: string, origin: string
     return null;
   }
 }
+
+const MYTREE_CANONICAL_ORIGIN = "https://mytree.cc";
+
+/** Build a canonical URL without allowing a pathname to replace its origin. */
+export function buildCanonicalMyTreeUrl(pathname: string, search = "", hash = ""): string {
+  const target = new URL(MYTREE_CANONICAL_ORIGIN);
+  target.pathname = pathname || "/";
+  target.search = search;
+  target.hash = hash;
+
+  if (target.origin !== MYTREE_CANONICAL_ORIGIN) {
+    throw new Error("canonical_mytree_origin_invariant_failed");
+  }
+  return target.toString();
+}

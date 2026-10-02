@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
-import { parseCustomerLiffStateDestination } from "@/lib/customerLiffState";
+import { buildCanonicalMyTreeUrl, parseCustomerLiffStateDestination } from "@/lib/customerLiffState";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -38,7 +38,7 @@ export function customerLiffRedirectUri(): string {
     || current.hostname === "127.0.0.1"
     || current.hostname.endsWith(".localhost");
   if (isCloudflarePreviewHost() || localDevelopmentHost) return current.toString();
-  return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
 }
 
 /** Canonicalize a production alias before route modules restore origin-local data. */
@@ -50,7 +50,7 @@ export function getCustomerCanonicalOriginRedirect(): string | null {
     || current.hostname.endsWith(".localhost");
   if (isCloudflarePreviewHost() || isOrderingPreview() || localDevelopmentHost) return null;
   if (current.origin === "https://mytree.cc") return null;
-  return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
 }
 
 /** Start the Customer LIFF login without losing the requested route. */
