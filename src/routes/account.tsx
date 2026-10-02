@@ -124,7 +124,7 @@ function AccountPage() {
 
       <div className="grid grid-cols-2 gap-2">
         <Link to="/orders" className="rounded-lg bg-gray-100 px-3 py-2 text-center text-sm">ประวัติออเดอร์</Link>
-        <Link to="/" className="rounded-lg bg-gray-100 px-3 py-2 text-center text-sm">สั่งอาหาร</Link>
+        <Link to="/hub" className="rounded-lg bg-gray-100 px-3 py-2 text-center text-sm">สั่งอาหาร</Link>
       </div>
     </div>
   );

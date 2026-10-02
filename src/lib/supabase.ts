@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
+import { buildCanonicalMyTreeUrl, parseCustomerLiffStateDestination } from "@/lib/customerLiffState";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -24,6 +25,44 @@ function isCloudflarePreviewHost(): boolean {
   return window.location.hostname.endsWith(".local-menu-hub.pages.dev")
     && window.location.hostname !== "local-menu-hub.pages.dev"
     && window.location.hostname !== "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+}
+
+/**
+ * Keep Customer LIFF callbacks on the canonical production origin and on the
+ * requested route. Preview sessions remain on their own preview origin.
+ */
+export function customerLiffRedirectUri(): string {
+  if (typeof window === "undefined") return "https://mytree.cc/";
+  const current = new URL(window.location.href);
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || localDevelopmentHost) return current.toString();
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
+}
+
+/** Canonicalize a production alias before route modules restore origin-local data. */
+export function getCustomerCanonicalOriginRedirect(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  const current = new URL(window.location.href);
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || isOrderingPreview() || localDevelopmentHost) return null;
+  if (current.origin === "https://mytree.cc") return null;
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
+}
+
+/** Start the Customer LIFF login without losing the requested route. */
+export function loginWithCustomerLiff(): void {
+  const redirectUri = customerLiffRedirectUri();
+  if (window.location.origin !== new URL(redirectUri).origin) {
+    // LIFF's PKCE verifier is origin-scoped. Move to the canonical host before
+    // starting login so the callback can read the verifier from that origin.
+    window.location.replace(redirectUri);
+    return;
+  }
+  liff.login({ redirectUri });
 }
 
 function isHeadOfficeShopPreviewHost(): boolean {
@@ -85,6 +124,16 @@ function getLiffStatePath(): string | null {
   } catch {
     return decoded.split(/[?#]/, 1)[0] || null;
   }
+}
+
+/**
+ * Return the same-origin destination embedded in a Customer LIFF primary
+ * redirect. The LIFF SDK normally consumes this via init(); `/map` is the
+ * public exception and is routed directly without initializing Customer LIFF.
+ */
+export function getCustomerLiffStateDestination(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  return parseCustomerLiffStateDestination(window.location.search, window.location.origin);
 }
 
 function isAiOfficeRoute(): boolean {
@@ -166,7 +215,7 @@ export async function getAccessToken(): Promise<string> {
       throw new Error("platform_admin_line_session_stale");
     }
 
-    liff.login();
+    loginWithCustomerLiff();
     return "";
   }
 

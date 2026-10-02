@@ -167,14 +167,14 @@ export function OrderHistory() {
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
   if (orders.length === 0) return (
-    <div className="p-6 text-center text-sm text-gray-400">
+    <div className="p-6 pb-24 text-center text-sm text-gray-400">
       ยังไม่มีประวัติออเดอร์
-      <Link to="/" className="text-orange-500 underline block mt-2">เริ่มสั่งอาหาร</Link>
+      <Link to="/hub" className="text-orange-500 underline block mt-2">เริ่มสั่งอาหาร</Link>
     </div>
   );
 
   return (
-    <div className="p-4 pb-8 space-y-3 max-w-md mx-auto">
+    <div className="p-4 pb-24 space-y-3 max-w-md mx-auto">
       <h1 className="text-lg font-bold">📋 ประวัติออเดอร์</h1>
 
       {orders.map((o) => {

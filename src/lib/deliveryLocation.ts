@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff, isOrderingPreview } from "@/lib/supabase";
+import { initLiff, isOrderingPreview, loginWithCustomerLiff } from "@/lib/supabase";
 
 const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
@@ -137,7 +137,7 @@ export async function quoteDeliveryRoute(shopId: string, point: Pick<ConfirmedDe
     if (isOrderingPreview()) {
       throw new Error("โหมดทดสอบต้องเปิดผ่าน LIFF staging ก่อนคำนวณค่าส่งจริง");
     }
-    liff.login();
+    loginWithCustomerLiff();
     throw new Error("กำลังเข้าสู่ระบบ LINE...");
   }
 

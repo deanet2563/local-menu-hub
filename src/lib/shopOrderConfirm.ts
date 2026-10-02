@@ -1,12 +1,12 @@
 import liff from "@line/liff";
-import { initLiff } from "@/lib/supabase";
+import { initLiff, loginWithCustomerLiff } from "@/lib/supabase";
 
 const CONFIRM_URL = "https://mytree-worker.kompakorn-t.workers.dev/shop/order/confirm";
 
 export async function confirmShopOrder(subId: string): Promise<{ ok: boolean; error?: string; notificationSent?: boolean }> {
   await initLiff();
   if (!liff.isLoggedIn()) {
-    liff.login();
+    loginWithCustomerLiff();
     return { ok: false, error: "กำลังเข้าสู่ระบบ LINE..." };
   }
 
