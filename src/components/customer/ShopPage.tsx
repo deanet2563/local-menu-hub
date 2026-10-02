@@ -103,9 +103,9 @@ export function ShopPage({ shopId }: { shopId: string }) {
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="p-4 flex items-center gap-3 border-b border-gray-100">
-        <Link to="/" className="text-gray-400 text-lg">‹</Link>
+        <Link to="/hub" className="text-gray-400 text-lg">‹</Link>
         <img src={shop.logo_url ?? ""} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{shop.name}</h1>
@@ -165,7 +165,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
       ))}
 
       {cartCount(c) > 0 && (
-        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
+        <Link to="/cart" className="fixed z-30 left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium">
           <span>ดูตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>
         </Link>

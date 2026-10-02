@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
+import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
+import { buildCanonicalMyTreeUrl, parseCustomerLiffStateDestination } from "@/lib/customerLiffState";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -23,6 +25,44 @@ function isCloudflarePreviewHost(): boolean {
   return window.location.hostname.endsWith(".local-menu-hub.pages.dev")
     && window.location.hostname !== "local-menu-hub.pages.dev"
     && window.location.hostname !== "mytree-ordering-flow-v2.local-menu-hub.pages.dev";
+}
+
+/**
+ * Keep Customer LIFF callbacks on the canonical production origin and on the
+ * requested route. Preview sessions remain on their own preview origin.
+ */
+export function customerLiffRedirectUri(): string {
+  if (typeof window === "undefined") return "https://mytree.cc/";
+  const current = new URL(window.location.href);
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || localDevelopmentHost) return current.toString();
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
+}
+
+/** Canonicalize a production alias before route modules restore origin-local data. */
+export function getCustomerCanonicalOriginRedirect(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  const current = new URL(window.location.href);
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || isOrderingPreview() || localDevelopmentHost) return null;
+  if (current.origin === "https://mytree.cc") return null;
+  return buildCanonicalMyTreeUrl(current.pathname, current.search, current.hash);
+}
+
+/** Start the Customer LIFF login without losing the requested route. */
+export function loginWithCustomerLiff(): void {
+  const redirectUri = customerLiffRedirectUri();
+  if (window.location.origin !== new URL(redirectUri).origin) {
+    // LIFF's PKCE verifier is origin-scoped. Move to the canonical host before
+    // starting login so the callback can read the verifier from that origin.
+    window.location.replace(redirectUri);
+    return;
+  }
+  liff.login({ redirectUri });
 }
 
 function isHeadOfficeShopPreviewHost(): boolean {
@@ -86,9 +126,25 @@ function getLiffStatePath(): string | null {
   }
 }
 
+/**
+ * Return the same-origin destination embedded in a Customer LIFF primary
+ * redirect. The LIFF SDK normally consumes this via init(); `/map` is the
+ * public exception and is routed directly without initializing Customer LIFF.
+ */
+export function getCustomerLiffStateDestination(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  return parseCustomerLiffStateDestination(window.location.search, window.location.origin);
+}
+
 function isAiOfficeRoute(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.pathname === "/sweet/ai-office";
+}
+
+/** The public discovery map is anonymous by contract and must never start LIFF login. */
+function isPublicCustomerMapRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname.replace(/\/+$/, "") === "/map";
 }
 
 export function isPlatformAdminRoute(): boolean {
@@ -117,6 +173,9 @@ function activeLiffId(): string {
 /** Initialise the route-appropriate LIFF app exactly once per page lifecycle. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
+  // /map only reads the public map RPC. Keep it usable outside LINE and avoid
+  // invoking a Customer LIFF app whose configured callback may be elsewhere.
+  if (isPublicCustomerMapRoute()) return Promise.resolve();
 
   const liffId = activeLiffId();
   if (!liffReady || liffReady.liffId !== liffId) {
@@ -137,6 +196,9 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  // Public map discovery has no authenticated actions or private-location data.
+  // Fail closed to anonymous access if a shared client is touched on this route.
+  if (isPublicCustomerMapRoute()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
@@ -148,26 +210,31 @@ export async function getAccessToken(): Promise<string> {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
 
     if (isPlatformAdminRoute()) {
-      if (!liff.isInClient()) {
-        liff.login({ redirectUri: window.location.href });
-        return "";
-      }
-      throw new Error("platform_admin_line_session_unavailable");
+      // PlatformAdminGate owns the guarded login/recovery flow. Do not start a
+      // second untracked LIFF redirect from a background Supabase request.
+      throw new Error("platform_admin_line_session_stale");
     }
 
-    liff.login();
+    loginWithCustomerLiff();
     return "";
   }
 
   const idToken = liff.getIDToken();
+  if (isPlatformAdminRoute()) {
+    const expectedChannelId = /^(\d+)-/.exec(PLATFORM_ADMIN_LIFF_ID)?.[1];
+    const status = getPlatformAdminIdTokenStatus(liff.getDecodedIDToken(), expectedChannelId);
+    if (!idToken || status !== "valid") {
+      // The auth broker verifies the LINE Login channel and token lifetime.
+      // Fail closed so a wrong-audience or expired token never reaches it.
+      throw new Error(status === "wrong_audience"
+        ? "platform_admin_id_token_audience_mismatch"
+        : "platform_admin_line_session_stale");
+    }
+  }
   if (!idToken) {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
     if (isPlatformAdminRoute()) {
-      if (!liff.isInClient()) {
-        liff.login({ redirectUri: window.location.href });
-        return "";
-      }
-      throw new Error("no LINE idToken");
+      throw new Error("platform_admin_line_session_stale");
     }
     throw new Error("no LINE idToken");
   }

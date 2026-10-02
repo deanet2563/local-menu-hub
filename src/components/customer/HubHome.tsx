@@ -99,7 +99,7 @@ export function HubHome() {
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
   return (
-    <div className="pb-24">
+    <div className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="p-4 space-y-3">
         <h1 className="text-xl font-bold">MyTree 🌳</h1>
 
@@ -195,7 +195,7 @@ export function HubHome() {
       {cartCount(c) > 0 && (
         <Link
           to="/cart"
-          className="fixed left-4 right-4 bottom-4 rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"
+          className="fixed left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] rounded-xl bg-orange-500 text-white px-4 py-3 flex justify-between text-sm font-medium"
         >
           <span>ตะกร้า ({cartCount(c)})</span>
           <span>฿{cartTotal(c)}</span>

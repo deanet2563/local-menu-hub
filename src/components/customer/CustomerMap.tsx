@@ -38,7 +38,7 @@ export function CustomerMap({ initialShopId = null }: { initialShopId?: string |
     return () => { active = false; };
   }, [initialShopId, retry]);
 
-  return <main className="mx-auto min-h-screen max-w-7xl space-y-4 bg-gray-50 px-3 py-4 pb-10 sm:px-6 sm:py-6">
+  return <main className="mx-auto min-h-screen max-w-7xl space-y-4 bg-gray-50 px-3 py-4 pb-24 sm:px-6 sm:py-6">
     <header className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-green-800">MyTree Local Map</p><h1 className="mt-1 text-2xl font-bold">ร้านใกล้บ้านและสถานที่ชุมชน</h1><p className="mt-1 text-sm text-gray-600">พิกัดสาธารณะจากข้อมูล MyTree ที่ผ่านเกณฑ์การแสดงผล</p></div><Link to="/" className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold">กลับหน้าแรก</Link></header>
     <label className="block"><span className="sr-only">ค้นหาตำแหน่ง</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาร้าน ชุมชน หรือที่อยู่" className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm" /></label>
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>โหลดข้อมูลแผนที่ไม่สำเร็จ</p><button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-2 font-semibold underline">ลองอีกครั้ง</button></div>}
