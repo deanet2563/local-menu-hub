@@ -44,10 +44,15 @@ export function PlatformAdminGate({
     setErrorMessage(null);
 
     try {
-      const loginState = await withTransientRetry("LIFF", () => ensurePlatformAdminLineLogin());
+      // Login can navigate the page. Do not retry it automatically: a second
+      // attempt after a cancelled/invalid callback would start another LINE
+      // authorization round-trip without user action.
+      const loginState = await ensurePlatformAdminLineLogin();
       if (loginState === "redirecting") return;
 
-      const customerId = await withTransientRetry("TOKEN", () => getCurrentCustomerId());
+      // A 401 from the auth broker is a rejected token, not a transient read;
+      // avoid resubmitting the same LINE token automatically.
+      const customerId = await getCurrentCustomerId();
 
       if (!customerId) {
         setState("no-auth");
@@ -81,7 +86,9 @@ export function PlatformAdminGate({
             ? "ไม่พบ LINE session สำหรับ Head Office กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่ผ่าน LINE"
             : message === "platform_admin_login_state_unavailable"
               ? "เบราว์เซอร์ไม่สามารถเก็บสถานะการเข้าสู่ระบบชั่วคราวได้ กรุณาอนุญาต session storage แล้วลองใหม่"
-              : message,
+              : message === "platform_admin_id_token_audience_mismatch"
+                ? "LINE session นี้ไม่ตรงกับ Platform Admin channel จึงไม่ได้ส่ง token ไปตรวจสอบ กรุณาเปิดผ่าน Platform Admin LIFF"
+                : message,
       );
       setState("error");
     }
