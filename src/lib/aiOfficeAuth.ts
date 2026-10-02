@@ -14,6 +14,15 @@ function adminLoginPendingKey(adminPath: string): string {
   return `${ADMIN_LOGIN_PENDING_PREFIX}${pathname}`;
 }
 
+function hasPlatformAdminChannelToken(): boolean {
+  const channelId = /^(\d+)-/.exec(PLATFORM_ADMIN_LIFF_ID)?.[1];
+  return Boolean(
+    channelId
+    && liff.isLoggedIn()
+    && liff.getDecodedIDToken()?.aud === channelId,
+  );
+}
+
 /**
  * Platform-admin surfaces initialize the dedicated Admin LIFF directly on the
  * canonical MyTree URL. If no LINE session exists, LIFF login returns to the
@@ -33,17 +42,24 @@ export async function ensurePlatformAdminLineLogin(
   // LIFF secondary redirect without bouncing back to liff.line.me.
   await initLiff();
 
-  if (liff.isInClient()) {
-    if (liff.isLoggedIn()) return "ready";
-    throw new Error("platform_admin_line_session_unavailable");
+  const pendingKey = adminLoginPendingKey(adminPath);
+  if (hasPlatformAdminChannelToken()) {
+    // The Worker authorizes the LINE Login channel audience, not a specific
+    // LIFF app. Reuse a token for that exact channel across Head Office route
+    // remounts; a token from another channel must never reach the broker.
+    try { window.sessionStorage.removeItem(pendingKey); } catch { /* no pending state to clear */ }
+    return "ready";
   }
 
-  // A direct browser may already have a LINE session from the Customer LIFF.
-  // That alone does not prove this Admin route completed the dedicated Admin
-  // LIFF login. Require one explicit Admin LIFF round-trip before exchanging
-  // its ID token; the per-tab marker prevents redirect loops and preserves the
-  // exact requested Head Office path.
-  const pendingKey = adminLoginPendingKey(adminPath);
+  if (liff.isInClient()) {
+    throw new Error(liff.isLoggedIn()
+      ? "platform_admin_id_token_audience_mismatch"
+      : "platform_admin_line_session_unavailable");
+  }
+
+  // A direct browser may already have a token from another LINE Login
+  // channel. Run one Admin LIFF round-trip, preserve the requested path, and
+  // fail closed if the callback still does not provide the expected audience.
   let loginPending = false;
   try {
     loginPending = window.sessionStorage.getItem(pendingKey) === "1";
@@ -52,12 +68,10 @@ export async function ensurePlatformAdminLineLogin(
   }
 
   if (loginPending) {
-    if (!liff.isLoggedIn()) {
-      try { window.sessionStorage.removeItem(pendingKey); } catch { /* fail closed below */ }
-      throw new Error("platform_admin_line_session_unavailable");
-    }
-    window.sessionStorage.removeItem(pendingKey);
-    return "ready";
+    try { window.sessionStorage.removeItem(pendingKey); } catch { /* fail closed below */ }
+    throw new Error(liff.isLoggedIn()
+      ? "platform_admin_id_token_audience_mismatch"
+      : "platform_admin_line_session_unavailable");
   }
 
   try {
