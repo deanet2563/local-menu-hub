@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:admin-auth": "node --test tools/tests/platform-admin-session-policy.test.cjs"
   },
   "dependencies": {
     "@line/liff": "^2.29.2",

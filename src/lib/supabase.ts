@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
+import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -160,11 +161,9 @@ export async function getAccessToken(): Promise<string> {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
 
     if (isPlatformAdminRoute()) {
-      if (!liff.isInClient()) {
-        liff.login({ redirectUri: window.location.href });
-        return "";
-      }
-      throw new Error("platform_admin_line_session_unavailable");
+      // PlatformAdminGate owns the guarded login/recovery flow. Do not start a
+      // second untracked LIFF redirect from a background Supabase request.
+      throw new Error("platform_admin_line_session_stale");
     }
 
     liff.login();
@@ -174,21 +173,19 @@ export async function getAccessToken(): Promise<string> {
   const idToken = liff.getIDToken();
   if (isPlatformAdminRoute()) {
     const expectedChannelId = /^(\d+)-/.exec(PLATFORM_ADMIN_LIFF_ID)?.[1];
-    if (!idToken || !expectedChannelId || liff.getDecodedIDToken()?.aud !== expectedChannelId) {
-      // The auth broker verifies ID-token audience against the LINE Login
-      // channel. Fail closed locally so a Customer/other-channel token is
-      // never exchanged as a Platform Admin credential.
-      throw new Error("platform_admin_id_token_audience_mismatch");
+    const status = getPlatformAdminIdTokenStatus(liff.getDecodedIDToken(), expectedChannelId);
+    if (!idToken || status !== "valid") {
+      // The auth broker verifies the LINE Login channel and token lifetime.
+      // Fail closed so a wrong-audience or expired token never reaches it.
+      throw new Error(status === "wrong_audience"
+        ? "platform_admin_id_token_audience_mismatch"
+        : "platform_admin_line_session_stale");
     }
   }
   if (!idToken) {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
     if (isPlatformAdminRoute()) {
-      if (!liff.isInClient()) {
-        liff.login({ redirectUri: window.location.href });
-        return "";
-      }
-      throw new Error("no LINE idToken");
+      throw new Error("platform_admin_line_session_stale");
     }
     throw new Error("no LINE idToken");
   }

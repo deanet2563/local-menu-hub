@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCurrentCustomerId } from "@/lib/supabase";
-import { ensurePlatformAdminLineLogin } from "@/lib/aiOfficeAuth";
+import {
+  clearPlatformAdminSessionRecovery,
+  ensurePlatformAdminLineLogin,
+  reauthenticatePlatformAdminLineSession,
+} from "@/lib/aiOfficeAuth";
 import {
   getAdminAccessContext,
   hasAdminPermission,
@@ -58,6 +62,7 @@ export function PlatformAdminGate({
         setState("no-auth");
         return;
       }
+      clearPlatformAdminSessionRecovery();
 
       const access = await withTransientRetry("ADMIN_RPC", () => getAdminAccessContext());
 
@@ -78,7 +83,15 @@ export function PlatformAdminGate({
 
       setState("ok");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "ไม่สามารถตรวจสอบสิทธิ์ได้";
+      let message = error instanceof Error ? error.message : "ไม่สามารถตรวจสอบสิทธิ์ได้";
+      if (message === "auth broker error: 401") {
+        try {
+          await reauthenticatePlatformAdminLineSession();
+          return;
+        } catch (reauthError) {
+          message = reauthError instanceof Error ? reauthError.message : String(reauthError);
+        }
+      }
       setErrorMessage(
         message === "platform_admin_liff_not_configured"
           ? "ยังไม่ได้ตั้งค่า Platform Admin LIFF สำหรับ Head Office"
@@ -86,6 +99,10 @@ export function PlatformAdminGate({
             ? "ไม่พบ LINE session สำหรับ Head Office กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่ผ่าน LINE"
             : message === "platform_admin_login_state_unavailable"
               ? "เบราว์เซอร์ไม่สามารถเก็บสถานะการเข้าสู่ระบบชั่วคราวได้ กรุณาอนุญาต session storage แล้วลองใหม่"
+              : message === "platform_admin_line_session_stale"
+                ? "LINE session หมดอายุหรือไม่มี ID token กรุณาเปิด Head Office ใหม่ผ่าน Platform Admin LIFF"
+                : message === "platform_admin_reauthentication_exhausted"
+                  ? "LINE session ยังถูกปฏิเสธหลังยืนยันตัวตนใหม่แล้ว กรุณาเปิดลิงก์ Platform Admin LIFF อีกครั้ง"
               : message === "platform_admin_id_token_audience_mismatch"
                 ? "LINE session นี้ไม่ตรงกับ Platform Admin channel จึงไม่ได้ส่ง token ไปตรวจสอบ กรุณาเปิดผ่าน Platform Admin LIFF"
                 : message,
