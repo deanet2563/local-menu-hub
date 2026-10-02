@@ -99,7 +99,7 @@ export function HubHome() {
   if (loading) return <p className="p-4 text-sm text-gray-400">กำลังโหลด...</p>;
 
   return (
-    <div className="pb-24">
+    <div className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="p-4 space-y-3">
         <h1 className="text-xl font-bold">MyTree 🌳</h1>
 

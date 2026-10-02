@@ -103,9 +103,9 @@ export function ShopPage({ shopId }: { shopId: string }) {
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="p-4 flex items-center gap-3 border-b border-gray-100">
-        <Link to="/" className="text-gray-400 text-lg">‹</Link>
+        <Link to="/hub" className="text-gray-400 text-lg">‹</Link>
         <img src={shop.logo_url ?? ""} alt={shop.name} className="w-14 h-14 rounded-xl object-cover bg-gray-100" />
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{shop.name}</h1>
