@@ -1,19 +1,26 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { routeTree } from "./routeTree.gen";
-import { initLiff, isPlatformAdminRoute } from "./lib/supabase";
+import { getCustomerCanonicalOriginRedirect, initLiff, isPlatformAdminRoute } from "./lib/supabase";
 import "./index.css";
 
-const router = createRouter({ routeTree });
+type AppRouter = ReturnType<typeof createRouter>;
 
 declare module "@tanstack/react-router" {
   interface Register {
-    router: typeof router;
+    router: AppRouter;
   }
 }
 
 async function bootstrap() {
+  if (!isPlatformAdminRoute()) {
+    const canonicalRedirect = getCustomerCanonicalOriginRedirect();
+    if (canonicalRedirect) {
+      window.location.replace(canonicalRedirect);
+      return;
+    }
+  }
+
   // Initialize Platform Admin LIFF before mounting the router for both direct
   // MyTree admin URLs and LIFF primary/secondary redirects. This prevents the
   // router from briefly rendering customer surfaces and avoids redirect loops.
@@ -30,6 +37,8 @@ async function bootstrap() {
     }
   }
 
+  const { routeTree } = await import("./routeTree.gen");
+  const router = createRouter({ routeTree });
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <RouterProvider router={router} />

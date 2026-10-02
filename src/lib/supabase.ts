@@ -40,6 +40,18 @@ export function customerLiffRedirectUri(): string {
   return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
 }
 
+/** Canonicalize a production alias before route modules restore origin-local data. */
+export function getCustomerCanonicalOriginRedirect(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  const current = new URL(window.location.href);
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || isOrderingPreview() || localDevelopmentHost) return null;
+  if (current.origin === "https://mytree.cc") return null;
+  return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
+}
+
 /** Start the Customer LIFF login without losing the requested route. */
 export function loginWithCustomerLiff(): void {
   const redirectUri = customerLiffRedirectUri();
