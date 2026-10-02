@@ -37,7 +37,17 @@ async function bootstrap() {
       } else {
         // LIFF consumes liff.state and performs the secondary redirect. Do this
         // before importing/mounting the router so Home cannot flash first.
-        await initLiff();
+        const retryUrl = window.location.href;
+        try {
+          await initLiff();
+        } catch (error) {
+          renderCustomerLiffBootstrapError(retryUrl);
+          console.error(
+            "Customer LIFF bootstrap failed",
+            error instanceof Error ? error.name : "unknown_error",
+          );
+          return;
+        }
       }
     }
   }
@@ -65,6 +75,37 @@ async function bootstrap() {
       <RouterProvider router={router} />
     </StrictMode>
   );
+}
+
+function renderCustomerLiffBootstrapError(retryUrl: string) {
+  const root = document.getElementById("root");
+  if (!root) return;
+
+  const main = document.createElement("main");
+  main.setAttribute("role", "alert");
+  main.setAttribute("aria-live", "polite");
+  main.style.cssText = "min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif;background:#f9fafb";
+
+  const content = document.createElement("div");
+  content.style.cssText = "max-width:480px;text-align:center";
+
+  const heading = document.createElement("h1");
+  heading.textContent = "เปิด MyTree ไม่สำเร็จ";
+  heading.style.cssText = "font-size:22px;font-weight:700;margin:0 0 8px;color:#111827";
+
+  const message = document.createElement("p");
+  message.textContent = "เริ่มต้นการเชื่อมต่อ LINE ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง";
+  message.style.cssText = "color:#4b5563;line-height:1.6;margin:0 0 20px";
+
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "ลองอีกครั้ง";
+  retry.style.cssText = "min-height:44px;border:0;border-radius:12px;background:#15803d;color:white;font-weight:600;padding:0 20px;cursor:pointer";
+  retry.addEventListener("click", () => window.location.replace(retryUrl));
+
+  content.append(heading, message, retry);
+  main.append(content);
+  root.replaceChildren(main);
 }
 
 void bootstrap();
