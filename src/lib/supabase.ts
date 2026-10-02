@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
+import { parseCustomerLiffStateDestination } from "@/lib/customerLiffState";
 import { isPreviewCheckoutMapAuthBypassActive } from "@/lib/previewDebugRoute";
 import { safeStoragePath } from "@/lib/storageKey";
 
@@ -123,6 +124,16 @@ function getLiffStatePath(): string | null {
   } catch {
     return decoded.split(/[?#]/, 1)[0] || null;
   }
+}
+
+/**
+ * Return the same-origin destination embedded in a Customer LIFF primary
+ * redirect. The LIFF SDK normally consumes this via init(); `/map` is the
+ * public exception and is routed directly without initializing Customer LIFF.
+ */
+export function getCustomerLiffStateDestination(): string | null {
+  if (typeof window === "undefined" || isPlatformAdminRoute()) return null;
+  return parseCustomerLiffStateDestination(window.location.search, window.location.origin);
 }
 
 function isAiOfficeRoute(): boolean {
