@@ -46,9 +46,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><dt className="text-xs font-medium text-gray-500">{label}</dt><dd className="mt-1 text-sm text-gray-900">{children || "—"}</dd></div>;
 }
 
-function CaseDetail({ detail, loading, error }: { detail: ModerationCaseDetail | null; loading: boolean; error: boolean }) {
+function CaseDetail({ detail, loading, error, onRetry }: { detail: ModerationCaseDetail | null; loading: boolean; error: boolean; onRetry: () => void }) {
   if (loading) return <p className="p-5 text-sm text-gray-500">กำลังโหลดรายละเอียดเคส…</p>;
-  if (error) return <div className="p-5 text-sm text-amber-800" role="status">อ่านรายละเอียดไม่ได้ หรือ endpoint ยังไม่พร้อม</div>;
+  if (error) return <div className="p-5 text-sm text-amber-800" role="alert"><p>อ่านรายละเอียดไม่ได้ หรือ endpoint ยังไม่พร้อม</p><button type="button" onClick={onRetry} className="mt-3 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold">ลองอีกครั้ง</button></div>;
   if (!detail) return <p className="p-5 text-sm text-gray-500">เลือกเคสเพื่อดูรายงาน ประวัติ และข้อมูลที่ได้รับอนุญาต</p>;
 
   const target = detail.target ?? {};
@@ -152,6 +152,7 @@ export function ModerationCenter() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [detailError, setDetailError] = useState(false);
+  const [detailRetryToken, setDetailRetryToken] = useState(0);
   const listRequestRef = useRef(0);
 
   const canRead = !!access && hasAdminPermission(access, "moderation.read");
@@ -206,7 +207,7 @@ export function ModerationCenter() {
     setDetail(null); setDetailLoading(true); setDetailError(false);
     void getModerationCase(selectedId).then((value) => { if (active) setDetail(value); }).catch(() => { if (active) setDetailError(true); }).finally(() => { if (active) setDetailLoading(false); });
     return () => { active = false; };
-  }, [canRead, selectedId]);
+  }, [canRead, selectedId, detailRetryToken]);
 
   function resetPage<T>(setter: (value: T) => void, value: T) {
     listRequestRef.current += 1;
@@ -260,7 +261,7 @@ export function ModerationCenter() {
           </li>)}</ul>}
           <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-600"><span>หน้า {page}{totalPages ? ` / ${totalPages}` : ""}</span><div className="flex gap-2"><button disabled={page <= 1 || loading} onClick={() => movePage(-1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ก่อนหน้า</button><button disabled={page >= totalPages || loading} onClick={() => movePage(1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">ถัดไป</button></div></div>
         </section>
-        <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"><div className="border-b border-gray-100 px-5 py-4"><h3 className="font-semibold">รายละเอียดเคส</h3></div><CaseDetail detail={detail} loading={detailLoading} error={detailError} /></section>
+        <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"><div className="border-b border-gray-100 px-5 py-4"><h3 className="font-semibold">รายละเอียดเคส</h3></div><CaseDetail detail={detail} loading={detailLoading} error={detailError} onRetry={() => setDetailRetryToken((value) => value + 1)} /></section>
       </div>}
 
       <section className="rounded-3xl border border-gray-200 bg-white p-5 text-sm text-gray-600 shadow-sm"><h3 className="font-semibold text-gray-900">โหมดอ่านอย่างเดียว</h3><p className="mt-1 leading-6">ยังไม่เปิด hide, remove, restore, warning, restriction, ban, unban, assignment หรือ appeal action. Review enforcement ยัง report-only, Member action ถูกปิดจน lifecycle/auth contract ครบ และ Shop/Rider ยังต้องเรียก lifecycle ของ module เจ้าของเท่านั้น</p><p className="mt-2 text-xs text-gray-500">หลักฐานแสดงเฉพาะ metadata; binary access, signed URL และ evidence upload ยัง unavailable</p></section>
