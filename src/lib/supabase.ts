@@ -91,6 +91,12 @@ function isAiOfficeRoute(): boolean {
   return window.location.pathname === "/sweet/ai-office";
 }
 
+/** The public discovery map is anonymous by contract and must never start LIFF login. */
+function isPublicCustomerMapRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname.replace(/\/+$/, "") === "/map";
+}
+
 export function isPlatformAdminRoute(): boolean {
   if (typeof window === "undefined") return false;
   if (isPlatformAdminPath(window.location.pathname)) return true;
@@ -117,6 +123,9 @@ function activeLiffId(): string {
 /** Initialise the route-appropriate LIFF app exactly once per page lifecycle. */
 export function initLiff(): Promise<void> {
   if (isPreviewCheckoutMapAuthBypassActive()) return Promise.resolve();
+  // /map only reads the public map RPC. Keep it usable outside LINE and avoid
+  // invoking a Customer LIFF app whose configured callback may be elsewhere.
+  if (isPublicCustomerMapRoute()) return Promise.resolve();
 
   const liffId = activeLiffId();
   if (!liffReady || liffReady.liffId !== liffId) {
@@ -137,6 +146,9 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
+  // Public map discovery has no authenticated actions or private-location data.
+  // Fail closed to anonymous access if a shared client is touched on this route.
+  if (isPublicCustomerMapRoute()) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
