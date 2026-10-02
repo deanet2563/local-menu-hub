@@ -172,6 +172,15 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const idToken = liff.getIDToken();
+  if (isPlatformAdminRoute()) {
+    const expectedChannelId = /^(\d+)-/.exec(PLATFORM_ADMIN_LIFF_ID)?.[1];
+    if (!idToken || !expectedChannelId || liff.getDecodedIDToken()?.aud !== expectedChannelId) {
+      // The auth broker verifies ID-token audience against the LINE Login
+      // channel. Fail closed locally so a Customer/other-channel token is
+      // never exchanged as a Platform Admin credential.
+      throw new Error("platform_admin_id_token_audience_mismatch");
+    }
+  }
   if (!idToken) {
     if (isOrderingPreview() && !isAiOfficeRoute()) return "";
     if (isPlatformAdminRoute()) {
