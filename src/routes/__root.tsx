@@ -4,9 +4,12 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
-const customerRoute = (pathname: string) => pathname === "/"
-  || ["/hub", "/map", "/cart", "/orders", "/account"].includes(pathname.replace(/\/$/, ""))
-  || pathname.startsWith("/shop/");
+const customerRoute = (pathname: string) => {
+  const normalizedPath = pathname.replace(/\/$/, "") || "/";
+  const pathParts = normalizedPath.split("/").filter(Boolean);
+  const customerShopDetail = pathParts.length === 2 && pathParts[0] === "shop" && pathParts[1] !== "orders";
+  return ["/", "/hub", "/map", "/cart", "/orders", "/account"].includes(normalizedPath) || customerShopDetail;
+};
 
 function RootLayout() {
   const { pathname } = useLocation();

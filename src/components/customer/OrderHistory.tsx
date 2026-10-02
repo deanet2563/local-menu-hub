@@ -169,7 +169,7 @@ export function OrderHistory() {
   if (orders.length === 0) return (
     <div className="p-6 pb-24 text-center text-sm text-gray-400">
       ยังไม่มีประวัติออเดอร์
-      <Link to="/" className="text-orange-500 underline block mt-2">เริ่มสั่งอาหาร</Link>
+      <Link to="/hub" className="text-orange-500 underline block mt-2">เริ่มสั่งอาหาร</Link>
     </div>
   );
 

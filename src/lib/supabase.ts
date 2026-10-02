@@ -33,13 +33,23 @@ function isCloudflarePreviewHost(): boolean {
 export function customerLiffRedirectUri(): string {
   if (typeof window === "undefined") return "https://mytree.cc/";
   const current = new URL(window.location.href);
-  if (isCloudflarePreviewHost()) return current.toString();
+  const localDevelopmentHost = current.hostname === "localhost"
+    || current.hostname === "127.0.0.1"
+    || current.hostname.endsWith(".localhost");
+  if (isCloudflarePreviewHost() || localDevelopmentHost) return current.toString();
   return new URL(`${current.pathname}${current.search}${current.hash}`, "https://mytree.cc").toString();
 }
 
 /** Start the Customer LIFF login without losing the requested route. */
 export function loginWithCustomerLiff(): void {
-  liff.login({ redirectUri: customerLiffRedirectUri() });
+  const redirectUri = customerLiffRedirectUri();
+  if (window.location.origin !== new URL(redirectUri).origin) {
+    // LIFF's PKCE verifier is origin-scoped. Move to the canonical host before
+    // starting login so the callback can read the verifier from that origin.
+    window.location.replace(redirectUri);
+    return;
+  }
+  liff.login({ redirectUri });
 }
 
 function isHeadOfficeShopPreviewHost(): boolean {

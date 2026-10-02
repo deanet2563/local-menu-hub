@@ -461,7 +461,7 @@ function CartCheckout() {
   if (c.items.length === 0) return (
     <div className="p-6 text-center text-sm text-gray-400">
       ตะกร้าว่าง
-      <Link to="/" className="text-orange-500 underline block mt-2">เลือกอาหาร</Link>
+      <Link to="/hub" className="text-orange-500 underline block mt-2">เลือกอาหาร</Link>
     </div>
   );
 
