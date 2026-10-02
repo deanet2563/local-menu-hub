@@ -20,7 +20,7 @@ function RootLayout() {
         <nav aria-label="เมนูลูกค้า" className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur">
           <div className="mx-auto grid max-w-xl grid-cols-5">
             <CustomerNavLink to="/" label="หน้าแรก" icon="⌂" active={normalizedPath === "/"} />
-            <CustomerNavLink to="/hub" label="อาหาร" icon="🍽" active={normalizedPath === "/hub"} />
+            <CustomerNavLink to="/hub" label="อาหาร" icon="🍽" active={normalizedPath === "/hub" || normalizedPath.startsWith("/shop/")} />
             <CustomerNavLink to="/map" label="แผนที่" icon="⌖" active={normalizedPath === "/map"} />
             <CustomerNavLink to="/orders" label="ออเดอร์" icon="▤" active={normalizedPath === "/orders"} />
             <CustomerNavLink to="/account" label="บัญชี" icon="●" active={normalizedPath === "/account"} />
