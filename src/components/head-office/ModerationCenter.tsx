@@ -134,6 +134,7 @@ function CaseDetail({ detail, loading, error, onRetry }: { detail: ModerationCas
 export function ModerationCenter() {
   const [access, setAccess] = useState<AdminAccessContext | null>(null);
   const [accessError, setAccessError] = useState(false);
+  const [accessRetryToken, setAccessRetryToken] = useState(0);
   const [items, setItems] = useState<ModerationCaseListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModerationCaseDetail | null>(null);
@@ -162,9 +163,10 @@ export function ModerationCenter() {
 
   useEffect(() => {
     let active = true;
+    setAccessError(false);
     void getAdminAccessContext().then((value) => { if (active) setAccess(value); }).catch(() => { if (active) setAccessError(true); });
     return () => { active = false; };
-  }, []);
+  }, [accessRetryToken]);
 
   const loadList = useCallback(async () => {
     const requestId = ++listRequestRef.current;
@@ -219,7 +221,7 @@ export function ModerationCenter() {
     setPage((value) => value + delta);
   }
 
-  if (accessError) return <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900" role="status">ตรวจสอบสิทธิ์ Platform Admin ไม่สำเร็จ จึงปิดการอ่านเคสไว้</div>;
+  if (accessError) return <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900" role="alert"><p>ตรวจสอบสิทธิ์ Platform Admin ไม่สำเร็จ จึงปิดการอ่านเคสไว้</p><button type="button" onClick={() => setAccessRetryToken((value) => value + 1)} className="mt-3 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold">ลองตรวจสอบอีกครั้ง</button></div>;
   if (!access) return <div className="rounded-3xl border border-gray-200 bg-white p-6 text-sm text-gray-500">กำลังตรวจสอบสิทธิ์…</div>;
   if (!canRead) return <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900" role="status">บัญชีนี้ไม่มีสิทธิ์ moderation.read</div>;
 
