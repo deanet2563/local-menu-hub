@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAdminAccessContext, hasAdminPermission, type AdminAccessContext } from "@/lib/adminAccess";
 import {
+  formatModerationTimestamp as fmt,
   getModerationCase,
   listModerationCases,
   type ModerationCaseDetail,
@@ -32,14 +33,6 @@ const CATEGORY_LABEL: Record<ModerationCategory, string> = {
   misinformation_local_safety_concern: "ข้อมูลผิดหรือความปลอดภัยในพื้นที่",
   duplicate: "รายงานซ้ำ",
   other: "อื่น ๆ",
-};
-
-const fmt = (value: string | null | undefined) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(date);
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
