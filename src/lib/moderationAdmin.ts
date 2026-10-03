@@ -80,12 +80,14 @@ function raise(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
-function dateBound(value: string, endOfDay = false) {
+function dateBound(value: string, exclusiveNextDay = false) {
   if (!value) return null;
   // Date inputs are Bangkok calendar dates; explicit +07:00 keeps RPC bounds
-  // independent of the administrator's device timezone.
-  const time = endOfDay ? "T23:59:59.999+07:00" : "T00:00:00.000+07:00";
-  return new Date(`${value}${time}`).toISOString();
+  // independent of the administrator's device timezone. The upper bound is
+  // next-day midnight so PostgreSQL microseconds are included with a < query.
+  const date = new Date(`${value}T00:00:00.000+07:00`);
+  if (exclusiveNextDay) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString();
 }
 
 export async function listModerationCases(params: {
