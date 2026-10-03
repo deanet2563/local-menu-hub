@@ -134,3 +134,16 @@ export async function getModerationCase(caseId: string) {
   raise(error);
   return data as ModerationCaseDetail;
 }
+
+
+export function formatModerationTimestamp(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat("th-TH", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Bangkok",
+      }).format(date);
+}
