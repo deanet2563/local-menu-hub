@@ -8,7 +8,7 @@ const source = fs.readFileSync(
   path.join(__dirname, "../../src/lib/moderationAdmin.ts"),
   "utf8",
 );
-const boundDeclaration = source.match(/function dateBound\(value: string, endOfDay = false\) \{[\s\S]*?\n\}/);
+const boundDeclaration = source.match(/function dateBound\(value: string, exclusiveNextDay = false\) \{[\s\S]*?\n\}/);
 assert.ok(boundDeclaration, "dateBound implementation should exist");
 const dateBound = vm.runInNewContext(
   `(${boundDeclaration[0].replace("value: string", "value")})`,
@@ -24,7 +24,11 @@ test("moderation date bounds use Bangkok calendar days under a non-Bangkok devic
   process.env.TZ = "America/Los_Angeles";
   try {
     assert.equal(dateBound("2026-10-03"), "2026-10-02T17:00:00.000Z");
-    assert.equal(dateBound("2026-10-03", true), "2026-10-03T16:59:59.999Z");
+    const toExclusive = dateBound("2026-10-03", true);
+    assert.equal(toExclusive, "2026-10-03T17:00:00.000Z");
+    const postgresMicrosecondEdge =
+      BigInt(Date.parse("2026-10-03T16:59:59.999Z")) * 1000n + 500n;
+    assert.ok(postgresMicrosecondEdge < BigInt(Date.parse(toExclusive)) * 1000n);
   } finally {
     if (previousTimezone === undefined) delete process.env.TZ;
     else process.env.TZ = previousTimezone;
