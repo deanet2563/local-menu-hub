@@ -83,10 +83,10 @@ function raise(error: { message: string } | null) {
 function dateBound(value: string, endOfDay = false) {
   if (!value) return null;
   const [year = 1970, month = 1, day = 1] = value.split("-").map(Number);
-  const date = endOfDay
-    ? new Date(year, month - 1, day, 23, 59, 59, 999)
-    : new Date(year, month - 1, day, 0, 0, 0, 0);
-  return date.toISOString();
+  // Date inputs are Bangkok calendar dates; explicit +07:00 keeps RPC bounds
+  // independent of the administrator's device timezone.
+  const time = endOfDay ? "T23:59:59.999+07:00" : "T00:00:00.000+07:00";
+  return new Date(`${value}${time}`).toISOString();
 }
 
 export async function listModerationCases(params: {
