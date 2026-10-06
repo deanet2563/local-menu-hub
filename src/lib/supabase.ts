@@ -71,7 +71,13 @@ function isHeadOfficeShopPreviewHost(): boolean {
   return window.location.hostname === "codex-head-office-shop-manag.local-menu-hub.pages.dev";
 }
 
-export const LIFF_ID = isHeadOfficeShopPreviewHost()
+// This Customer LIFF is registered for this stable preview origin only.
+const isCustomerStagingHost = typeof window !== "undefined"
+  && window.location.hostname === "codex-reconcile-food-hub-oct.local-menu-hub.pages.dev";
+
+export const LIFF_ID = isCustomerStagingHost
+  ? "2010936243-9ERQ3pDZ"
+  : isHeadOfficeShopPreviewHost()
   ? STAGING_PLATFORM_ADMIN_LIFF_ID
   : import.meta.env.VITE_LIFF_ID || DEFAULT_LIFF_ID;
 export const PLATFORM_ADMIN_LIFF_ID = isCloudflarePreviewHost()
