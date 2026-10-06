@@ -5,6 +5,8 @@ on:
       - 'src/components/customer/**'
       - 'src/hooks/useCustomerCatalog.ts'
       - 'src/lib/customerPublicRoutes.ts'
+      - 'src/lib/foodHubCategories.ts'
+      - 'public/brand/**'
       - 'src/lib/supabase.ts'
       - 'tools/tests/customer-public-auth.test.cjs'
       - 'src/routes/index.tsx'
