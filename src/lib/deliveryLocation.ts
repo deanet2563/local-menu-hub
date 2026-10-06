@@ -1,7 +1,7 @@
 import liff from "@line/liff";
-import { initLiff, isOrderingPreview, loginWithCustomerLiff } from "@/lib/supabase";
+import { initLiff, isOrderingPreview, loginWithCustomerLiff, WORKER_BASE } from "@/lib/supabase";
 
-const WORKER_URL = "https://mytree-worker.kompakorn-t.workers.dev";
+const WORKER_URL = WORKER_BASE;
 const LOCATION_RESOLVE_URL = `${WORKER_URL}/location/resolve`;
 const LOCATION_SEARCH_URL = `${WORKER_URL}/location/search`;
 const DELIVERY_QUOTE_URL = `${WORKER_URL}/delivery/quote`;

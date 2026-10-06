@@ -39,3 +39,20 @@ order sets and authorization behavior. Do not restore the old whole ShopPage.
 - Real staging catalog, promotion query and LINE/device QA remain required.
 - Old #111/#97 remain intact for provenance; no automatic closure or merge.
 - No Production merge/deploy, database write, test order or migration execution.
+
+## Local verification results
+Home slice commit: 3c05c60 (branch codex/reconcile-customer-home-oct06).
+Food Hub slice branch: codex/reconcile-food-hub-oct06, stacked on Home.
+- Vite production build and TypeScript: passed for Home and combined Food Hub.
+- 13 Node regression tests: passed (7 catalog/Shop, 4 canonical LIFF, 2 Admin auth).
+- git diff --check: passed.
+- Browser screenshots/interactions: NOT RUN. Playwright Chromium download returned
+  a truncated/non-ZIP archive; no usable browser was installed.
+- Live staging database queries / LINE device QA: NOT RUN.
+- GitHub push: automatic approval review rejected external code egress to the
+  remote as an unverified destination. No workaround or connector write attempted.
+  Explicit user confirmation is needed for pushing these new branches to
+  https://github.com/deanet2563/local-menu-hub and opening two draft PRs.
+- Original #111/#97 are unchanged. These are replacement review slices, not claims
+  that their GitHub merge conflicts have already disappeared.
+- CI/review remain pending until upload; neither slice is ready for Production.

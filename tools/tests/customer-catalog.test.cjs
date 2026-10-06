@@ -24,10 +24,10 @@ function catalogHarness(responses) {
       const query = { table, operations: [] };
       queries.push(query);
       const chain = {};
-      for (const method of ['select', 'eq', 'or', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'is', 'or', 'order', 'limit']) {
         chain[method] = (...args) => { query.operations.push([method, ...args]); return chain; };
       }
-      chain.then = (resolve, reject) => Promise.resolve(responses[table] ?? { data: [], error: null }).then(resolve, reject);
+      chain.then = (resolve, reject) => Promise.resolve(typeof responses[table] === 'function' ? responses[table](query) : responses[table] ?? { data: [], error: null }).then(resolve, reject);
       return chain;
     },
     rpc: async () => responses.nearby ?? { data: [], error: null },
@@ -91,4 +91,89 @@ test('unknown or negative distance never appears as zero kilometres', async () =
   await h.render().reloadCatalog();
   await h.render().refreshNearbyShops();
   assert.ok(h.render().allOrderedShops.every(shop => shop.distance_km === null));
+});
+
+test('full Hub catalog is opt-in and preserves closed/unavailable states', async () => {
+  const row = { item_id: 'closed-item', shop_id: 'closed', name: 'Unavailable', category: ' Snacks ', is_available: false, shops: { is_open: false } };
+  const h = catalogHarness({ shops: { data: shops }, menu_items: { data: [row] } });
+  await h.render().reloadCatalog();
+  assert.equal(h.queries.filter(q => q.table === 'menu_items').length, 1);
+  assert.equal(h.render().hubItems.length, 0);
+  await h.render({ includeHubItems: true }).reloadCatalog();
+  const view = h.render({ includeHubItems: true });
+  assert.equal(view.hubItems.length, 1);
+  assert.equal(view.hubItems[0].is_available, false);
+  assert.equal(view.hubItems[0].shop_is_open, false);
+  const full = h.queries.filter(q => q.table === 'menu_items').at(-1);
+  assert.ok(!full.operations.some(op => op[0] === 'eq' && ['is_available', 'shops.is_open'].includes(op[1])));
+  assert.ok(full.operations.some(op => op[0] === 'eq' && op[1] === 'shops.is_approved' && op[2] === true));
+  assert.ok(full.operations.some(op => op[0] === 'eq' && op[1] === 'shops.is_banned' && op[2] === false));
+});
+
+test('Hub enrichment failure falls back to the successful available-menu query', async () => {
+  const h = catalogHarness({ shops: { data: shops }, menu_items: q =>
+    q.operations.some(op => op[0] === 'select' && op[1].includes('category,is_available'))
+      ? { error: { message: 'enrichment unavailable' } }
+      : { data: [{ item_id: 'available', shop_id: 'open', name: 'Available' }] }
+  });
+  await h.render({ includeHubItems: true }).reloadCatalog();
+  const view = h.render({ includeHubItems: true });
+  assert.equal(view.catalogState, 'ready');
+  assert.equal(view.hubItems[0].item_id, 'available');
+  assert.equal(view.hubItems[0].shop_is_open, true);
+  assert.equal(view.hubItems[0].is_available, true);
+});
+
+test('closed Shop page disables add and refuses stale configurator confirmation', () => {
+  const React = require('react');
+  const exports = {};
+  let index = 0;
+  const shop = { shop_id: 'closed', name: 'Closed shop', is_open: false, is_approved: true, is_banned: false };
+  const item = { item_id: 'item', shop_id: 'closed', name: 'Item', category: 'Food', price: 25 };
+  const state = [shop, [item], false, item, 1, 1];
+  let additions = 0;
+  const configurator = () => null;
+  const compiled = ts.transpileModule(fs.readFileSync('src/components/customer/ShopPage.tsx', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(compiled, {
+    exports,
+    require(name) {
+      if (name === 'react') return { ...React, useEffect() {}, useState: () => [state[index++], () => {}] };
+      if (name === 'react/jsx-runtime') return require(name);
+      if (name === '@tanstack/react-router') return { Link: () => null };
+      if (name === '@/lib/supabase') return {};
+      if (name === '@/lib/cart') return { cart: { add: () => { additions++; return 'ok'; } }, useCart: () => ({ shopId: null, items: [] }), cartCount: () => 0 };
+      if (name.endsWith('/ProductConfigurator')) return { ProductConfigurator: configurator };
+      throw new Error(name);
+    },
+  });
+  const nodes = [];
+  function walk(node) {
+    if (!node) return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (typeof node !== 'object') return;
+    nodes.push(node);
+    walk(node.props?.children);
+  }
+  walk(exports.ShopPage({ shopId: 'closed' }));
+  const add = nodes.find(node => node.type === 'button' && node.props.children === 'ร้านปิด');
+  assert.equal(add.props.disabled, true);
+  nodes.find(node => node.type === configurator).props.onConfirm({ product: { itemId: 'item', shopId: 'closed' }, qty: 1 });
+  assert.equal(additions, 0);
+});
+
+ test('Hub excludes archived rows while retaining temporarily unavailable items', async () => {
+  const rows = [
+    { item_id: 'paused', archived_at: null, is_available: false, shops: { is_open: true } },
+    { item_id: 'removed', archived_at: '2026-10-01', is_available: false, shops: { is_open: true } },
+  ];
+  const h = catalogHarness({ menu_items: q => ({ data: rows.filter(row =>
+    !q.operations.some(op => op[0] === 'is' && op[1] === 'archived_at' && op[2] === null) || row.archived_at === null
+  ) }) });
+  await h.render({ includeHubItems: true }).reloadCatalog();
+  const items = h.render({ includeHubItems: true }).hubItems;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].item_id, 'paused');
+  assert.equal(items[0].is_available, false);
 });

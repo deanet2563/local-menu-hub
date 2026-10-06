@@ -77,6 +77,7 @@ export function ShopPage({ shopId }: { shopId: string }) {
     options: Parameters<typeof cart.add>[0]["options"];
     note: string | null;
   }) {
+    if (!shop?.is_open || shop.shop_id !== input.product.shopId || !shop.is_approved || shop.is_banned) return;
     const payload = {
       itemId: input.product.itemId,
       shopId: input.product.shopId,
@@ -117,6 +118,8 @@ export function ShopPage({ shopId }: { shopId: string }) {
 
       {shop.is_map_visible && shop.location_verification_status === "verified" && shop.lat != null && shop.lng != null && <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white p-3"><div><p className="text-xs font-semibold text-gray-700">📍 ที่ตั้งร้าน</p><p className="mt-1 text-xs text-gray-500">{shop.address || "ดูตำแหน่งร้านบนแผนที่"}</p></div><Link to="/map" search={{ shop: shop.shop_id }} className="rounded-lg bg-green-800 px-3 py-2 text-xs font-semibold text-white">ดูแผนที่</Link></div>}
 
+      {!shop.is_open && <p className="mx-4 mt-3 rounded-xl bg-gray-100 p-3 text-sm text-gray-600">ร้านปิดอยู่ ดูเมนูได้ แต่ยังไม่สามารถเพิ่มสินค้าได้</p>}
+
       <div className="sticky top-0 z-20 bg-white border-b border-orange-100 px-4 py-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <span className="text-sm text-gray-500 shrink-0">กำลังเลือก</span>
@@ -155,8 +158,8 @@ export function ShopPage({ shopId }: { shopId: string }) {
                   <p className="text-sm text-orange-600">฿{i.price}</p>
                   {qtyOf(i.item_id) > 0 && <p className="text-[11px] text-gray-400">ใน{activeSetName} {qtyOf(i.item_id)} ชิ้น</p>}
                 </div>
-                <button onClick={() => setConfiguring(i)} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5">
-                  {qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
+                <button disabled={!shop.is_open} onClick={() => { if (shop.is_open) setConfiguring(i); }} className="rounded-lg bg-orange-500 text-white text-sm px-3 py-1.5 disabled:cursor-not-allowed disabled:bg-gray-300">
+                  {!shop.is_open ? "ร้านปิด" : qtyOf(i.item_id) > 0 ? "เพิ่มอีก" : "เพิ่ม"}
                 </button>
               </div>
             ))}

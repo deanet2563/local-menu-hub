@@ -7,12 +7,12 @@ const compile = source => ts.transpileModule(source, { compilerOptions: { module
 const routes = {};
 vm.runInNewContext(compile(fs.readFileSync('src/lib/customerPublicRoutes.ts','utf8')), { exports: routes });
 
-function authHarness(pathname, search = '') {
+function authHarness(pathname, search = '', host = 'mytree.cc') {
   const calls = [];
   const exports = {};
   const liff = { init: async () => { calls.push('init'); }, isLoggedIn: () => false, login: () => calls.push('login') };
   const source = fs.readFileSync('src/lib/supabase.ts','utf8').replaceAll('import.meta.env', 'TEST_ENV');
-  const location = { pathname, search, origin: 'https://mytree.cc', hostname: 'mytree.cc', href: 'https://mytree.cc'+pathname+search };
+  const location = { pathname, search, origin: 'https://'+host, hostname: host, href: 'https://'+host+pathname+search };
   vm.runInNewContext(compile(source), { exports, URL, URLSearchParams, Date, TEST_ENV: {}, window: {location}, require(name) {
     if (name === '@supabase/supabase-js') return {createClient: () => ({storage: {from() { return {}; }}})};
     if (name === '@line/liff') return {default: liff};
@@ -52,4 +52,15 @@ test('explicit LIFF bootstrap on Home still runs for customer deep links', async
   const h=authHarness('/', '?liff.state=%2Forders');
   await h.exports.initLiff();
   assert.equal(h.calls.join(','), 'init');
+});
+
+ test('Customer staging LIFF is scoped to its registered host', () => {
+  const h=authHarness('/account','?tab=profile','codex-reconcile-food-hub-oct.local-menu-hub.pages.dev');
+  assert.equal(h.exports.LIFF_ID,'2010936243-9ERQ3pDZ');
+  assert.equal(h.exports.customerLiffRedirectUri(),'https://codex-reconcile-food-hub-oct.local-menu-hub.pages.dev/account?tab=profile');
+  assert.equal(h.exports.WORKER_BASE,'https://mytree-worker-staging.kompakorn-t.workers.dev');
+  assert.equal(h.exports.PLATFORM_ADMIN_LIFF_ID,'2010936243-lSLChhqP');
+  for(const host of ['mytree.cc','arbitrary.local-menu-hub.pages.dev','codex-reconcile-food-hub-oct.local-menu-hub.pages.dev.evil.test']) {
+    assert.equal(authHarness('/account','',host).exports.LIFF_ID,'2010936243-3kPykppE');
+  }
 });
