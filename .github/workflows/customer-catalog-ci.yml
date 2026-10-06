@@ -4,6 +4,9 @@ on:
     paths:
       - 'src/components/customer/**'
       - 'src/hooks/useCustomerCatalog.ts'
+      - 'src/lib/customerPublicRoutes.ts'
+      - 'src/lib/supabase.ts'
+      - 'tools/tests/customer-public-auth.test.cjs'
       - 'src/routes/index.tsx'
       - 'src/routes/hub/**'
       - 'tools/tests/customer-catalog.test.cjs'
@@ -18,5 +21,5 @@ jobs:
         with:
           bun-version: '1.2.22'
       - run: bun install --frozen-lockfile
-      - run: node --test tools/tests/customer-catalog.test.cjs tools/tests/customer-liff-state.test.cjs tools/tests/platform-admin-session-policy.test.cjs
+      - run: node --test tools/tests/customer-public-auth.test.cjs tools/tests/customer-catalog.test.cjs tools/tests/customer-liff-state.test.cjs tools/tests/platform-admin-session-policy.test.cjs
       - run: bun run build
