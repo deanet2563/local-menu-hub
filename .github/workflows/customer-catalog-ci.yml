@@ -9,6 +9,7 @@ on:
       - 'public/brand/**'
       - 'src/lib/supabase.ts'
       - 'src/lib/order.ts'
+      - 'src/lib/deliveryLocation.ts'
       - 'tools/tests/order-environment.test.cjs'
       - 'tools/tests/customer-public-auth.test.cjs'
       - 'src/routes/index.tsx'
