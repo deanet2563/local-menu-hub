@@ -25,24 +25,11 @@ function ArrowIcon() {
 }
 
 function MyTreeLogo() {
-  const [failed, setFailed] = useState(false);
+  // The inherited raster asset is malformed. Use the existing lightweight
+  // brand fallback until a validated source logo is supplied.
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
-      {failed ? (
-        <span className="text-3xl" role="img" aria-label="MyTree">🌳</span>
-      ) : (
-        <img
-          src="/brand/mytree-logo-88.webp"
-          alt="MyTree"
-          width={44}
-          height={44}
-          loading="eager"
-          decoding="async"
-          fetchPriority="high"
-          onError={() => setFailed(true)}
-          className="h-11 w-11 object-contain"
-        />
-      )}
+      <span className="text-3xl" role="img" aria-label="MyTree">🌳</span>
     </div>
   );
 }
