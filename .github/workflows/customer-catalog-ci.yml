@@ -8,6 +8,8 @@ on:
       - 'src/lib/foodHubCategories.ts'
       - 'public/brand/**'
       - 'src/lib/supabase.ts'
+      - 'src/lib/order.ts'
+      - 'tools/tests/order-environment.test.cjs'
       - 'tools/tests/customer-public-auth.test.cjs'
       - 'src/routes/index.tsx'
       - 'src/routes/hub/**'
@@ -23,5 +25,5 @@ jobs:
         with:
           bun-version: '1.2.22'
       - run: bun install --frozen-lockfile
-      - run: node --test tools/tests/customer-public-auth.test.cjs tools/tests/customer-catalog.test.cjs tools/tests/customer-liff-state.test.cjs tools/tests/platform-admin-session-policy.test.cjs
+      - run: node --test tools/tests/order-environment.test.cjs tools/tests/customer-public-auth.test.cjs tools/tests/customer-catalog.test.cjs tools/tests/customer-liff-state.test.cjs tools/tests/platform-admin-session-policy.test.cjs
       - run: bun run build

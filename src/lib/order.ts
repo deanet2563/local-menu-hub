@@ -1,5 +1,5 @@
 import liff from "@line/liff";
-import { initLiff, isOrderingPreview, loginWithCustomerLiff } from "@/lib/supabase";
+import { initLiff, isOrderingPreview, loginWithCustomerLiff, WORKER_BASE } from "@/lib/supabase";
 import { cart, type CartBundleSelection, type CartOptionSelection } from "@/lib/cart";
 import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/deliveryLocation";
 
@@ -11,7 +11,7 @@ import { getDeliveryQuoteToken, type DeliveryLocationSource } from "@/lib/delive
 // it never changes server-authoritative prices.
 // ============================================================
 
-const ORDER_URL = "https://mytree-worker.kompakorn-t.workers.dev/order";
+const ORDER_URL = `${WORKER_BASE}/order`;
 
 export type OrderLinePayload = {
   lineId: string;
