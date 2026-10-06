@@ -1,3 +1,4 @@
+import { isPublicCustomerDiscoveryPath } from "@/lib/customerPublicRoutes";
 import { createClient } from "@supabase/supabase-js";
 import liff from "@line/liff";
 import { getPlatformAdminIdTokenStatus } from "@/lib/platformAdminSessionPolicy";
@@ -196,9 +197,12 @@ export function initLiff(): Promise<void> {
 /** Get a valid MyTree access token, logging in via LINE if needed. */
 export async function getAccessToken(): Promise<string> {
   if (isPreviewCheckoutMapAuthBypassActive()) return "";
-  // Public map discovery has no authenticated actions or private-location data.
-  // Fail closed to anonymous access if a shared client is touched on this route.
-  if (isPublicCustomerMapRoute()) return "";
+  // Supabase may request its realtime token eagerly when route modules load.
+  // Discovery uses publicSupabase; this background lookup must never start
+  // Customer login. Admin deep links retain their dedicated gate, and explicit
+  // LIFF bootstrap still consumes liff.state before mounting the destination.
+  if (typeof window !== "undefined" && !isPlatformAdminRoute()
+    && isPublicCustomerDiscoveryPath(window.location.pathname)) return "";
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.exp - 60 > now) return cached.token;
 
