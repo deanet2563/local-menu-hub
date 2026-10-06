@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MyTreeHome } from "@/components/customer/MyTreeHome";
+import { HomeOverview } from "@/components/customer/HomeOverview";
+import { HomeErrorBoundary } from "@/components/customer/HomeErrorBoundary";
 
 export const Route = createFileRoute("/")({
-  component: MyTreeHome,
+  component: () => <HomeErrorBoundary><HomeOverview /></HomeErrorBoundary>,
 });
