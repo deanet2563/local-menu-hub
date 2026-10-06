@@ -65,6 +65,7 @@ export function useCustomerCatalog({ includeHubItems = false }: { includeHubItem
           ? publicSupabase
               .from("menu_items")
               .select("item_id,shop_id,name,price,image_url,category,is_available, shops!inner(is_open,is_approved,is_banned)")
+              .is("archived_at", null)
               .eq("shops.is_approved", true)
               .eq("shops.is_banned", false)
           : Promise.resolve({ data: null, error: null }),

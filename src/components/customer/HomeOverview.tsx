@@ -32,7 +32,7 @@ function MyTreeLogo() {
         <span className="text-3xl" role="img" aria-label="MyTree">🌳</span>
       ) : (
         <img
-          src="/brand/mytree-logo.png"
+          src="/brand/mytree-logo-88.webp"
           alt="MyTree"
           width={44}
           height={44}

@@ -24,7 +24,7 @@ function catalogHarness(responses) {
       const query = { table, operations: [] };
       queries.push(query);
       const chain = {};
-      for (const method of ['select', 'eq', 'or', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'is', 'or', 'order', 'limit']) {
         chain[method] = (...args) => { query.operations.push([method, ...args]); return chain; };
       }
       chain.then = (resolve, reject) => Promise.resolve(typeof responses[table] === 'function' ? responses[table](query) : responses[table] ?? { data: [], error: null }).then(resolve, reject);
@@ -161,4 +161,19 @@ test('closed Shop page disables add and refuses stale configurator confirmation'
   assert.equal(add.props.disabled, true);
   nodes.find(node => node.type === configurator).props.onConfirm({ product: { itemId: 'item', shopId: 'closed' }, qty: 1 });
   assert.equal(additions, 0);
+});
+
+ test('Hub excludes archived rows while retaining temporarily unavailable items', async () => {
+  const rows = [
+    { item_id: 'paused', archived_at: null, is_available: false, shops: { is_open: true } },
+    { item_id: 'removed', archived_at: '2026-10-01', is_available: false, shops: { is_open: true } },
+  ];
+  const h = catalogHarness({ menu_items: q => ({ data: rows.filter(row =>
+    !q.operations.some(op => op[0] === 'is' && op[1] === 'archived_at' && op[2] === null) || row.archived_at === null
+  ) }) });
+  await h.render({ includeHubItems: true }).reloadCatalog();
+  const items = h.render({ includeHubItems: true }).hubItems;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].item_id, 'paused');
+  assert.equal(items[0].is_available, false);
 });
